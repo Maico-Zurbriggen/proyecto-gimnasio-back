@@ -1,0 +1,37 @@
+name: Historia o feature
+description: Proponer una unidad vertical de valor.
+title: '[Feature]: '
+labels: [feature]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qué necesita el actor y por qué.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+      description: Condiciones observables y verificables.
+      placeholder: |
+        - [ ] Dado ..., cuando ..., entonces ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área principal
+      options:
+        - Frontend
+        - Backend
+        - Motor analítico
+        - Transversal
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Fuera de alcance
+      description: Qué no se resolverá en esta historia.
