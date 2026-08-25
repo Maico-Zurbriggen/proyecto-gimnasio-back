@@ -2,7 +2,9 @@
 
 ## Contexto
 
-Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes. Antes de implementar una historia, consultar el documento funcional correspondiente en `docs/`.
+Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes.
+
+La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-documentacion`. Cuando los repositorios están clonados como carpetas hermanas, leer primero `../proyecto-gimnasio-documentacion/AGENTS.md` y usar su `manifest.json` para seleccionar el contexto de la tarea. Si no está disponible localmente, consultar su versión en GitHub; no reconstruir reglas por memoria ni copiar documentación a este repositorio.
 
 ## Responsabilidad
 
@@ -22,7 +24,7 @@ Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones 
 - Aplicar baja lógica cuando el historial dependa de una entidad.
 - No modificar migraciones ya aplicadas. Crear una nueva y documentar cambios incompatibles.
 - Actualizar OpenAPI en el mismo PR que cambie un contrato.
-- Nombrar conceptos con los términos literales de `docs/D2-glosario.md`.
+- Nombrar conceptos con los términos literales de `product/glossary.md` del repositorio documental.
 
 ## Integraciones
 
@@ -35,6 +37,7 @@ Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones 
 - Crear ramas desde `develop`; todo cambio entra por pull request.
 - Usar Conventional Commits en inglés: `type(scope): summary`.
 - No agregar dependencias de producción sin justificar su necesidad en el PR.
+- Relacionar el PR de código con el PR documental cuando cambie un contrato, una regla, una migración conceptual o un flujo.
 
 ## Verificación
 
