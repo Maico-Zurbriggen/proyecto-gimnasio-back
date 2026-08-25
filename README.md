@@ -30,7 +30,7 @@ npm run db:deploy
 npm run db:studio
 ```
 
-Consultar [docs/local-database.md](docs/local-database.md) antes de modificar el modelo.
+Consultar la guía `operations/local-database.md` del [repositorio documental](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion) antes de modificar el modelo.
 
 ## Verificación
 
@@ -38,4 +38,4 @@ Consultar [docs/local-database.md](docs/local-database.md) antes de modificar el
 npm run check
 ```
 
-El backend publica OpenAPI como contrato para el frontend. El corpus funcional compartido está indexado en [docs/README.md](docs/README.md).
+El backend publica OpenAPI como contrato para el frontend. El corpus funcional, la arquitectura y las reglas de dominio se mantienen exclusivamente en [proyecto-gimnasio-documentacion](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion). Para trabajo asistido por IA, comenzar por su `AGENTS.md` y `manifest.json`.
