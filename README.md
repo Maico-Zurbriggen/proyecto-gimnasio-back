@@ -27,15 +27,8 @@ El backend local usa Neon Test compartida. No ejecutar `prisma migrate reset`, `
 
 Antes de cambiar el esquema, consultar [operations/local-database.md](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion/blob/main/operations/local-database.md).
 
-<<<<<<< Updated upstream
 Consultar [docs/local-database.md](docs/local-database.md) antes de modificar el modelo.
-=======
-## Integración IA
-
-Backend crea solicitudes idempotentes, envía contexto minimizado y consulta resultados persistidos. El servicio Python responde `202` y procesa fuera de la petición; una salida nunca evita las validaciones de negocio ni la revisión del entrenador.
-
-Las variables test se entregan por un canal seguro. Producción no se configura en computadoras locales.
->>>>>>> Stashed changes
+Consultar la guía `operations/local-database.md` del [repositorio documental](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion) antes de modificar el modelo.
 
 ## Verificación
 
@@ -43,8 +36,5 @@ Las variables test se entregan por un canal seguro. Producción no se configura 
 npm run check
 ```
 
-<<<<<<< Updated upstream
 El backend publica OpenAPI como contrato para el frontend. El corpus funcional compartido está indexado en [docs/README.md](docs/README.md).
-=======
-La documentación canónica vive en [proyecto-gimnasio-documentacion](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion). Para trabajo asistido por IA, comenzar por su `AGENTS.md` y `manifest.json`.
->>>>>>> Stashed changes
+El backend publica OpenAPI como contrato para el frontend. El corpus funcional, la arquitectura y las reglas de dominio se mantienen exclusivamente en [proyecto-gimnasio-documentacion](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion). Para trabajo asistido por IA, comenzar por su `AGENTS.md` y `manifest.json`.

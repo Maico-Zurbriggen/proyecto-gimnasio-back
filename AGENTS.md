@@ -2,13 +2,10 @@
 
 ## Contexto
 
-<<<<<<< Updated upstream
 Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes. Antes de implementar una historia, consultar el documento funcional correspondiente en `docs/`.
-=======
-Este repositorio contiene Express + TypeScript, Prisma y las migraciones. Frontend React y el servicio Python de IA viven en repositorios independientes. IA expone un OpenAPI versionado mediante ngrok, procesa generaciones de forma asíncrona en el Polo y orquesta el LLM local; los jobs predictivos permanecen batch.
+Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes.
 
-La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-documentacion`. Con repositorios hermanos, leer primero `../proyecto-gimnasio-documentacion/AGENTS.md` y usar `manifest.json`. Si no está local, consultar GitHub; no copiar documentación aquí.
->>>>>>> Stashed changes
+La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-documentacion`. Cuando los repositorios están clonados como carpetas hermanas, leer primero `../proyecto-gimnasio-documentacion/AGENTS.md` y usar su `manifest.json` para seleccionar el contexto de la tarea. Si
 
 ## Responsabilidad
 
@@ -22,7 +19,6 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 
 ## Dominio y seguridad
 
-<<<<<<< Updated upstream
 - Autorizar en dos pasos: rol y propiedad/asignación del recurso. Probar ambos.
 - Usar cookies `httpOnly` para sesión; nunca guardar tokens en `localStorage`.
 - Congelar la prescripción al iniciar una sesión y conservarla junto a los valores reales.
@@ -30,16 +26,7 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 - No modificar migraciones ya aplicadas. Crear una nueva y documentar cambios incompatibles.
 - Actualizar OpenAPI en el mismo PR que cambie un contrato.
 - Nombrar conceptos con los términos literales de `docs/D2-glosario.md`.
-=======
-- Autorizar por rol y por propiedad o asignación; probar ambos.
-- Usar cookies `httpOnly`; nunca tokens en `localStorage`.
-- Congelar prescripción al iniciar una sesión.
-- Aplicar baja lógica cuando exista historial.
-- No modificar migraciones aplicadas.
-- No ejecutar `migrate dev`, `db push`, resets ni seeds destructivos contra Neon Test compartida.
-- Aplicar migraciones a test y producción sólo desde CI mediante `migrate deploy` y rol separado.
-- Nombrar dominio con `product/glossary.md` documental.
->>>>>>> Stashed changes
+- Nombrar conceptos con los términos literales de `product/glossary.md` del repositorio documental.
 
 ## Integración IA
 
@@ -55,17 +42,10 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 
 ## Forma de trabajo
 
-<<<<<<< Updated upstream
 - Crear ramas desde `develop`; todo cambio entra por pull request.
 - Usar Conventional Commits en inglés: `type(scope): summary`.
 - No agregar dependencias de producción sin justificar su necesidad en el PR.
-=======
-- Crear ramas desde `develop`; todo cambio entra por PR.
-- Promover `develop → test → main`; no crear commits exclusivos en `test`.
-- Usar Conventional Commits en inglés.
-- No agregar dependencias de producción sin justificarlas.
-- Relacionar PR de backend, IA y documentación cuando cambie un contrato, regla o migración conceptual.
->>>>>>> Stashed changes
+- Relacionar el PR de código con el PR documental cuando cambie un contrato, una regla, una migración conceptual o un flujo.
 
 ## Verificación
 
