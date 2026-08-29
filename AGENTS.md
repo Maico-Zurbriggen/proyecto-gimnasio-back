@@ -2,19 +2,20 @@
 
 ## Contexto
 
+Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes. Antes de implementar una historia, consultar el documento funcional correspondiente en `docs/`.
 Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes.
 
-La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-documentacion`. Cuando los repositorios están clonados como carpetas hermanas, leer primero `../proyecto-gimnasio-documentacion/AGENTS.md` y usar su `manifest.json` para seleccionar el contexto de la tarea. Si no está disponible localmente, consultar su versión en GitHub; no reconstruir reglas por memoria ni copiar documentación a este repositorio.
+La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-documentacion`. Cuando los repositorios están clonados como carpetas hermanas, leer primero `../proyecto-gimnasio-documentacion/AGENTS.md` y usar su `manifest.json` para seleccionar el contexto de la tarea. Si
 
 ## Responsabilidad
 
-- Mantener un único despliegue organizado como monolito modular.
+- Mantener un monolito modular desplegable en Vercel.
 - Hacer cumplir invariantes, autorización, transacciones y contratos HTTP.
-- Separar módulos por dominio: identidad, catálogo, rutinas, entrenamiento, métricas, seguimiento y administración.
-- Mantener `app.ts` libre del arranque del servidor para probar la aplicación con Supertest.
-- Usar routers y middleware explícitos; no crear un framework interno ni contenedores de inyección de dependencias.
-- Mantener Prisma como detalle de infraestructura; no exponer modelos ORM como respuestas HTTP.
-- Publicar OpenAPI como fuente de verdad para consumidores externos.
+- Separar módulos por dominio al implementar historias verticales.
+- Mantener `app.ts` libre del arranque para probar con Supertest.
+- Usar routers y middleware explícitos; no crear un framework interno.
+- Mantener Prisma como infraestructura; no exponer modelos ORM.
+- Publicar OpenAPI como fuente de verdad del frontend.
 
 ## Dominio y seguridad
 
@@ -24,13 +25,20 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 - Aplicar baja lógica cuando el historial dependa de una entidad.
 - No modificar migraciones ya aplicadas. Crear una nueva y documentar cambios incompatibles.
 - Actualizar OpenAPI en el mismo PR que cambie un contrato.
+- Nombrar conceptos con los términos literales de `docs/D2-glosario.md`.
 - Nombrar conceptos con los términos literales de `product/glossary.md` del repositorio documental.
 
-## Integraciones
+## Integración IA
 
-- Encapsular LLM y recomendadores detrás de puertos/adaptadores.
-- Aplicar timeout, reintento limitado, límite y fallback determinístico.
-- Leer resultados del motor precalculados; no ejecutar Python durante una petición.
+- Encapsular el servicio IA detrás de un cliente generado o validado desde su OpenAPI.
+- Frontend nunca conoce la URL de IA; backend es el único consumidor.
+- Crear una solicitud idempotente, minimizar el contexto y aceptar el flujo asíncrono con `202`.
+- Leer estados y resultados de estructuras de integración; validar catálogo, compatibilidad, rangos y permisos antes de crear un candidato.
+- Cada intento vence inicialmente a los 120 segundos y admite un único reintento.
+- Tras el segundo fallo declarar generación no disponible; no implementar fallback determinístico.
+- Mantener disponibles los presets publicados del gimnasio, siempre sujetos a aprobación del entrenador.
+- Usar credenciales distintas para test y producción. No enviar URLs de base, datos identificatorios innecesarios ni secretos al Polo.
+- Los tests pueden simular transporte HTTP; no agregar un modo fake ejecutable.
 
 ## Forma de trabajo
 
@@ -41,12 +49,14 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 
 ## Verificación
 
-- Ejecutar `npm run check` antes de cerrar una tarea.
-- Priorizar unit tests para reglas puras, tests de API para autorización y tests de integración para persistencia.
+- Ejecutar `npm run check`.
+- Priorizar unitarias para reglas, API tests para permisos y persistencia para integración.
+- Probar idempotencia, timeout, reintento, rol IA restringido y aislamiento test/producción.
 
 ## Code Review Rules
 
-- Señalar routers con lógica de dominio o acceso directo a Prisma.
-- Señalar endpoints con identificadores de usuario que no prueben acceso ajeno con 403.
-- Señalar cambios que reescriban sesiones, series históricas o versiones ya congeladas.
-- Exigir test para toda regla de dominio, permiso y corrección de bug.
+- Señalar routers con lógica de dominio o Prisma directo.
+- Señalar identificadores de alumno sin prueba 403 de acceso ajeno.
+- Señalar migraciones destructivas sobre la base compartida.
+- Señalar llamadas al LLM desde backend o trabajos Python dentro de una petición.
+- Exigir test para regla, permiso y corrección de bug.
