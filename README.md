@@ -15,11 +15,27 @@ API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, pers
 npm ci
 cp .env.example .env
 npm run db:generate
-npm run db:status
 npm run dev
 ```
 
-En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://localhost:3000`; `GET /health` es la verificación base.
+En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://localhost:3000`.
+
+- `GET /health` verifica que el proceso HTTP esté disponible.
+- `GET /ready` ejecuta una consulta mínima contra PostgreSQL y devuelve `503` si Neon no está disponible.
+
+`DATABASE_URL` debe ser la conexión pooled de `backend_test`; el hostname de Neon contiene `-pooler`. `CORS_ORIGINS` acepta orígenes separados por comas y debe incluir `http://localhost:5173` para desarrollo local.
+
+Hasta que exista la primera migración, `npm run db:status` informa correctamente que la base todavía no está administrada por Prisma Migrate. Para verificar la conexión inicial usar `GET /ready`.
+
+## Despliegue en Vercel
+
+Vercel detecta `src/app.ts` como la entrada Express. `src/main.ts` se usa solamente para levantar el servidor local. Las Functions se ejecutan en São Paulo (`gru1`) para mantenerlas cerca de Neon `sa-east-1`.
+
+- Preview asociado a `test`: `DATABASE_URL` de `backend_test` y URL del frontend Test en `CORS_ORIGINS`.
+- Production asociado a `main`: `DATABASE_URL` de `backend_production` y URL del frontend productivo en `CORS_ORIGINS`.
+- No configurar roles `migrator` ni credenciales administrativas en Vercel.
+
+Tras cambiar una variable de entorno, volver a desplegar para aplicarla.
 
 ## Base de datos
 
