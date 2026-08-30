@@ -1,0 +1,18 @@
+name: gym-migrations
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: gym_migrations
+      POSTGRES_USER: gym_migrator
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gym_migrator -d gym_migrations']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    ports:
+      - '127.0.0.1:55432:5432'
+    tmpfs:
+      - /var/lib/postgresql/data

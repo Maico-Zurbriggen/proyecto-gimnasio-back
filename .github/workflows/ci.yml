@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, develop]
+    branches: [main, test, develop]
 
 permissions:
   contents: read
@@ -12,6 +12,24 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: gym_ci
+          POSTGRES_USER: gym_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gym_ci -d gym_ci"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      DATABASE_URL: postgresql://gym_ci@localhost:5432/gym_ci?schema=public
 
     steps:
       - name: Checkout
@@ -25,6 +43,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Apply migrations to a clean database
+        if: ${{ hashFiles('prisma/migrations/**/migration.sql') != '' }}
+        run: npm run db:deploy
+
+      - name: Verify migration status
+        if: ${{ hashFiles('prisma/migrations/**/migration.sql') != '' }}
+        run: npm run db:status
 
       - name: Check repository
         run: npm run check
