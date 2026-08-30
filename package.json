@@ -2,6 +2,10 @@
   "name": "@gym/backend",
   "version": "0.0.0",
   "private": true,
+  "engines": {
+    "node": "24.x",
+    "npm": "11.x"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
@@ -14,18 +18,21 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint src test",
+    "postinstall": "prisma generate",
     "start": "node dist/main.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit --pretty false"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@types/cors": "^2.8.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "@types/supertest": "^6.0.0",
