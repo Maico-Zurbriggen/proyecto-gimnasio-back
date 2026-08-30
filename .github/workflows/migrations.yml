@@ -1,0 +1,74 @@
+name: Database migrations
+
+on:
+  push:
+    branches: [test, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-migrations-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  migrate-test:
+    name: migrate-test
+    if: github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: test
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply pending migrations
+        if: ${{ hashFiles('prisma/migrations/**/migration.sql') != '' }}
+        run: npm run db:deploy
+
+      - name: Verify migration status
+        if: ${{ hashFiles('prisma/migrations/**/migration.sql') != '' }}
+        run: npm run db:status
+
+  migrate-production:
+    name: migrate-production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply pending migrations
+        if: ${{ hashFiles('prisma/migrations/**/migration.sql') != '' }}
+        run: npm run db:deploy
+
+      - name: Verify migration status
+        if: ${{ hashFiles('prisma/migrations/**/migration.sql') != '' }}
+        run: npm run db:status
