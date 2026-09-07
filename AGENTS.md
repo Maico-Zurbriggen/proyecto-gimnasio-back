@@ -33,10 +33,10 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 - Encapsular el servicio IA detrás de un cliente generado o validado desde su OpenAPI.
 - Frontend nunca conoce la URL de IA; backend es el único consumidor.
 - Crear una solicitud idempotente, minimizar el contexto y aceptar el flujo asíncrono con `202`.
-- Leer estados y resultados de estructuras de integración; validar catálogo, compatibilidad, rangos y permisos antes de crear un candidato.
+- Leer estados y resultados de estructuras de integración; validar catálogo, compatibilidad, rangos y permisos antes de crear directamente una rutina `PROPUESTA`.
 - Cada intento vence inicialmente a los 120 segundos y admite un único reintento.
 - Tras el segundo fallo declarar generación no disponible; no implementar fallback determinístico.
-- Mantener disponibles los presets publicados del gimnasio, siempre sujetos a aprobación del entrenador.
+- Mantener operativas las plantillas y la creación manual cuando falle generación. Los presets son alcance opcional y, si se implementan, siguen sujetos a aprobación del entrenador.
 - Usar credenciales distintas para test y producción. No enviar URLs de base, datos identificatorios innecesarios ni secretos al Polo.
 - Los tests pueden simular transporte HTTP; no agregar un modo fake ejecutable.
 
