@@ -18,7 +18,7 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 
 ## Estructura del código
 
-Mantener un monolito modular organizado por dominio y crear carpetas sólo cuando exista código real que las justifique:
+Mantener un monolito modular con arquitectura hexagonal por dominio. Crear carpetas sólo cuando exista código real que las justifique:
 
 ```text
 src/
@@ -30,16 +30,25 @@ src/
 │   └── ai/
 ├── modules/
 │   └── <module>/
-│       ├── <module>.routes.ts
-│       ├── <module>.controller.ts
-│       ├── <module>.service.ts
-│       ├── <module>.repository.ts
-│       ├── <module>.schemas.ts
-│       └── <module>.types.ts
+│       ├── domain/
+│       │   ├── entities/
+│       │   ├── value-objects/
+│       │   ├── errors/
+│       │   └── services/
+│       ├── application/
+│       │   ├── ports/
+│       │   ├── use-cases/
+│       │   └── dto/
+│       └── infrastructure/
+│           ├── http/
+│           │   ├── <module>.routes.ts
+│           │   ├── <module>.controller.ts
+│           │   └── <module>.schemas.ts
+│           └── persistence/
+│               └── prisma-<module>.repository.ts
 ├── shared/
 │   ├── errors/
 │   ├── middleware/
-│   ├── schemas/
 │   └── types/
 ├── app.ts
 └── main.ts
@@ -55,15 +64,17 @@ test/
 └── helpers/
 ```
 
-- `routes` declara endpoints y encadena middleware; no implementa reglas de negocio.
-- `controller` traduce entre HTTP y los casos de uso; no accede directamente a Prisma.
-- `service` concentra reglas de negocio, autorización y límites transaccionales.
-- `repository` encapsula Prisma y devuelve estructuras de dominio o DTO internos, no modelos ORM hacia HTTP.
-- `schemas` valida entradas, parámetros y salidas con Zod; `types` contiene tipos propios del módulo.
-- `infrastructure/` contiene adaptadores técnicos; `integrations/ai/` es el único lugar que conoce la API Python.
+- `domain/` contiene reglas puras y no importa Express, Prisma, Zod ni clientes HTTP.
+- `application/use-cases/` orquesta el dominio y define los límites transaccionales.
+- `application/ports/` declara las interfaces requeridas por los casos de uso, como repositorios, reloj, transacciones y clientes externos.
+- `infrastructure/http/` adapta Express al puerto de entrada: las rutas encadenan middleware, los controllers invocan casos de uso y los schemas validan con Zod.
+- `infrastructure/persistence/` implementa los puertos de persistencia con Prisma. Los modelos ORM no salen de este adaptador.
+- `integrations/ai/` contiene el adaptador de salida hacia la API Python y es el único lugar que conoce su transporte HTTP.
+- Las dependencias apuntan hacia adentro: infraestructura depende de aplicación y dominio; dominio nunca depende de infraestructura.
 - `shared/` recibe sólo código transversal usado por varios módulos y no se convierte en un dominio genérico.
-- Mantener las pruebas unitarias junto al módulo y usar `test/api` y `test/integration` para pruebas transversales.
-- No exigir todos los archivos a módulos simples ni crear todas las carpetas por anticipado.
+- Mantener las pruebas unitarias junto al dominio o caso de uso; usar `test/api` y `test/integration` para adaptadores y recorridos transversales.
+- No crear interfaces con una única implementación si no aíslan un límite externo o no aportan una sustitución útil para pruebas.
+- No exigir todas las subcarpetas a módulos simples ni crear archivos vacíos por anticipado.
 - Crear inicialmente módulos como `auth`, `users`, `gyms`, `exercise-catalog`, `routine-templates`, `routines`, `training-sessions`, `evolution` y `notifications` a medida que se implementen.
 
 ## Dominio y seguridad
@@ -103,7 +114,9 @@ test/
 
 ## Code Review Rules
 
-- Señalar routers con lógica de dominio o Prisma directo.
+- Señalar dependencias de dominio o aplicación hacia Express, Prisma, Zod o clientes HTTP.
+- Señalar routers y controllers con lógica de dominio o acceso directo a Prisma.
+- Señalar adaptadores de persistencia que expongan modelos Prisma fuera de infraestructura.
 - Señalar identificadores de alumno sin prueba 403 de acceso ajeno.
 - Señalar migraciones destructivas sobre la base compartida.
 - Señalar llamadas al LLM desde backend o trabajos Python dentro de una petición.
