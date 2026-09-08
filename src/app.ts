@@ -1,13 +1,28 @@
 import cors, { type CorsOptions } from 'cors';
 import express, { type ErrorRequestHandler } from 'express';
 
-import { databaseHealthCheck, type HealthCheck } from './database/client';
+import {
+  databaseHealthCheck,
+  type HealthCheck,
+  prisma,
+} from './database/client';
+import {
+  SystemClock,
+  type Clock,
+} from './modules/routines/application/ports/clock';
+import type { RoutinesRepository } from './modules/routines/application/ports/routines.repository';
+import { GetActiveRoutineUseCase } from './modules/routines/application/use-cases/get-active-routine.use-case';
+import { RoutinesController } from './modules/routines/infrastructure/http/routines.controller';
+import { createRoutinesRouter } from './modules/routines/infrastructure/http/routines.routes';
+import { PrismaRoutinesRepository } from './modules/routines/infrastructure/persistence/prisma-routines.repository';
 
 class CorsOriginError extends Error {}
 
 interface AppDependencies {
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
+  routinesRepository?: RoutinesRepository;
+  clock?: Clock;
 }
 
 function parseAllowedOrigins(value: string | undefined): string[] {
@@ -36,6 +51,8 @@ function createCorsOptions(allowedOrigins: readonly string[]): CorsOptions {
 export function createApp({
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
+  routinesRepository,
+  clock,
 }: AppDependencies = {}) {
   const app = express();
 
@@ -55,6 +72,18 @@ export function createApp({
       response.status(503).json({ status: 'unavailable', database: 'down' });
     }
   });
+
+  const resolvedRoutinesRepo =
+    routinesRepository ?? new PrismaRoutinesRepository(prisma);
+  const resolvedClock = clock ?? new SystemClock();
+  const getActiveRoutineUseCase = new GetActiveRoutineUseCase(
+    resolvedRoutinesRepo,
+    resolvedClock,
+  );
+  const routinesController = new RoutinesController(getActiveRoutineUseCase);
+  const routinesRouter = createRoutinesRouter(routinesController);
+
+  app.use(routinesRouter);
 
   const errorHandler: ErrorRequestHandler = (
     error,
