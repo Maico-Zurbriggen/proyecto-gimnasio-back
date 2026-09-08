@@ -28,6 +28,33 @@ En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://local
 
 Hasta que exista la primera migración, `npm run db:status` informa correctamente que la base todavía no está administrada por Prisma Migrate. Para verificar la conexión inicial usar `GET /ready`.
 
+## Estructura del código
+
+El backend es un monolito modular organizado por dominio:
+
+```text
+src/
+├── config/                  # Configuración validada
+├── infrastructure/         # PostgreSQL, Prisma y transporte HTTP
+├── integrations/ai/        # Cliente de la API Python
+├── modules/
+│   └── <module>/
+│       ├── <module>.routes.ts
+│       ├── <module>.controller.ts
+│       ├── <module>.service.ts
+│       ├── <module>.repository.ts
+│       ├── <module>.schemas.ts
+│       └── <module>.types.ts
+├── shared/                  # Errores y middleware transversales
+├── app.ts
+└── main.ts
+
+prisma/                      # Schema, migraciones y seeds
+test/                        # Pruebas API, integración y helpers
+```
+
+Los routers y controllers no acceden directamente a Prisma. Los services aplican reglas, autorización y transacciones; los repositories encapsulan persistencia. La estructura interna se crea progresivamente y un módulo simple no necesita archivos vacíos. Las reglas completas están en `AGENTS.md`.
+
 ## Despliegue en Vercel
 
 Vercel detecta `src/app.ts` como la entrada Express. `src/main.ts` se usa solamente para levantar el servidor local. Las Functions se ejecutan en São Paulo (`gru1`) para mantenerlas cerca de Neon `sa-east-1`.

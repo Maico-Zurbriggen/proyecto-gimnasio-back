@@ -2,10 +2,9 @@
 
 ## Contexto
 
-Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes. Antes de implementar una historia, consultar el documento funcional correspondiente en `docs/`.
 Este repositorio contiene la API Express + TypeScript, Prisma y las migraciones PostgreSQL. El frontend React y el motor batch Python viven en repositorios independientes.
 
-La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-documentacion`. Cuando los repositorios están clonados como carpetas hermanas, leer primero `../proyecto-gimnasio-documentacion/AGENTS.md` y usar su `manifest.json` para seleccionar el contexto de la tarea. Si
+La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-documentacion`. Cuando los repositorios están clonados como carpetas hermanas, leer primero `../proyecto-gimnasio-documentacion/AGENTS.md` y usar su `manifest.json` para seleccionar el contexto de la tarea. Si no está disponible localmente, consultar GitHub; no reconstruir reglas por memoria ni copiar documentación aquí.
 
 ## Responsabilidad
 
@@ -17,6 +16,56 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 - Mantener Prisma como infraestructura; no exponer modelos ORM.
 - Publicar OpenAPI como fuente de verdad del frontend.
 
+## Estructura del código
+
+Mantener un monolito modular organizado por dominio y crear carpetas sólo cuando exista código real que las justifique:
+
+```text
+src/
+├── config/
+├── infrastructure/
+│   ├── database/
+│   └── http/
+├── integrations/
+│   └── ai/
+├── modules/
+│   └── <module>/
+│       ├── <module>.routes.ts
+│       ├── <module>.controller.ts
+│       ├── <module>.service.ts
+│       ├── <module>.repository.ts
+│       ├── <module>.schemas.ts
+│       └── <module>.types.ts
+├── shared/
+│   ├── errors/
+│   ├── middleware/
+│   ├── schemas/
+│   └── types/
+├── app.ts
+└── main.ts
+
+prisma/
+├── migrations/
+├── seeds/
+└── schema.prisma
+
+test/
+├── api/
+├── integration/
+└── helpers/
+```
+
+- `routes` declara endpoints y encadena middleware; no implementa reglas de negocio.
+- `controller` traduce entre HTTP y los casos de uso; no accede directamente a Prisma.
+- `service` concentra reglas de negocio, autorización y límites transaccionales.
+- `repository` encapsula Prisma y devuelve estructuras de dominio o DTO internos, no modelos ORM hacia HTTP.
+- `schemas` valida entradas, parámetros y salidas con Zod; `types` contiene tipos propios del módulo.
+- `infrastructure/` contiene adaptadores técnicos; `integrations/ai/` es el único lugar que conoce la API Python.
+- `shared/` recibe sólo código transversal usado por varios módulos y no se convierte en un dominio genérico.
+- Mantener las pruebas unitarias junto al módulo y usar `test/api` y `test/integration` para pruebas transversales.
+- No exigir todos los archivos a módulos simples ni crear todas las carpetas por anticipado.
+- Crear inicialmente módulos como `auth`, `users`, `gyms`, `exercise-catalog`, `routine-templates`, `routines`, `training-sessions`, `evolution` y `notifications` a medida que se implementen.
+
 ## Dominio y seguridad
 
 - Autorizar en dos pasos: rol y propiedad/asignación del recurso. Probar ambos.
@@ -25,7 +74,6 @@ La documentación canónica vive en `Maico-Zurbriggen/proyecto-gimnasio-document
 - Aplicar baja lógica cuando el historial dependa de una entidad.
 - No modificar migraciones ya aplicadas. Crear una nueva y documentar cambios incompatibles.
 - Actualizar OpenAPI en el mismo PR que cambie un contrato.
-- Nombrar conceptos con los términos literales de `docs/D2-glosario.md`.
 - Nombrar conceptos con los términos literales de `product/glossary.md` del repositorio documental.
 
 ## Integración IA
