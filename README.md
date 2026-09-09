@@ -28,6 +28,37 @@ En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://local
 
 Hasta que exista la primera migración, `npm run db:status` informa correctamente que la base todavía no está administrada por Prisma Migrate. Para verificar la conexión inicial usar `GET /ready`.
 
+## Estructura del código
+
+El backend es un monolito modular con arquitectura hexagonal por dominio:
+
+```text
+src/
+├── config/
+├── infrastructure/                  # Configuración técnica compartida
+│   ├── database/
+│   └── http/
+├── integrations/ai/                 # Adaptador hacia la API Python
+├── modules/
+│   └── <module>/
+│       ├── domain/                  # Entidades y reglas puras
+│       ├── application/
+│       │   ├── ports/               # Interfaces de salida
+│       │   ├── use-cases/           # Orquestación de aplicación
+│       │   └── dto/
+│       └── infrastructure/
+│           ├── http/                # Express y Zod
+│           └── persistence/         # Adaptadores Prisma
+├── shared/
+├── app.ts
+└── main.ts
+
+prisma/                              # Schema, migraciones y seeds
+test/                                # Pruebas API, integración y helpers
+```
+
+Las dependencias apuntan hacia el dominio: éste no conoce Express, Prisma, Zod ni la API Python. Los casos de uso dependen de puertos; los adaptadores HTTP, Prisma y de IA implementan los límites externos. La estructura se crea progresivamente y no se agregan abstracciones o archivos vacíos sin una necesidad concreta. Las reglas completas están en `AGENTS.md`.
+
 ## Despliegue en Vercel
 
 Vercel detecta `src/app.ts` como la entrada Express. `src/main.ts` se usa solamente para levantar el servidor local. Las Functions se ejecutan en São Paulo (`gru1`) para mantenerlas cerca de Neon `sa-east-1`.
