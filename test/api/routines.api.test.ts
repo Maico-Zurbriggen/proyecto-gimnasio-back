@@ -127,7 +127,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     );
   });
 
-  it('returns 403 Forbidden when an ALUMNO tries to access another student\'s routine (prueba 403 de acceso ajeno)', async () => {
+  it("returns 403 Forbidden when an ALUMNO tries to access another student's routine (prueba 403 de acceso ajeno)", async () => {
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn(),
     };
@@ -148,7 +148,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     expect(mockRepo.findActiveByStudentId).not.toHaveBeenCalled();
   });
 
-  it('allows an ENTRENADOR to access a student\'s active routine', async () => {
+  it("allows an ENTRENADOR to access a student's active routine", async () => {
     const trainerId = '33333333-3333-4333-a333-333333333333';
     const activeRoutine = new Routine({
       id: '22222222-2222-4222-a222-222222222222',
@@ -250,4 +250,3 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     expect(response.body.avisoRenovacion.estado).toBe('pendiente');
   });
 });
-

@@ -35,7 +35,10 @@ export function addMonths(date: Date, months: number): Date {
  * Calcula la diferencia en días calendario entre dos fechas (target - from) en UTC.
  * Normalizado a medianoche UTC para garantizar consistencia independientemente de la zona horaria local.
  */
-export function differenceInCalendarDays(targetDate: Date, fromDate: Date): number {
+export function differenceInCalendarDays(
+  targetDate: Date,
+  fromDate: Date,
+): number {
   const utcTarget = Date.UTC(
     targetDate.getUTCFullYear(),
     targetDate.getUTCMonth(),
@@ -98,7 +101,10 @@ export function calculateRenewalNotice(
   cycleMonths = 3,
 ): RenewalNotice {
   const fechaVencimiento = calculateRenewalDate(startDate, cycleMonths);
-  const diasRestantes = calculateDaysUntilRenewal(fechaVencimiento, currentDate);
+  const diasRestantes = calculateDaysUntilRenewal(
+    fechaVencimiento,
+    currentDate,
+  );
   const estado = determineNoticeState(diasRestantes);
 
   return {
@@ -107,4 +113,3 @@ export function calculateRenewalNotice(
     fechaVencimiento,
   };
 }
-

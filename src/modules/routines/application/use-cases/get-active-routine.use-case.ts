@@ -17,7 +17,9 @@ export class GetActiveRoutineUseCase {
     private readonly clock: Clock,
   ) {}
 
-  async execute(query: GetActiveRoutineQuery): Promise<ActiveRoutineResponseDto> {
+  async execute(
+    query: GetActiveRoutineQuery,
+  ): Promise<ActiveRoutineResponseDto> {
     const routine = await this.routinesRepository.findActiveByStudentId(
       query.studentId,
     );
@@ -56,4 +58,3 @@ export class GetActiveRoutineUseCase {
     };
   }
 }
-

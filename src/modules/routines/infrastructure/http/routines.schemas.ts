@@ -7,4 +7,3 @@ export const getActiveRoutineParamsSchema = z.object({
 export type GetActiveRoutineParams = z.infer<
   typeof getActiveRoutineParamsSchema
 >;
-

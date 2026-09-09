@@ -34,4 +34,3 @@ export class Routine {
     return this.state === 'VIGENTE';
   }
 }
-

@@ -18,4 +18,3 @@ export class ForbiddenAccessError extends Error {
     this.name = 'ForbiddenAccessError';
   }
 }
-

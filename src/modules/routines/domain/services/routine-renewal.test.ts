@@ -109,7 +109,9 @@ describe('routine-renewal domain service', () => {
       const notice = calculateRenewalNotice(startDate, currentDate);
       expect(notice.estado).toBe(EstadoAvisoRenovacion.PENDIENTE);
       expect(notice.diasRestantes).toBe(23);
-      expect(notice.fechaVencimiento.toISOString().slice(0, 10)).toBe('2026-10-01');
+      expect(notice.fechaVencimiento.toISOString().slice(0, 10)).toBe(
+        '2026-10-01',
+      );
     });
 
     it('produces notice with "cerrado hoy" when current date matches the 3-month renewal date', () => {
@@ -119,7 +121,9 @@ describe('routine-renewal domain service', () => {
       const notice = calculateRenewalNotice(startDate, currentDate);
       expect(notice.estado).toBe(EstadoAvisoRenovacion.CERRADO_HOY);
       expect(notice.diasRestantes).toBe(0);
-      expect(notice.fechaVencimiento.toISOString().slice(0, 10)).toBe('2026-09-08');
+      expect(notice.fechaVencimiento.toISOString().slice(0, 10)).toBe(
+        '2026-09-08',
+      );
     });
 
     it('produces notice with "vencido" when cycle renewal date is past', () => {
@@ -129,8 +133,9 @@ describe('routine-renewal domain service', () => {
       const notice = calculateRenewalNotice(startDate, currentDate);
       expect(notice.estado).toBe(EstadoAvisoRenovacion.VENCIDO);
       expect(notice.diasRestantes).toBe(-38);
-      expect(notice.fechaVencimiento.toISOString().slice(0, 10)).toBe('2026-08-01');
+      expect(notice.fechaVencimiento.toISOString().slice(0, 10)).toBe(
+        '2026-08-01',
+      );
     });
   });
 });
-

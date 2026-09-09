@@ -70,7 +70,9 @@ describe('GetActiveRoutineUseCase', () => {
     const result = await useCase.execute({ studentId });
 
     expect(result.diasRestantesParaRenovacion).toBe(0);
-    expect(result.avisoRenovacion.estado).toBe(EstadoAvisoRenovacion.CERRADO_HOY);
+    expect(result.avisoRenovacion.estado).toBe(
+      EstadoAvisoRenovacion.CERRADO_HOY,
+    );
   });
 
   it('derives "vencido" when cycle renewal date has passed', async () => {
@@ -130,4 +132,3 @@ describe('GetActiveRoutineUseCase', () => {
     );
   });
 });
-

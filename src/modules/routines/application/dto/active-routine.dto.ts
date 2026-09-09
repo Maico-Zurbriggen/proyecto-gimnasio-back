@@ -19,4 +19,3 @@ export interface ActiveRoutineResponseDto {
   avisoRenovacion: RenewalNoticeDto;
   currentVersionNumber?: number;
 }
-

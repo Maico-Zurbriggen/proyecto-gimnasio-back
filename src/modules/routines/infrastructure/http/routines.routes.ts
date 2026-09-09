@@ -35,4 +35,3 @@ export function createRoutinesRouter(controller: RoutinesController): Router {
 
   return router;
 }
-
