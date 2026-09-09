@@ -6,8 +6,15 @@ import {
   prisma,
   type HealthCheck,
 } from './database/client';
-import type { Clock } from './modules/routines/application/ports/clock';
-import { SystemClock } from './modules/routines/application/ports/clock';
+import {
+  SystemClock,
+  type Clock,
+} from './modules/routines/application/ports/clock';
+import type { RoutinesRepository } from './modules/routines/application/ports/routines.repository';
+import { GetActiveRoutineUseCase } from './modules/routines/application/use-cases/get-active-routine.use-case';
+import { RoutinesController } from './modules/routines/infrastructure/http/routines.controller';
+import { createRoutinesRouter } from './modules/routines/infrastructure/http/routines.routes';
+import { PrismaRoutinesRepository } from './modules/routines/infrastructure/persistence/prisma-routines.repository';
 import type { UsersRepository } from './modules/users/application/ports/users.repository';
 import { BlockUserOnInactivityUseCase } from './modules/users/application/use-cases/block-user-on-inactivity.use-case';
 import { UsersController } from './modules/users/infrastructure/http/users.controller';
@@ -20,6 +27,7 @@ interface AppDependencies {
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
   usersRepository?: UsersRepository;
+  routinesRepository?: RoutinesRepository;
   clock?: Clock;
 }
 
@@ -50,6 +58,7 @@ export function createApp({
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
   usersRepository,
+  routinesRepository,
   clock,
 }: AppDependencies = {}) {
   const app = express();
@@ -82,6 +91,17 @@ export function createApp({
   const usersRouter = createUsersRouter(usersController);
 
   app.use(usersRouter);
+
+  const resolvedRoutinesRepo =
+    routinesRepository ?? new PrismaRoutinesRepository(prisma);
+  const getActiveRoutineUseCase = new GetActiveRoutineUseCase(
+    resolvedRoutinesRepo,
+    resolvedClock,
+  );
+  const routinesController = new RoutinesController(getActiveRoutineUseCase);
+  const routinesRouter = createRoutinesRouter(routinesController);
+
+  app.use(routinesRouter);
 
   const errorHandler: ErrorRequestHandler = (
     error,
