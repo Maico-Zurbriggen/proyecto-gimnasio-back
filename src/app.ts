@@ -15,6 +15,16 @@ import { GetActiveRoutineUseCase } from './modules/routines/application/use-case
 import { RoutinesController } from './modules/routines/infrastructure/http/routines.controller';
 import { createRoutinesRouter } from './modules/routines/infrastructure/http/routines.routes';
 import { PrismaRoutinesRepository } from './modules/routines/infrastructure/persistence/prisma-routines.repository';
+  prisma,
+  type HealthCheck,
+} from './database/client';
+import type { Clock } from './modules/routines/application/ports/clock';
+import { SystemClock } from './modules/routines/application/ports/clock';
+import type { UsersRepository } from './modules/users/application/ports/users.repository';
+import { BlockUserOnInactivityUseCase } from './modules/users/application/use-cases/block-user-on-inactivity.use-case';
+import { UsersController } from './modules/users/infrastructure/http/users.controller';
+import { createUsersRouter } from './modules/users/infrastructure/http/users.routes';
+import { PrismaUsersRepository } from './modules/users/infrastructure/persistence/prisma-users.repository';
 
 class CorsOriginError extends Error {}
 
@@ -22,6 +32,7 @@ interface AppDependencies {
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
   routinesRepository?: RoutinesRepository;
+  usersRepository?: UsersRepository;
   clock?: Clock;
 }
 
@@ -52,6 +63,7 @@ export function createApp({
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
   routinesRepository,
+  usersRepository,
   clock,
 }: AppDependencies = {}) {
   const app = express();
@@ -84,6 +96,17 @@ export function createApp({
   const routinesRouter = createRoutinesRouter(routinesController);
 
   app.use(routinesRouter);
+  const resolvedUsersRepository =
+    usersRepository ?? new PrismaUsersRepository(prisma);
+  const resolvedClock = clock ?? new SystemClock();
+  const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
+    resolvedUsersRepository,
+    resolvedClock,
+  );
+  const usersController = new UsersController(blockUserOnInactivityUseCase);
+  const usersRouter = createUsersRouter(usersController);
+
+  app.use(usersRouter);
 
   const errorHandler: ErrorRequestHandler = (
     error,
