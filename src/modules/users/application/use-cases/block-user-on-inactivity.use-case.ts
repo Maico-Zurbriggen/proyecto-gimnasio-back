@@ -7,7 +7,7 @@ import type { UsersRepository } from '../ports/users.repository';
 export interface BlockUserOnInactivityCommand {
   userId: string;
   consecutiveFaltas?: number;
-  monthsInactive?: number;
+  daysInactive?: number;
   lastDataDate?: Date;
 }
 
@@ -28,7 +28,7 @@ export class BlockUserOnInactivityUseCase {
     const currentDate = this.clock.now();
     const evaluation = evaluateInactivity({
       consecutiveFaltas: command.consecutiveFaltas,
-      monthsInactive: command.monthsInactive,
+      daysInactive: command.daysInactive,
       lastDataDate: command.lastDataDate,
       currentDate,
     });
@@ -43,7 +43,7 @@ export class BlockUserOnInactivityUseCase {
       state: user.state,
       blocked: evaluation.shouldBlock,
       consecutiveFaltas: evaluation.consecutiveFaltas,
-      monthsInactive: evaluation.monthsInactive,
+      daysInactive: evaluation.daysInactive,
       reason: evaluation.reason,
     };
   }

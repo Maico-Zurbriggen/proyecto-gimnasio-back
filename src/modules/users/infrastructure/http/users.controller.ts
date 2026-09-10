@@ -43,7 +43,7 @@ export class UsersController {
       const result = await this.blockUserOnInactivityUseCase.execute({
         userId: parsedParams.data.userId,
         consecutiveFaltas: parsedBody.data.consecutiveFaltas,
-        monthsInactive: parsedBody.data.monthsInactive,
+        daysInactive: parsedBody.data.daysInactive,
         lastDataDate,
       });
 

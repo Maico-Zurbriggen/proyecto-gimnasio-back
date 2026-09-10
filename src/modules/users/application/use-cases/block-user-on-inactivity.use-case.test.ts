@@ -42,7 +42,7 @@ describe('BlockUserOnInactivityUseCase', () => {
     expect(mockRepo.save).toHaveBeenCalledWith(user);
   });
 
-  it('suspends user when reaching 9 months of inactivity', async () => {
+  it('suspends user when reaching 180 days of inactivity', async () => {
     const user = createActiveUser();
     const mockRepo: UsersRepository = {
       findById: vi.fn().mockResolvedValue(user),
@@ -52,7 +52,7 @@ describe('BlockUserOnInactivityUseCase', () => {
     const useCase = new BlockUserOnInactivityUseCase(mockRepo, mockClock);
     const result = await useCase.execute({
       userId: user.id,
-      monthsInactive: 9,
+      daysInactive: 180,
     });
 
     expect(result.blocked).toBe(true);
@@ -62,7 +62,7 @@ describe('BlockUserOnInactivityUseCase', () => {
     expect(mockRepo.save).toHaveBeenCalledOnce();
   });
 
-  it('leaves user ACTIVO and does not save when user has 1ª falta (3 months)', async () => {
+  it('leaves user ACTIVO and does not save when user has 1ª falta (60 days)', async () => {
     const user = createActiveUser();
     const mockRepo: UsersRepository = {
       findById: vi.fn().mockResolvedValue(user),
@@ -72,7 +72,7 @@ describe('BlockUserOnInactivityUseCase', () => {
     const useCase = new BlockUserOnInactivityUseCase(mockRepo, mockClock);
     const result = await useCase.execute({
       userId: user.id,
-      monthsInactive: 3,
+      daysInactive: 60,
     });
 
     expect(result.blocked).toBe(false);
@@ -82,7 +82,7 @@ describe('BlockUserOnInactivityUseCase', () => {
     expect(mockRepo.save).not.toHaveBeenCalled();
   });
 
-  it('leaves user ACTIVO and does not save when user has 2ª falta (6 months)', async () => {
+  it('leaves user ACTIVO and does not save when user has 2ª falta (120 days)', async () => {
     const user = createActiveUser();
     const mockRepo: UsersRepository = {
       findById: vi.fn().mockResolvedValue(user),
@@ -92,7 +92,7 @@ describe('BlockUserOnInactivityUseCase', () => {
     const useCase = new BlockUserOnInactivityUseCase(mockRepo, mockClock);
     const result = await useCase.execute({
       userId: user.id,
-      monthsInactive: 6,
+      daysInactive: 120,
     });
 
     expect(result.blocked).toBe(false);

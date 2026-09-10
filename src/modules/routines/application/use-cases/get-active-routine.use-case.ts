@@ -48,7 +48,7 @@ export class GetActiveRoutineUseCase {
       origin: routine.origin,
       startDate: routine.startDate.toISOString(),
       renewalDate: notice.fechaVencimiento.toISOString(),
-      diasRestantesParaRenovacion: notice.diasRestantes,
+      diasRestantesRenovacion: notice.diasRestantes,
       avisoRenovacion: {
         estado: notice.estado,
         diasRestantes: notice.diasRestantes,
