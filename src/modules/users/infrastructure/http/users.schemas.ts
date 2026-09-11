@@ -6,7 +6,7 @@ export const inactivityCheckParamsSchema = z.object({
 
 export const inactivityCheckBodySchema = z.object({
   consecutiveFaltas: z.number().int().min(0).optional(),
-  monthsInactive: z.number().int().min(0).optional(),
+  daysInactive: z.number().int().min(0).optional(),
   lastDataDate: z.string().datetime().optional(),
 });
 

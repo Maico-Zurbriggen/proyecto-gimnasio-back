@@ -25,7 +25,7 @@ describe('GetActiveRoutineUseCase', () => {
       targetWeeklyFrequency: 4,
       state: 'VIGENTE',
       origin: 'PLANTILLA_ENTRENADOR',
-      startDate: new Date('2026-07-08T00:00:00Z'),
+      startDate: new Date('2026-08-09T00:00:00Z'),
       currentVersionNumber: 1,
     });
 
@@ -39,10 +39,11 @@ describe('GetActiveRoutineUseCase', () => {
     expect(result.id).toBe(activeRoutine.id);
     expect(result.studentId).toBe(studentId);
     expect(result.state).toBe('VIGENTE');
-    expect(result.startDate).toBe('2026-07-08T00:00:00.000Z');
+    expect(result.startDate).toBe('2026-08-09T00:00:00.000Z');
+    // Ciclo de 60 días: 2026-08-09 + 60 = 2026-10-08
     expect(result.renewalDate).toBe('2026-10-08T00:00:00.000Z');
     // 2026-09-08 to 2026-10-08 is 30 days
-    expect(result.diasRestantesParaRenovacion).toBe(30);
+    expect(result.diasRestantesRenovacion).toBe(30);
     expect(result.avisoRenovacion).toEqual({
       estado: EstadoAvisoRenovacion.PENDIENTE,
       diasRestantes: 30,
@@ -59,7 +60,8 @@ describe('GetActiveRoutineUseCase', () => {
       targetWeeklyFrequency: 3,
       state: 'VIGENTE',
       origin: 'GENERADA',
-      startDate: new Date('2026-06-08T00:00:00Z'),
+      // Ciclo de 60 días: 2026-07-10 + 60 = 2026-09-08, el "ahora" del test
+      startDate: new Date('2026-07-10T00:00:00Z'),
     });
 
     const mockRepository: RoutinesRepository = {
@@ -69,7 +71,7 @@ describe('GetActiveRoutineUseCase', () => {
     const useCase = new GetActiveRoutineUseCase(mockRepository, mockClock);
     const result = await useCase.execute({ studentId });
 
-    expect(result.diasRestantesParaRenovacion).toBe(0);
+    expect(result.diasRestantesRenovacion).toBe(0);
     expect(result.avisoRenovacion.estado).toBe(
       EstadoAvisoRenovacion.CERRADO_HOY,
     );
@@ -94,7 +96,7 @@ describe('GetActiveRoutineUseCase', () => {
     const useCase = new GetActiveRoutineUseCase(mockRepository, mockClock);
     const result = await useCase.execute({ studentId });
 
-    expect(result.diasRestantesParaRenovacion).toBeLessThan(0);
+    expect(result.diasRestantesRenovacion).toBeLessThan(0);
     expect(result.avisoRenovacion.estado).toBe(EstadoAvisoRenovacion.VENCIDO);
   });
 
