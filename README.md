@@ -26,7 +26,7 @@ En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://local
 
 `DATABASE_URL` debe ser la conexión pooled de `backend_test`; el hostname de Neon contiene `-pooler`. `CORS_ORIGINS` acepta orígenes separados por comas y debe incluir `http://localhost:5173` para desarrollo local.
 
-Hasta que exista la primera migración, `npm run db:status` informa correctamente que la base todavía no está administrada por Prisma Migrate. Para verificar la conexión inicial usar `GET /ready`.
+Usar `npm run db:status` para comprobar el estado de las migraciones y `GET /ready` para verificar la conexión de la API con PostgreSQL.
 
 ## Estructura del código
 
@@ -72,6 +72,16 @@ Tras cambiar una variable de entorno, volver a desplegar para aplicarla.
 ## Base de datos
 
 El backend local usa Neon Test compartida. No ejecutar `prisma migrate reset`, `prisma db push`, seeds destructivos ni `migrate dev` sobre esa base. Las migraciones se aplican desde CI mediante `npm run db:deploy`.
+
+### Datos iniciales de Test
+
+Después de aplicar la migración, ejecutar mediante el SQL Editor de Neon y en este orden:
+
+1. `prisma/seeds/seed-reference.sql`: equipamiento, músculos y articulaciones.
+2. `prisma/seeds/seed-catalog.sql`: catálogo base de ejercicios y sus relaciones.
+3. `prisma/seeds/seed-demo.sql`: alumno y entrenador demo, rutina vigente y desempeño histórico simulado.
+
+Los tres scripts son repetibles. `seed-demo.sql` es exclusivo de Test: sus sesiones llevan `simulated = true`, no crea solicitudes de IA y utiliza correos reservados bajo `example.invalid`. La contraseña intencionalmente no es utilizable hasta que autenticación defina y aplique el algoritmo de hash; no reemplazarla por una contraseña en texto plano.
 
 ### Crear una migración
 
