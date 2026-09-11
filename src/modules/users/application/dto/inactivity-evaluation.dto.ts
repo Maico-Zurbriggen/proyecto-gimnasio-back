@@ -5,6 +5,6 @@ export interface InactivityEvaluationResultDto {
   state: UserDomainState;
   blocked: boolean;
   consecutiveFaltas: number;
-  monthsInactive: number;
+  daysInactive: number;
   reason?: string;
 }

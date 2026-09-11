@@ -1,3 +1,27 @@
+/**
+ * Duración del ciclo de rutina, en días calendario (HU01 - T1).
+ *
+ * El ciclo se expresa en DÍAS, no en meses calendario: 60 días es una duración
+ * fija, mientras que "2 meses" varía entre 59 y 62 días según el mes de inicio.
+ * Una duración fija hace que la fecha de vencimiento sea predecible y que el
+ * aviso de renovación se comporte igual para todos los alumnos.
+ *
+ * [SUPUESTO] Este valor no proviene del corpus documental: lo pidió el usuario
+ * final (cátedra) y no tiene respaldo en D5/RN-39a, que define para cada tipo de
+ * rutina frecuencia, series, repeticiones y descansos, pero no duración. En D6/§2
+ * una rutina vigente no vence: se archiva cuando otra entra en vigencia.
+ * Registrar en `planning/risks-and-assumptions.md` cuando se actualice el corpus.
+ */
+export const DURACION_CICLO_DIAS = 60;
+
+/**
+ * Días de antelación con que se muestra el aviso de renovación (HU01 - T6).
+ *
+ * Con un ciclo de 60 días: iniciado hace 52 días o menos no hay aviso (quedan 8
+ * o más); iniciado hace 53 días o más sí lo hay (quedan 7 o menos).
+ */
+export const DIAS_ANTELACION_AVISO = 7;
+
 export enum EstadoAvisoRenovacion {
   PENDIENTE = 'pendiente',
   CERRADO_HOY = 'cerrado hoy',
@@ -13,21 +37,15 @@ export interface RenewalNotice {
 }
 
 /**
- * Agrega meses a una fecha en UTC manejando desbordamientos de fin de mes
- * (ej: 31 de mayo + 3 meses = 31 de agosto; 31 de marzo + 3 meses = 30 de junio).
+ * Agrega días calendario a una fecha en UTC.
+ *
+ * `setUTCDate` normaliza por sí mismo el desborde de mes y de año, y al operar
+ * siempre en UTC el resultado no depende de la zona horaria local ni del horario
+ * de verano.
  */
-export function addMonths(date: Date, months: number): Date {
+export function addDays(date: Date, days: number): Date {
   const result = new Date(date.getTime());
-  const originalDay = result.getUTCDate();
-
-  result.setUTCMonth(result.getUTCMonth() + months);
-
-  // Si el día UTC cambió, hubo desbordamiento al mes siguiente (ej. 31 pasó a 1 de julio)
-  // setUTCDate(0) ajusta al último día del mes deseado.
-  if (result.getUTCDate() !== originalDay) {
-    result.setUTCDate(0);
-  }
-
+  result.setUTCDate(result.getUTCDate() + days);
   return result;
 }
 
@@ -55,10 +73,13 @@ export function differenceInCalendarDays(
 }
 
 /**
- * Calcula la fecha de vencimiento para un ciclo de duración en meses (por defecto 3 meses).
+ * Calcula la fecha de vencimiento del ciclo (por defecto, 90 días).
  */
-export function calculateRenewalDate(startDate: Date, cycleMonths = 3): Date {
-  return addMonths(startDate, cycleMonths);
+export function calculateRenewalDate(
+  startDate: Date,
+  cycleDays: number = DURACION_CICLO_DIAS,
+): Date {
+  return addDays(startDate, cycleDays);
 }
 
 /**
@@ -93,14 +114,42 @@ export function determineNoticeState(
 }
 
 /**
+ * Determina si corresponde mostrar el aviso de renovación (HU01, Esc. 1 a 4).
+ *
+ * Regla de dominio: no se expone en la respuesta del endpoint. El aviso y su
+ * reaparición diaria son HU01/T4 y T5, que son frontend.
+ *
+ * Se muestra cuando faltan 7 días o menos, incluido el día del vencimiento y
+ * todos los posteriores mientras el ciclo siga sin renovarse.
+ */
+export function shouldDisplayNotice(
+  daysUntilRenewal: number,
+  noticeLeadDays: number = DIAS_ANTELACION_AVISO,
+): boolean {
+  return daysUntilRenewal <= noticeLeadDays;
+}
+
+/**
+ * Determina si el aviso puede descartarse (HU01, Esc. 2.1 y 4).
+ *
+ * Regla de dominio: no se expone en la respuesta del endpoint. Ver HU01/T4.
+ *
+ * Un aviso vencido no se descarta: permanece visible hasta que se genere la
+ * rutina nueva. Los estados `pendiente` y `cerrado hoy` sí son descartables.
+ */
+export function isNoticeDismissible(estado: EstadoAvisoRenovacion): boolean {
+  return estado !== EstadoAvisoRenovacion.VENCIDO;
+}
+
+/**
  * Servicio de dominio completo para derivar la información de renovación del ciclo.
  */
 export function calculateRenewalNotice(
   startDate: Date,
   currentDate: Date,
-  cycleMonths = 3,
+  cycleDays: number = DURACION_CICLO_DIAS,
 ): RenewalNotice {
-  const fechaVencimiento = calculateRenewalDate(startDate, cycleMonths);
+  const fechaVencimiento = calculateRenewalDate(startDate, cycleDays);
   const diasRestantes = calculateDaysUntilRenewal(
     fechaVencimiento,
     currentDate,

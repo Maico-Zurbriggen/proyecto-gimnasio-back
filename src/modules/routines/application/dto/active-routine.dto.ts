@@ -15,7 +15,12 @@ export interface ActiveRoutineResponseDto {
   origin: string;
   startDate: string;
   renewalDate: string;
-  diasRestantesParaRenovacion: number;
+  /**
+   * Días restantes para la renovación del ciclo (HU01, Esc. 5).
+   *
+   * Es derivado: se calcula en cada consulta y nunca se persiste.
+   */
+  diasRestantesRenovacion: number;
   avisoRenovacion: RenewalNoticeDto;
   currentVersionNumber?: number;
 }
