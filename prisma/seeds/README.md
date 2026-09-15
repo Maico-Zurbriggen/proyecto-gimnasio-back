@@ -9,7 +9,9 @@ CONFLICT` y nunca crean, alteran ni borran nada.
 | Archivo              | Ambiente          | Contenido                                                      |
 | -------------------- | ----------------- | -------------------------------------------------------------- |
 | `seed-reference.sql` | Test y Producción | Equipamiento, grupos musculares, articulaciones, catálogo base |
-| `seed-test.sql`      | Solo Test         | Gimnasio, usuarios, rutinas, sesiones y auditoría ficticios    |
+| `seed-test.sql`      | Solo Test         | Todo `app` + `ai_integration`: 39 tablas con datos ficticios   |
+| `catalogo-base.csv`  | Solo Test         | Los 14 ejercicios base en CSV para probar                      |
+| `alumnos.csv`        | Solo Test         | Los 5 perfiles de alumno en CSV para probar                    |
 
 ## Orden de carga
 
@@ -31,6 +33,10 @@ actualizan por código natural y el resto usa UUID fijos con `DO NOTHING`.
   por equipamiento (diego), alumna sin asignación ni objetivo (valen),
   aptitud vigente/vencida/ausente, sesión BLOQUEADA/COMPLETADA/EN_CURSO,
   sustitución, omisión con motivo y serie adicional.
+- Adaptación: propuesta P1 ACEPTADA_PARCIAL (genera la v2 de R1) y P2
+  PENDIENTE (sofía), con diagnósticos por ejercicio coherentes con RN-79a.
+- Autenticación: una sesión activa, una revocada, un token de recupero
+  pendiente y uno usado.
 
 ## Supuestos a confirmar con la primera migración
 
@@ -53,7 +59,9 @@ PR antes de cargarlos en Neon Test.
 ## Requisito para la primera migración
 
 `seed-test.sql` corre en una transacción con `SET CONSTRAINTS ALL DEFERRED`
-porque invitaciones y usuarios se referencian mutuamente (`users.invitation_id`
-y `invitations.consumed_by_user_id`). La primera migración debe declarar esas
-dos FK como `DEFERRABLE INITIALLY DEFERRED`; sin eso, la carga circular es
-imposible con restricciones inmediatas.
+por dos referencias circulares: invitaciones y usuarios (`users.invitation_id`
+y `invitations.consumed_by_user_id`), y versiones y propuestas
+(`routine_versions.adaptation_proposal_id` y
+`adaptation_proposals.resulting_version_id`). La primera migración debe
+declarar esas FK como `DEFERRABLE INITIALLY DEFERRED`; sin eso, la carga
+circular es imposible con restricciones inmediatas.
