@@ -1,6 +1,6 @@
 # Proyecto Gimnasio — Backend
 
-API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, persiste en Neon y orquesta solicitudes hacia el servicio Python desplegado también en Vercel. El servicio IA es el único que accede al LLM del Polo mediante ngrok.
+API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, persiste en Neon y orquesta solicitudes hacia el servicio Python desplegado también en Vercel. El servicio IA es el único que accede al LLM del Polo mediante Cloudflare Tunnel.
 
 ## Requisitos
 
