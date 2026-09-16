@@ -53,43 +53,45 @@ ON CONFLICT (code) DO UPDATE SET
 -- ---------------------------------------------------------------------------
 -- 2. Grupos musculares (D2 §4.2) · 17 valores
 -- ---------------------------------------------------------------------------
-INSERT INTO app.muscle_groups (code, name, region) VALUES
-  ('PECTORAL', 'Pectoral', 'TORSO_ANTERIOR'),
-  ('DELTOIDES_ANTERIOR', 'Deltoides anterior', 'HOMBRO'),
-  ('DELTOIDES_LATERAL', 'Deltoides lateral', 'HOMBRO'),
-  ('BICEPS', 'Biceps', 'BRAZO'),
-  ('ANTEBRAZO', 'Antebrazo', 'BRAZO'),
-  ('ABDOMINALES', 'Abdominales', 'CORE'),
-  ('OBLICUOS', 'Oblicuos', 'CORE'),
-  ('CUADRICEPS', 'Cuadriceps', 'PIERNA'),
-  ('ADUCTORES', 'Aductores', 'PIERNA'),
-  ('DORSAL', 'Dorsal ancho', 'TORSO_POSTERIOR'),
-  ('TRAPECIO', 'Trapecio', 'TORSO_POSTERIOR'),
-  ('DELTOIDES_POSTERIOR', 'Deltoides posterior', 'HOMBRO'),
-  ('TRICEPS', 'Triceps', 'BRAZO'),
-  ('ERECTORES_LUMBARES', 'Erectores lumbares', 'CORE'),
-  ('GLUTEO', 'Gluteo', 'PIERNA'),
-  ('ISQUIOTIBIALES', 'Isquiotibiales', 'PIERNA'),
-  ('GEMELOS', 'Gemelos', 'PIERNA')
+INSERT INTO app.muscle_groups (code, name, region, display_order) VALUES
+  ('PECTORAL', 'Pectoral', 'TORSO_ANTERIOR', 1),
+  ('DELTOIDES_ANTERIOR', 'Deltoides anterior', 'HOMBRO', 2),
+  ('DELTOIDES_LATERAL', 'Deltoides lateral', 'HOMBRO', 3),
+  ('BICEPS', 'Biceps', 'BRAZO', 4),
+  ('ANTEBRAZO', 'Antebrazo', 'BRAZO', 5),
+  ('ABDOMINALES', 'Abdominales', 'CORE', 6),
+  ('OBLICUOS', 'Oblicuos', 'CORE', 7),
+  ('CUADRICEPS', 'Cuadriceps', 'PIERNA', 8),
+  ('ADUCTORES', 'Aductores', 'PIERNA', 9),
+  ('DORSAL', 'Dorsal ancho', 'TORSO_POSTERIOR', 10),
+  ('TRAPECIO', 'Trapecio', 'TORSO_POSTERIOR', 11),
+  ('DELTOIDES_POSTERIOR', 'Deltoides posterior', 'HOMBRO', 12),
+  ('TRICEPS', 'Triceps', 'BRAZO', 13),
+  ('ERECTORES_LUMBARES', 'Erectores lumbares', 'CORE', 14),
+  ('GLUTEO', 'Gluteo', 'PIERNA', 15),
+  ('ISQUIOTIBIALES', 'Isquiotibiales', 'PIERNA', 16),
+  ('GEMELOS', 'Gemelos', 'PIERNA', 17)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
-  region = EXCLUDED.region;
+  region = EXCLUDED.region,
+  display_order = EXCLUDED.display_order;
 
 -- ---------------------------------------------------------------------------
 -- 3. Articulaciones (D2 §4.3) · 8 valores
 -- ---------------------------------------------------------------------------
-INSERT INTO app.joints (code, name, region) VALUES
-  ('HOMBRO', 'Hombro', 'MIEMBRO_SUPERIOR'),
-  ('CODO', 'Codo', 'MIEMBRO_SUPERIOR'),
-  ('MUNECA', 'Muneca', 'MIEMBRO_SUPERIOR'),
-  ('COLUMNA_CERVICAL', 'Columna cervical', 'COLUMNA'),
-  ('COLUMNA_LUMBAR', 'Columna lumbar', 'COLUMNA'),
-  ('CADERA', 'Cadera', 'MIEMBRO_INFERIOR'),
-  ('RODILLA', 'Rodilla', 'MIEMBRO_INFERIOR'),
-  ('TOBILLO', 'Tobillo', 'MIEMBRO_INFERIOR')
+INSERT INTO app.joints (code, name, region, display_order) VALUES
+  ('HOMBRO', 'Hombro', 'MIEMBRO_SUPERIOR', 1),
+  ('CODO', 'Codo', 'MIEMBRO_SUPERIOR', 2),
+  ('MUNECA', 'Muneca', 'MIEMBRO_SUPERIOR', 3),
+  ('COLUMNA_CERVICAL', 'Columna cervical', 'COLUMNA', 4),
+  ('COLUMNA_LUMBAR', 'Columna lumbar', 'COLUMNA', 5),
+  ('CADERA', 'Cadera', 'MIEMBRO_INFERIOR', 6),
+  ('RODILLA', 'Rodilla', 'MIEMBRO_INFERIOR', 7),
+  ('TOBILLO', 'Tobillo', 'MIEMBRO_INFERIOR', 8)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
-  region = EXCLUDED.region;
+  region = EXCLUDED.region,
+  display_order = EXCLUDED.display_order;
 
 -- ---------------------------------------------------------------------------
 -- 4. Catalogo base de ejercicios (14 ejercicios, gym_id NULL)
@@ -100,58 +102,58 @@ ON CONFLICT (code) DO UPDATE SET
 -- UUID fijos para que las relaciones sean estables y re-ejecutables.
 INSERT INTO app.exercises (
   id, gym_id, author_user_id, name, instructions, movement_pattern,
-  difficulty_level, unilateral, visual_resource_url, origin, state
+  difficulty_level, unilateral, visual_resource_url, origin
 ) VALUES
-  ('e0000000-0001-4000-8000-000000000001', NULL, NULL,
+  ('10000000-0000-4000-8000-000000000008', NULL, NULL,
    'Sentadilla con barra', 'Barra sobre trapecios, pies al ancho de hombros. Bajar hasta muslos paralelos manteniendo la espalda neutra.',
-   'DOMINANTE_RODILLA', 'INTERMEDIO', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'DOMINANTE_RODILLA', 'INTERMEDIO', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Squat/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0002-4000-8000-000000000002', NULL, NULL,
    'Peso muerto rumano', 'Barra frente a muslos, bisagra de cadera con rodillas semiflexionadas. Bajar hasta tension de isquiotibiales.',
-   'DOMINANTE_CADERA', 'INTERMEDIO', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'DOMINANTE_CADERA', 'INTERMEDIO', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Romanian_Deadlift/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0003-4000-8000-000000000003', NULL, NULL,
    'Press de banca plano', 'Acostado en banco plano, barra al pecho con agarre medio. Empujar hasta extender sin bloquear codos.',
-   'EMPUJE_HORIZONTAL', 'PRINCIPIANTE', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'EMPUJE_HORIZONTAL', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Bench_Press_-_Medium_Grip/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0004-4000-8000-000000000004', NULL, NULL,
    'Remo con barra', 'Tronco inclinado a 45 grados, barra desde el suelo al abdomen bajo. Escapulas retraidas al final.',
-   'TRACCION_HORIZONTAL', 'PRINCIPIANTE', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'TRACCION_HORIZONTAL', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bent_Over_Barbell_Row/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0005-4000-8000-000000000005', NULL, NULL,
    'Dominadas', 'Colgado de la barra con agarre prono. Subir hasta pasar la barbilla y bajar controlado.',
-   'TRACCION_VERTICAL', 'AVANZADO', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'TRACCION_VERTICAL', 'AVANZADO', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Pullups/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0006-4000-8000-000000000006', NULL, NULL,
    'Press militar con mancuernas', 'Sentado o de pie, mancuernas a la altura de hombros. Empujar sobre la cabeza sin arquear la lumbar.',
-   'EMPUJE_VERTICAL', 'INTERMEDIO', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'EMPUJE_VERTICAL', 'INTERMEDIO', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Shoulder_Press/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0007-4000-8000-000000000007', NULL, NULL,
    'Plancha abdominal', 'Apoyo en antebrazos y puntas de pies, cuerpo en linea recta. Sostener sin elevar la cadera.',
-   'CORE', 'PRINCIPIANTE', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'CORE', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Plank/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0008-4000-8000-000000000008', NULL, NULL,
    'Curl de biceps con mancuernas', 'De pie, mancuernas a los costados. Flexionar codos sin balancear el tronco.',
-   'AISLAMIENTO_SUPERIOR', 'PRINCIPIANTE', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'AISLAMIENTO_SUPERIOR', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Alternate_Hammer_Curl/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0009-4000-8000-000000000009', NULL, NULL,
    'Extension de cuadriceps en maquina', 'Sentado en la maquina, extender rodillas hasta casi el bloqueo y bajar controlado.',
-   'AISLAMIENTO_INFERIOR', 'PRINCIPIANTE', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'AISLAMIENTO_INFERIOR', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Leg_Extensions/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0010-4000-8000-000000000010', NULL, NULL,
    'Hip thrust', 'Espalda apoyada en banco, barra sobre la cadera. Elevar hasta alinear rodillas, cadera y hombros.',
-   'DOMINANTE_CADERA', 'INTERMEDIO', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'DOMINANTE_CADERA', 'INTERMEDIO', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Hip_Thrust/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0011-4000-8000-000000000011', NULL, NULL,
    'Fondos en paralelas', 'Suspendido en paralelas, bajar hasta hombros a la altura de codos y empujar sin encoger hombros.',
-   'EMPUJE_VERTICAL', 'INTERMEDIO', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'EMPUJE_VERTICAL', 'INTERMEDIO', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dips_-_Triceps_Version/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0012-4000-8000-000000000012', NULL, NULL,
    'Jalon al pecho en polea alta', 'Sentado frente a la polea, traccionar la barra al pecho alto con el tronco estable.',
-   'TRACCION_VERTICAL', 'PRINCIPIANTE', false, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'TRACCION_VERTICAL', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Wide-Grip_Lat_Pulldown/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0013-4000-8000-000000000013', NULL, NULL,
    'Zancadas caminando con mancuernas', 'Paso largo al frente con mancuerna en cada mano, bajar hasta ambas rodillas a 90 grados y alternar.',
-   'DOMINANTE_RODILLA', 'PRINCIPIANTE', true, NULL, 'CATALOGO_BASE', 'APROBADO'),
+   'DOMINANTE_RODILLA', 'PRINCIPIANTE', true, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Lunges/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0014-4000-8000-000000000014', NULL, NULL,
    'Puente de gluteo', 'Acostado boca arriba con rodillas flexionadas, elevar la cadera hasta alinear rodillas, cadera y hombros.',
-   'DOMINANTE_CADERA', 'PRINCIPIANTE', false, NULL, 'CATALOGO_BASE', 'APROBADO')
+   'DOMINANTE_CADERA', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butt_Lift_(Bridge)/0.jpg', 'CATALOGO_BASE')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   instructions = EXCLUDED.instructions,
   movement_pattern = EXCLUDED.movement_pattern,
   difficulty_level = EXCLUDED.difficulty_level,
   unilateral = EXCLUDED.unilateral,
-  origin = EXCLUDED.origin,
-  state = EXCLUDED.state;
+  visual_resource_url = EXCLUDED.visual_resource_url,
+  origin = EXCLUDED.origin;
 
 -- ---------------------------------------------------------------------------
 -- 5. Equipamiento requerido por ejercicio
@@ -159,9 +161,9 @@ ON CONFLICT (id) DO UPDATE SET
 -- La plancha (0007) y el puente (0014) no declaran filas:
 -- requieren solo PESO_CORPORAL (RN-116).
 INSERT INTO app.exercise_equipment (exercise_id, equipment_code) VALUES
-  ('e0000000-0001-4000-8000-000000000001', 'BARRA'),
-  ('e0000000-0001-4000-8000-000000000001', 'DISCOS'),
-  ('e0000000-0001-4000-8000-000000000001', 'RACK_SENTADILLA'),
+  ('10000000-0000-4000-8000-000000000008', 'BARRA'),
+  ('10000000-0000-4000-8000-000000000008', 'DISCOS'),
+  ('10000000-0000-4000-8000-000000000008', 'RACK_SENTADILLA'),
   ('e0000000-0002-4000-8000-000000000002', 'BARRA'),
   ('e0000000-0002-4000-8000-000000000002', 'DISCOS'),
   ('e0000000-0003-4000-8000-000000000003', 'BARRA'),
@@ -186,9 +188,9 @@ ON CONFLICT DO NOTHING;
 -- 6. Participacion muscular (maximo una PRIMARIA por ejercicio, RI-21)
 -- ---------------------------------------------------------------------------
 INSERT INTO app.exercise_muscles (exercise_id, muscle_code, participation) VALUES
-  ('e0000000-0001-4000-8000-000000000001', 'CUADRICEPS', 'PRIMARIA'),
-  ('e0000000-0001-4000-8000-000000000001', 'GLUTEO', 'SECUNDARIA'),
-  ('e0000000-0001-4000-8000-000000000001', 'ERECTORES_LUMBARES', 'SECUNDARIA'),
+  ('10000000-0000-4000-8000-000000000008', 'CUADRICEPS', 'PRIMARIA'),
+  ('10000000-0000-4000-8000-000000000008', 'GLUTEO', 'SECUNDARIA'),
+  ('10000000-0000-4000-8000-000000000008', 'ERECTORES_LUMBARES', 'SECUNDARIA'),
   ('e0000000-0002-4000-8000-000000000002', 'ISQUIOTIBIALES', 'PRIMARIA'),
   ('e0000000-0002-4000-8000-000000000002', 'GLUTEO', 'SECUNDARIA'),
   ('e0000000-0002-4000-8000-000000000002', 'ERECTORES_LUMBARES', 'SECUNDARIA'),
@@ -225,10 +227,10 @@ ON CONFLICT DO NOTHING;
 -- 7. Articulaciones exigidas por ejercicio (base de RN-44a)
 -- ---------------------------------------------------------------------------
 INSERT INTO app.exercise_joints (exercise_id, joint_code) VALUES
-  ('e0000000-0001-4000-8000-000000000001', 'RODILLA'),
-  ('e0000000-0001-4000-8000-000000000001', 'CADERA'),
-  ('e0000000-0001-4000-8000-000000000001', 'TOBILLO'),
-  ('e0000000-0001-4000-8000-000000000001', 'COLUMNA_LUMBAR'),
+  ('10000000-0000-4000-8000-000000000008', 'RODILLA'),
+  ('10000000-0000-4000-8000-000000000008', 'CADERA'),
+  ('10000000-0000-4000-8000-000000000008', 'TOBILLO'),
+  ('10000000-0000-4000-8000-000000000008', 'COLUMNA_LUMBAR'),
   ('e0000000-0002-4000-8000-000000000002', 'CADERA'),
   ('e0000000-0002-4000-8000-000000000002', 'COLUMNA_LUMBAR'),
   ('e0000000-0002-4000-8000-000000000002', 'RODILLA'),
