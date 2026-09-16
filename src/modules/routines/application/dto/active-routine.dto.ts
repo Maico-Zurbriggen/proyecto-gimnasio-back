@@ -20,6 +20,8 @@ export interface ActiveRoutineResponseDto {
    *
    * Es derivado: se calcula en cada consulta y nunca se persiste.
    */
+  /** Días que dura el ciclo del tipo de rutina (HU01 - T1). */
+  duracionCicloDias: number;
   diasRestantesRenovacion: number;
   avisoRenovacion: RenewalNoticeDto;
   currentVersionNumber?: number;

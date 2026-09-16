@@ -162,3 +162,26 @@ export function calculateRenewalNotice(
     fechaVencimiento,
   };
 }
+
+/**
+ * Duración del ciclo por tipo de rutina (HU01 - T1).
+ *
+ * La duración es un atributo del tipo de rutina, no una constante suelta. Hoy los
+ * cuatro tipos usan el mismo valor; el mapa existe para que cambiarlo en uno solo
+ * no obligue a tocar el resto del código.
+ *
+ * [SUPUESTO] La HU enuncia 90 días en su descripción, pero sus criterios de
+ * aceptación cuentan sobre 60 (52 días sin aviso, 53 con aviso, vencimiento a los
+ * 60). Se implementa 60, que es lo verificable. Pendiente de confirmar con el equipo.
+ */
+export const DURACION_CICLO_POR_TIPO: Readonly<Record<string, number>> = {
+  FUERZA: DURACION_CICLO_DIAS,
+  HIPERTROFIA: DURACION_CICLO_DIAS,
+  RESISTENCIA_MUSCULAR: DURACION_CICLO_DIAS,
+  ACONDICIONAMIENTO_GENERAL: DURACION_CICLO_DIAS,
+};
+
+/** Días de ciclo del tipo de rutina; si el tipo no está mapeado, el valor por defecto. */
+export function duracionCicloDias(routineType: string): number {
+  return DURACION_CICLO_POR_TIPO[routineType] ?? DURACION_CICLO_DIAS;
+}
