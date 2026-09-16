@@ -6,6 +6,7 @@ import {
   prisma,
   type HealthCheck,
 } from './database/client';
+import { createRoutineGenerationGatewayFromEnv } from './integrations/ai/http-routine-generation.gateway';
 import {
   SystemClock,
   type Clock,
@@ -15,6 +16,19 @@ import { GetActiveRoutineUseCase } from './modules/routines/application/use-case
 import { RoutinesController } from './modules/routines/infrastructure/http/routines.controller';
 import { createRoutinesRouter } from './modules/routines/infrastructure/http/routines.routes';
 import { PrismaRoutinesRepository } from './modules/routines/infrastructure/persistence/prisma-routines.repository';
+import type { GenerationContextRepository } from './modules/routine-generations/application/ports/generation-context.repository';
+import {
+  CryptoIdGenerator,
+  type IdGenerator,
+} from './modules/routine-generations/application/ports/id-generator';
+import type { RoutineGenerationGateway } from './modules/routine-generations/application/ports/routine-generation.gateway';
+import type { RoutineGenerationsRepository } from './modules/routine-generations/application/ports/routine-generations.repository';
+import { GetRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/get-routine-generation.use-case';
+import { RequestRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/request-routine-generation.use-case';
+import { RoutineGenerationsController } from './modules/routine-generations/infrastructure/http/routine-generations.controller';
+import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
+import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
+import { PrismaRoutineGenerationsRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-generations.repository';
 import type { UsersRepository } from './modules/users/application/ports/users.repository';
 import { BlockUserOnInactivityUseCase } from './modules/users/application/use-cases/block-user-on-inactivity.use-case';
 import { UsersController } from './modules/users/infrastructure/http/users.controller';
@@ -29,6 +43,10 @@ interface AppDependencies {
   usersRepository?: UsersRepository;
   routinesRepository?: RoutinesRepository;
   clock?: Clock;
+  generationContextRepository?: GenerationContextRepository;
+  routineGenerationGateway?: RoutineGenerationGateway;
+  routineGenerationsRepository?: RoutineGenerationsRepository;
+  idGenerator?: IdGenerator;
 }
 
 function parseAllowedOrigins(value: string | undefined): string[] {
@@ -60,6 +78,10 @@ export function createApp({
   usersRepository,
   routinesRepository,
   clock,
+  generationContextRepository,
+  routineGenerationGateway,
+  routineGenerationsRepository,
+  idGenerator,
 }: AppDependencies = {}) {
   const app = express();
 
@@ -102,6 +124,35 @@ export function createApp({
   const routinesRouter = createRoutinesRouter(routinesController);
 
   app.use(routinesRouter);
+
+  const resolvedGenerationContextRepository =
+    generationContextRepository ??
+    new PrismaGenerationContextRepository(prisma);
+  const resolvedRoutineGenerationGateway =
+    routineGenerationGateway ?? createRoutineGenerationGatewayFromEnv();
+  const resolvedRoutineGenerationsRepository =
+    routineGenerationsRepository ??
+    new PrismaRoutineGenerationsRepository(prisma);
+  const resolvedIdGenerator = idGenerator ?? new CryptoIdGenerator();
+
+  const requestRoutineGenerationUseCase = new RequestRoutineGenerationUseCase(
+    resolvedGenerationContextRepository,
+    resolvedRoutineGenerationGateway,
+    resolvedIdGenerator,
+    resolvedClock,
+  );
+  const getRoutineGenerationUseCase = new GetRoutineGenerationUseCase(
+    resolvedRoutineGenerationsRepository,
+  );
+  const routineGenerationsController = new RoutineGenerationsController(
+    requestRoutineGenerationUseCase,
+    getRoutineGenerationUseCase,
+  );
+  const routineGenerationsRouter = createRoutineGenerationsRouter(
+    routineGenerationsController,
+  );
+
+  app.use(routineGenerationsRouter);
 
   const errorHandler: ErrorRequestHandler = (
     error,
