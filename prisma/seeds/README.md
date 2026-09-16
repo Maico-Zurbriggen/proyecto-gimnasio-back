@@ -38,14 +38,22 @@ actualizan por código natural y el resto usa UUID fijos con `DO NOTHING`.
 - Autenticación: una sesión activa, una revocada, un token de recupero
   pendiente y uno usado.
 
-## Supuestos a confirmar con la primera migración
+## Compatibilidad con la primera migración
 
-Los nombres de tabla y columna siguen literalmente `ARCH-DATABASE`. Estos
-valores no están cerrados en el corpus y se eligieron por convención:
+Los scripts usan los nombres, tipos y restricciones de la migración Prisma
+vigente:
 
-- `gyms.affiliation_status = ACTIVA`, `consents.type = DATOS_SALUD`.
-- `student_profiles.sex` en `MASCULINO`/`FEMENINO`,
-  `membership_state` en `AL_DIA`/`VENCIDA` (informativo, RN-14).
+- `gyms.affiliation_status = AFFILIATED` y
+  `consents.type = DATOS_SALUD`.
+- `student_profiles.sex` usa `MASCULINO`/`FEMENINO`; la migración no incluye
+  una columna `membership_state`.
+- Las cargas de ejercicios con peso corporal se representan con `0.00`, ya
+  que las columnas de carga sugerida y prescripta son obligatorias.
+- `Sentadilla con barra` conserva el UUID
+  `10000000-0000-4000-8000-000000000008` del catálogo anterior para que la
+  transición no duplique el ejercicio ni rompa referencias existentes.
+- Los usuarios ficticios usan el namespace UUID `21000000-...` para no
+  colisionar con los usuarios del antiguo `seed-demo.sql`.
 - `session_set_records.prescribed_exercise_id` y `performed_exercise_id`
   referencian el catálogo de ejercicios (iguales salvo sustitución).
 - Las rutinas semilla cumplen RN-41/RN-43 pero son mínimas a propósito y no
@@ -53,15 +61,10 @@ valores no están cerrados en el corpus y se eligieron por convención:
 - El hash de contraseña es ficticio (`...FAKE.HASH.FOR.SEED.DATA.ONLY`) y no
   corresponde a ninguna clave real.
 
-Si la primera migración nombra algo distinto, actualizar los seeds en el mismo
-PR antes de cargarlos en Neon Test.
+Si una migración futura cambia estos nombres o restricciones, actualizar los
+seeds en el mismo PR antes de cargarlos en Neon Test.
 
-## Requisito para la primera migración
-
-`seed-test.sql` corre en una transacción con `SET CONSTRAINTS ALL DEFERRED`
-por dos referencias circulares: invitaciones y usuarios (`users.invitation_id`
-y `invitations.consumed_by_user_id`), y versiones y propuestas
-(`routine_versions.adaptation_proposal_id` y
-`adaptation_proposals.resulting_version_id`). La primera migración debe
-declarar esas FK como `DEFERRABLE INITIALLY DEFERRED`; sin eso, la carga
-circular es imposible con restricciones inmediatas.
+`seed-test.sql` ordena las inserciones para respetar las claves foráneas
+inmediatas. Las referencias entre una propuesta de adaptación y su versión
+resultante son diferibles y se validan al confirmar la transacción, porque
+forman una relación circular intencional.
