@@ -1,13 +1,13 @@
 # Proyecto Gimnasio — Backend
 
-API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, persiste en Neon y orquesta solicitudes hacia el servicio Python del Polo mediante su API expuesta por ngrok.
+API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, persiste en Neon y orquesta solicitudes hacia el servicio Python desplegado también en Vercel. El servicio IA es el único que accede al LLM del Polo mediante Cloudflare Tunnel.
 
 ## Requisitos
 
 - Node.js 24 o superior;
 - npm 11.6 o superior;
 - acceso autorizado a Neon Test;
-- credencial test del servicio IA cuando se prueba integración real;
+- URL y credencial test del servicio IA cuando se prueba integración real;
 - Docker Desktop, únicamente para quienes creen migraciones.
 
 ## Inicio local
@@ -65,6 +65,7 @@ Vercel detecta `src/app.ts` como la entrada Express. `src/main.ts` se usa solame
 
 - Preview asociado a `test`: `DATABASE_URL` de `backend_test` y URL del frontend Test en `CORS_ORIGINS`.
 - Production asociado a `main`: `DATABASE_URL` de `backend_production` y URL del frontend productivo en `CORS_ORIGINS`.
+- `AI_SERVICE_URL` apunta al deployment equivalente del repo IA y `AI_SERVICE_API_KEY` coincide con el secreto configurado allí.
 - No configurar roles `migrator` ni credenciales administrativas en Vercel.
 
 Tras cambiar una variable de entorno, volver a desplegar para aplicarla.

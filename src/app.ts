@@ -7,6 +7,13 @@ import {
   type HealthCheck,
 } from './database/client';
 import { createRoutineGenerationGatewayFromEnv } from './integrations/ai/http-routine-generation.gateway';
+import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
+import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
+import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
+import { ResolveProposalUseCase } from './modules/evolution/application/use-cases/resolve-proposal.use-case';
+import { ProposalsController } from './modules/evolution/infrastructure/http/proposals.controller';
+import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
+import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
 import {
   SystemClock,
   type Clock,
@@ -29,11 +36,21 @@ import { RoutineGenerationsController } from './modules/routine-generations/infr
 import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
 import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
 import { PrismaRoutineGenerationsRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-generations.repository';
+import type { StudentsRepository } from './modules/students/application/ports/students.repository';
+import type { TrainerAssignments } from './modules/students/application/ports/trainer-assignments.port';
+import { GetStudentStatusUseCase } from './modules/students/application/use-cases/get-student-status.use-case';
+import { ListTrainerStudentsUseCase } from './modules/students/application/use-cases/list-trainer-students.use-case';
+import { UnlockStudentUseCase } from './modules/students/application/use-cases/unlock-student.use-case';
+import { StudentsController } from './modules/students/infrastructure/http/students.controller';
+import { createStudentsRouter } from './modules/students/infrastructure/http/students.routes';
+import { PrismaStudentsRepository } from './modules/students/infrastructure/persistence/prisma-students.repository';
+import { PrismaTrainerAssignments } from './modules/students/infrastructure/persistence/prisma-trainer-assignments.repository';
 import type { UsersRepository } from './modules/users/application/ports/users.repository';
 import { BlockUserOnInactivityUseCase } from './modules/users/application/use-cases/block-user-on-inactivity.use-case';
 import { UsersController } from './modules/users/infrastructure/http/users.controller';
 import { createUsersRouter } from './modules/users/infrastructure/http/users.routes';
 import { PrismaUsersRepository } from './modules/users/infrastructure/persistence/prisma-users.repository';
+import { requireTrainerAssignment } from './shared/middleware/assignment.middleware';
 
 class CorsOriginError extends Error {}
 
@@ -42,6 +59,9 @@ interface AppDependencies {
   database?: HealthCheck;
   usersRepository?: UsersRepository;
   routinesRepository?: RoutinesRepository;
+  studentsRepository?: StudentsRepository;
+  proposalsRepository?: ProposalsRepository;
+  trainerAssignments?: TrainerAssignments;
   clock?: Clock;
   generationContextRepository?: GenerationContextRepository;
   routineGenerationGateway?: RoutineGenerationGateway;
@@ -77,6 +97,9 @@ export function createApp({
   database = databaseHealthCheck,
   usersRepository,
   routinesRepository,
+  studentsRepository,
+  proposalsRepository,
+  trainerAssignments,
   clock,
   generationContextRepository,
   routineGenerationGateway,
@@ -114,6 +137,9 @@ export function createApp({
 
   app.use(usersRouter);
 
+  const resolvedAssignments =
+    trainerAssignments ?? new PrismaTrainerAssignments(prisma);
+
   const resolvedRoutinesRepo =
     routinesRepository ?? new PrismaRoutinesRepository(prisma);
   const getActiveRoutineUseCase = new GetActiveRoutineUseCase(
@@ -121,7 +147,10 @@ export function createApp({
     resolvedClock,
   );
   const routinesController = new RoutinesController(getActiveRoutineUseCase);
-  const routinesRouter = createRoutinesRouter(routinesController);
+  const routinesRouter = createRoutinesRouter(
+    routinesController,
+    requireTrainerAssignment(resolvedAssignments),
+  );
 
   app.use(routinesRouter);
 
@@ -153,6 +182,38 @@ export function createApp({
   );
 
   app.use(routineGenerationsRouter);
+
+  const resolvedStudentsRepo =
+    studentsRepository ?? new PrismaStudentsRepository(prisma);
+  const studentsController = new StudentsController(
+    new ListTrainerStudentsUseCase(resolvedStudentsRepo, resolvedClock),
+    new GetStudentStatusUseCase(
+      resolvedStudentsRepo,
+      resolvedAssignments,
+      resolvedClock,
+    ),
+    new UnlockStudentUseCase(
+      resolvedStudentsRepo,
+      resolvedAssignments,
+      resolvedClock,
+    ),
+  );
+
+  app.use(createStudentsRouter(studentsController));
+
+  const resolvedProposalsRepo =
+    proposalsRepository ?? new PrismaProposalsRepository(prisma);
+  const proposalsController = new ProposalsController(
+    new ListTrainerProposalsUseCase(resolvedProposalsRepo),
+    new GetProposalReviewUseCase(resolvedProposalsRepo, resolvedAssignments),
+    new ResolveProposalUseCase(
+      resolvedProposalsRepo,
+      resolvedAssignments,
+      resolvedClock,
+    ),
+  );
+
+  app.use(createProposalsRouter(proposalsController));
 
   const errorHandler: ErrorRequestHandler = (
     error,
