@@ -1,0 +1,6 @@
+id,email,nombre,roles,fecha_nacimiento,sexo,altura_cm,nivel_experiencia,dias_disponibles,membresia,objetivo_vigente,entrenador,condiciones_vigentes,aptitud
+20000000-0000-4000-8000-000000000003,entrenador.marco@gimnasio.test,Marco Entrenador (test),ENTRENADOR|ALUMNO,1990-05-10,MASCULINO,178.0,AVANZADO,3,AL_DIA,ACONDICIONAMIENTO_GENERAL desde 2026-08-20,entrenador.lucia@gimnasio.test,ninguna,ausente
+20000000-0000-4000-8000-000000000004,alumno.martin@gimnasio.test,Martin Alumno (test),ALUMNO,2000-03-15,MASCULINO,175.5,PRINCIPIANTE,3,AL_DIA,HIPERTROFIA desde 2026-08-01,entrenador.lucia@gimnasio.test,ninguna (TOBILLO LEVE cerrada 2026-07-10),vigente hasta 2027-02-01
+20000000-0000-4000-8000-000000000005,alumna.sofia@gimnasio.test,Sofia Alumna (test),ALUMNO,1998-07-22,FEMENINO,162.0,INTERMEDIO,4,AL_DIA,FUERZA desde 2026-07-15,entrenador.lucia@gimnasio.test,RODILLA LEVE desde 2026-08-15,vencida 2026-01-10
+20000000-0000-4000-8000-000000000006,alumno.diego@gimnasio.test,Diego Alumno (test),ALUMNO,1995-11-30,MASCULINO,182.0,AVANZADO,5,VENCIDA,FUERZA desde 2026-08-10,entrenador.marco@gimnasio.test,HOMBRO MODERADA desde 2026-09-01,ausente
+20000000-0000-4000-8000-000000000007,alumna.valen@gimnasio.test,Valen Alumna (test),ALUMNO,2002-01-05,FEMENINO,168.0,PRINCIPIANTE,2,AL_DIA,sin objetivo,sin asignacion,ninguna (sin consentimiento),ausente
