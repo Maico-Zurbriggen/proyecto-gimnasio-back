@@ -1,13 +1,13 @@
 # Proyecto Gimnasio — Backend
 
-API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, persiste en Neon y orquesta solicitudes hacia el servicio Python del Polo mediante su API expuesta por ngrok.
+API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, persiste en Neon y orquesta solicitudes hacia el servicio Python desplegado también en Vercel. El servicio IA es el único que accede al LLM del Polo mediante Cloudflare Tunnel.
 
 ## Requisitos
 
 - Node.js 24 o superior;
 - npm 11.6 o superior;
 - acceso autorizado a Neon Test;
-- credencial test del servicio IA cuando se prueba integración real;
+- URL y credencial test del servicio IA cuando se prueba integración real;
 - Docker Desktop, únicamente para quienes creen migraciones.
 
 ## Inicio local
@@ -26,7 +26,38 @@ En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://local
 
 `DATABASE_URL` debe ser la conexión pooled de `backend_test`; el hostname de Neon contiene `-pooler`. `CORS_ORIGINS` acepta orígenes separados por comas y debe incluir `http://localhost:5173` para desarrollo local.
 
-Hasta que exista la primera migración, `npm run db:status` informa correctamente que la base todavía no está administrada por Prisma Migrate. Para verificar la conexión inicial usar `GET /ready`.
+Usar `npm run db:status` para comprobar el estado de las migraciones y `GET /ready` para verificar la conexión de la API con PostgreSQL.
+
+## Estructura del código
+
+El backend es un monolito modular con arquitectura hexagonal por dominio:
+
+```text
+src/
+├── config/
+├── infrastructure/                  # Configuración técnica compartida
+│   ├── database/
+│   └── http/
+├── integrations/ai/                 # Adaptador hacia la API Python
+├── modules/
+│   └── <module>/
+│       ├── domain/                  # Entidades y reglas puras
+│       ├── application/
+│       │   ├── ports/               # Interfaces de salida
+│       │   ├── use-cases/           # Orquestación de aplicación
+│       │   └── dto/
+│       └── infrastructure/
+│           ├── http/                # Express y Zod
+│           └── persistence/         # Adaptadores Prisma
+├── shared/
+├── app.ts
+└── main.ts
+
+prisma/                              # Schema, migraciones y seeds
+test/                                # Pruebas API, integración y helpers
+```
+
+Las dependencias apuntan hacia el dominio: éste no conoce Express, Prisma, Zod ni la API Python. Los casos de uso dependen de puertos; los adaptadores HTTP, Prisma y de IA implementan los límites externos. La estructura se crea progresivamente y no se agregan abstracciones o archivos vacíos sin una necesidad concreta. Las reglas completas están en `AGENTS.md`.
 
 ## Despliegue en Vercel
 
@@ -34,6 +65,7 @@ Vercel detecta `src/app.ts` como la entrada Express. `src/main.ts` se usa solame
 
 - Preview asociado a `test`: `DATABASE_URL` de `backend_test` y URL del frontend Test en `CORS_ORIGINS`.
 - Production asociado a `main`: `DATABASE_URL` de `backend_production` y URL del frontend productivo en `CORS_ORIGINS`.
+- `AI_SERVICE_URL` apunta al deployment equivalente del repo IA y `AI_SERVICE_API_KEY` coincide con el secreto configurado allí.
 - No configurar roles `migrator` ni credenciales administrativas en Vercel.
 
 Tras cambiar una variable de entorno, volver a desplegar para aplicarla.
@@ -41,6 +73,16 @@ Tras cambiar una variable de entorno, volver a desplegar para aplicarla.
 ## Base de datos
 
 El backend local usa Neon Test compartida. No ejecutar `prisma migrate reset`, `prisma db push`, seeds destructivos ni `migrate dev` sobre esa base. Las migraciones se aplican desde CI mediante `npm run db:deploy`.
+
+### Datos iniciales de Test
+
+Después de aplicar la migración, ejecutar mediante el SQL Editor de Neon y en este orden:
+
+1. `prisma/seeds/seed-reference.sql`: equipamiento, músculos y articulaciones.
+2. `prisma/seeds/seed-catalog.sql`: catálogo base de ejercicios y sus relaciones.
+3. `prisma/seeds/seed-demo.sql`: alumno y entrenador demo, rutina vigente y desempeño histórico simulado.
+
+Los tres scripts son repetibles. `seed-demo.sql` es exclusivo de Test: sus sesiones llevan `simulated = true`, no crea solicitudes de IA y utiliza correos reservados bajo `example.invalid`. La contraseña intencionalmente no es utilizable hasta que autenticación defina y aplique el algoritmo de hash; no reemplazarla por una contraseña en texto plano.
 
 ### Crear una migración
 

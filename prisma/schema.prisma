@@ -5,6 +5,1023 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["app", "ai_integration"]
 }
 
-// Domain models are intentionally introduced through reviewed migrations.
+enum GymAffiliationStatus {
+  AFFILIATED
+
+  @@schema("app")
+}
+
+enum InvitationStatus {
+  VIGENTE
+  USADA
+  REVOCADA
+  CADUCADA
+
+  @@schema("app")
+}
+
+enum UserRole {
+  ALUMNO
+  ENTRENADOR
+  ADMINISTRADOR
+
+  @@schema("app")
+}
+
+enum UserState {
+  ACTIVO
+  SUSPENDIDO
+
+  @@schema("app")
+}
+
+enum ConsentType {
+  DATOS_SALUD
+
+  @@schema("app")
+}
+
+enum ExperienceLevel {
+  PRINCIPIANTE
+  INTERMEDIO
+  AVANZADO
+
+  @@schema("app")
+}
+
+enum TrainingPurpose {
+  FUERZA
+  HIPERTROFIA
+  RESISTENCIA_MUSCULAR
+  ACONDICIONAMIENTO_GENERAL
+
+  @@schema("app")
+}
+
+enum ConditionSeverity {
+  LEVE
+  MODERADA
+  SEVERA
+
+  @@schema("app")
+}
+
+enum BodyMeasurementType {
+  PESO_CORPORAL
+  PERIMETRO_CINTURA
+  PERIMETRO_CADERA
+  PERIMETRO_BRAZO
+  PERIMETRO_MUSLO
+  PERIMETRO_PECHO
+
+  @@schema("app")
+}
+
+enum MovementPattern {
+  EMPUJE_HORIZONTAL
+  EMPUJE_VERTICAL
+  TRACCION_HORIZONTAL
+  TRACCION_VERTICAL
+  DOMINANTE_RODILLA
+  DOMINANTE_CADERA
+  CORE
+  AISLAMIENTO_SUPERIOR
+  AISLAMIENTO_INFERIOR
+
+  @@schema("app")
+}
+
+enum ExerciseOrigin {
+  CATALOGO_BASE
+  GIMNASIO
+
+  @@schema("app")
+}
+
+enum MuscleParticipation {
+  PRIMARIA
+  SECUNDARIA
+
+  @@schema("app")
+}
+
+enum RoutineOrigin {
+  PLANTILLA_ENTRENADOR
+  GENERADA
+
+  @@schema("app")
+}
+
+enum RoutineState {
+  PROPUESTA
+  BLOQUEADA
+  VIGENTE
+  RECHAZADA
+  DESCARTADA
+  ARCHIVADA
+
+  @@schema("app")
+}
+
+enum RoutineReviewResult {
+  APROBADA
+  APROBADA_CON_CAMBIOS
+  RECHAZADA
+
+  @@schema("app")
+}
+
+enum CompatibilityState {
+  COMPATIBLE
+  ADVERTIDO
+  INCOMPATIBLE
+
+  @@schema("app")
+}
+
+enum TrainingSessionState {
+  EN_CURSO
+  COMPLETADA
+  ABANDONADA
+  BLOQUEADA
+
+  @@schema("app")
+}
+
+enum NoticeType {
+  RUTINA_PROPUESTA_PENDIENTE
+  RUTINA_EN_VIGENCIA
+  RUTINA_RECHAZADA
+  RUTINA_AJUSTADA
+  PROPUESTA_PENDIENTE
+  RECORD_ALCANZADO
+  SENAL_DETECTADA
+  INCOMPATIBILIDAD_SOBREVENIDA
+  APTITUD_POR_VENCER
+
+  @@schema("app")
+}
+
+enum EvolutionSituation {
+  DATOS_INSUFICIENTES
+  SOBREEXIGENCIA
+  PROGRESION_ADECUADA
+  ESTIMULO_INSUFICIENTE
+  ESTANCAMIENTO
+
+  @@schema("app")
+}
+
+enum AdaptationProposalState {
+  PENDIENTE
+  BLOQUEADA
+  ACEPTADA_TOTAL
+  ACEPTADA_PARCIAL
+  RECHAZADA
+  INVALIDADA
+  CADUCADA
+
+  @@schema("app")
+}
+
+enum AdjustmentType {
+  CARGA
+  VOLUMEN
+  ESQUEMA
+  SUSTITUCION
+  ESTRUCTURA
+
+  @@schema("app")
+}
+
+enum ProposedAdjustmentState {
+  PENDIENTE
+  ACEPTADO
+  RECHAZADO
+
+  @@schema("app")
+}
+
+enum PersonalRecordType {
+  CARGA_MAXIMA_ESTIMADA
+  CARGA_MOVILIZADA
+  REPETICIONES
+
+  @@schema("app")
+}
+
+enum AiGenerationRequestState {
+  PENDIENTE
+  PROCESANDO
+  COMPLETADA
+  NO_DISPONIBLE
+  CANCELADA
+
+  @@schema("ai_integration")
+}
+
+enum AiGenerationAttemptState {
+  PENDIENTE
+  PROCESANDO
+  COMPLETADO
+  FALLIDO
+  AGOTADO_POR_TIEMPO
+  SALIDA_INVALIDA
+
+  @@schema("ai_integration")
+}
+
+model Gym {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String
+  timezone          String
+  affiliationStatus GymAffiliationStatus @default(AFFILIATED) @map("affiliation_status")
+  active            Boolean              @default(true)
+  invitations       Invitation[]
+  users             User[]
+  equipment         GymEquipment[]
+  exercises         Exercise[]
+  routineTemplates  RoutineTemplate[]
+
+  @@map("gyms")
+  @@schema("app")
+}
+
+model Invitation {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gymId           String           @map("gym_id") @db.Uuid
+  issuedByUserId  String           @map("issued_by_user_id") @db.Uuid
+  emailNormalized String           @map("email_normalized")
+  status          InvitationStatus @default(VIGENTE)
+  issuedAt        DateTime         @default(now()) @map("issued_at") @db.Timestamptz(6)
+  expiresAt       DateTime         @map("expires_at") @db.Timestamptz(6)
+  gym             Gym              @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  issuedBy        User             @relation("IssuedInvitations", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  roles           InvitationRole[]
+  createdUser     User?            @relation("InvitationCreatedUser")
+
+  @@index([gymId, status])
+  @@index([emailNormalized])
+  @@map("invitations")
+  @@schema("app")
+}
+
+model InvitationRole {
+  invitationId String     @map("invitation_id") @db.Uuid
+  role         UserRole
+  invitation   Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  @@id([invitationId, role])
+  @@map("invitation_roles")
+  @@schema("app")
+}
+
+model User {
+  id                  String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gymId               String                     @map("gym_id") @db.Uuid
+  invitationId        String?                    @unique @map("invitation_id") @db.Uuid
+  emailNormalized     String                     @map("email_normalized")
+  displayName         String                     @map("display_name")
+  passwordHash        String                     @map("password_hash")
+  state               UserState                  @default(ACTIVO)
+  createdAt           DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  gym                 Gym                        @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  sourceInvitation    Invitation?                @relation("InvitationCreatedUser", fields: [invitationId], references: [id], onDelete: Restrict)
+  issuedInvitations   Invitation[]               @relation("IssuedInvitations")
+  roles               UserRoleAssignment[]
+  consents            Consent[]
+  authSessions        AuthSession[]
+  passwordResetTokens PasswordResetToken[]
+  studentProfile      StudentProfile?
+  trainerProfile      TrainerProfile?
+  recordedClearances  FitnessClearance[]         @relation("ClearanceRecorder")
+  assignmentsStarted  TrainerStudentAssignment[] @relation("AssignmentStarter")
+  assignmentsEnded    TrainerStudentAssignment[] @relation("AssignmentEnder")
+  updatedEquipment    GymEquipment[]             @relation("EquipmentUpdater")
+  authoredExercises   Exercise[]                 @relation("ExerciseAuthor")
+  requestedRoutines   Routine[]                  @relation("RoutineRequester")
+  createdVersions     RoutineVersion[]           @relation("RoutineVersionCreator")
+  notices             Notice[]
+  auditLogs           AuditLog[]
+
+  @@unique([gymId, emailNormalized])
+  @@index([gymId, state])
+  @@map("users")
+  @@schema("app")
+}
+
+model UserRoleAssignment {
+  userId String   @map("user_id") @db.Uuid
+  role   UserRole
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, role])
+  @@map("user_roles")
+  @@schema("app")
+}
+
+model Consent {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String      @map("user_id") @db.Uuid
+  type         ConsentType
+  granted      Boolean
+  acceptedText String      @map("accepted_text")
+  recordedAt   DateTime    @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, type, recordedAt])
+  @@map("consents")
+  @@schema("app")
+}
+
+model AuthSession {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  lastActivityAt DateTime  @default(now()) @map("last_activity_at") @db.Timestamptz(6)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("auth_sessions")
+  @@schema("app")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+  @@schema("app")
+}
+
+model Equipment {
+  code         String              @id
+  name         String              @unique
+  displayOrder Int                 @unique @map("display_order")
+  gyms         GymEquipment[]
+  exercises    ExerciseEquipment[]
+
+  @@map("equipment")
+  @@schema("app")
+}
+
+model MuscleGroup {
+  code         String           @id
+  name         String           @unique
+  region       String
+  displayOrder Int              @unique @map("display_order")
+  exercises    ExerciseMuscle[]
+
+  @@map("muscle_groups")
+  @@schema("app")
+}
+
+model Joint {
+  code         String          @id
+  name         String          @unique
+  region       String
+  displayOrder Int             @unique @map("display_order")
+  exercises    ExerciseJoint[]
+
+  @@map("joints")
+  @@schema("app")
+}
+
+model StudentProfile {
+  userId               String                     @id @map("user_id") @db.Uuid
+  birthDate            DateTime                   @map("birth_date") @db.Date
+  sex                  String
+  heightCm             Decimal                    @map("height_cm") @db.Decimal(5, 2)
+  experienceLevel      ExperienceLevel            @map("experience_level")
+  availableDaysPerWeek Int                        @map("available_days_per_week")
+  user                 User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  goals                Goal[]
+  physicalConditions   PhysicalCondition[]
+  fitnessClearances    FitnessClearance[]
+  bodyMeasurements     BodyMeasurement[]
+  trainerAssignments   TrainerStudentAssignment[]
+  routines             Routine[]
+  trainingSessions     TrainingSession[]
+  evolutionDiagnostics EvolutionDiagnostic[]
+  adaptationProposals  AdaptationProposal[]
+  personalRecords      PersonalRecord[]
+
+  @@map("student_profiles")
+  @@schema("app")
+}
+
+model TrainerProfile {
+  userId             String                     @id @map("user_id") @db.Uuid
+  specialty          String
+  experienceYears    Int                        @map("experience_years")
+  presentation       String
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  studentAssignments TrainerStudentAssignment[]
+  routineTemplates   RoutineTemplate[]
+  routineReviews     RoutineReview[]
+  resolvedProposals  AdaptationProposal[]       @relation("AdaptationResolver")
+
+  @@map("trainer_profiles")
+  @@schema("app")
+}
+
+model Goal {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId String          @map("student_id") @db.Uuid
+  type      TrainingPurpose
+  startsOn  DateTime        @map("starts_on") @db.Date
+  endsOn    DateTime?       @map("ends_on") @db.Date
+  student   StudentProfile  @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+
+  @@index([studentId, startsOn])
+  @@map("goals")
+  @@schema("app")
+}
+
+model PhysicalCondition {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId    String            @map("student_id") @db.Uuid
+  bodyZoneCode String            @map("body_zone_code")
+  severity     ConditionSeverity
+  description  String?
+  startsOn     DateTime          @map("starts_on") @db.Date
+  endsOn       DateTime?         @map("ends_on") @db.Date
+  student      StudentProfile    @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+
+  @@index([studentId, startsOn])
+  @@map("physical_conditions")
+  @@schema("app")
+}
+
+model FitnessClearance {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId        String         @map("student_id") @db.Uuid
+  recordedByUserId String         @map("recorded_by_user_id") @db.Uuid
+  issuedOn         DateTime       @map("issued_on") @db.Date
+  expiresOn        DateTime       @map("expires_on") @db.Date
+  observation      String?
+  student          StudentProfile @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  recordedBy       User           @relation("ClearanceRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, expiresOn])
+  @@map("fitness_clearances")
+  @@schema("app")
+}
+
+model BodyMeasurement {
+  id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId  String              @map("student_id") @db.Uuid
+  type       BodyMeasurementType
+  value      Decimal             @db.Decimal(10, 2)
+  measuredOn DateTime            @map("measured_on") @db.Date
+  student    StudentProfile      @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+
+  @@unique([studentId, type, measuredOn])
+  @@map("body_measurements")
+  @@schema("app")
+}
+
+model TrainerStudentAssignment {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId       String         @map("student_id") @db.Uuid
+  trainerId       String         @map("trainer_id") @db.Uuid
+  startsAt        DateTime       @map("starts_at") @db.Timestamptz(6)
+  endsAt          DateTime?      @map("ends_at") @db.Timestamptz(6)
+  startedByUserId String         @map("started_by_user_id") @db.Uuid
+  endedByUserId   String?        @map("ended_by_user_id") @db.Uuid
+  student         StudentProfile @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  trainer         TrainerProfile @relation(fields: [trainerId], references: [userId], onDelete: Restrict)
+  startedBy       User           @relation("AssignmentStarter", fields: [startedByUserId], references: [id], onDelete: Restrict)
+  endedBy         User?          @relation("AssignmentEnder", fields: [endedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, startsAt])
+  @@index([trainerId, startsAt])
+  @@map("trainer_student_assignments")
+  @@schema("app")
+}
+
+model GymEquipment {
+  gymId           String    @map("gym_id") @db.Uuid
+  equipmentCode   String    @map("equipment_code")
+  present         Boolean   @default(true)
+  updatedByUserId String    @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  gym             Gym       @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  equipment       Equipment @relation(fields: [equipmentCode], references: [code], onDelete: Restrict)
+  updatedBy       User      @relation("EquipmentUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@id([gymId, equipmentCode])
+  @@map("gym_equipment")
+  @@schema("app")
+}
+
+model Exercise {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gymId               String?              @map("gym_id") @db.Uuid
+  authorUserId        String?              @map("author_user_id") @db.Uuid
+  name                String
+  instructions        String
+  movementPattern     MovementPattern      @map("movement_pattern")
+  difficultyLevel     ExperienceLevel      @map("difficulty_level")
+  unilateral          Boolean              @default(false)
+  visualResourceUrl   String               @map("visual_resource_url")
+  origin              ExerciseOrigin
+  gym                 Gym?                 @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  author              User?                @relation("ExerciseAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  equipment           ExerciseEquipment[]
+  muscles             ExerciseMuscle[]
+  joints              ExerciseJoint[]
+  templateExercises   TemplateExercise[]
+  routineExercises    RoutineExercise[]
+  prescribedRecords   SessionSetRecord[]   @relation("PrescribedExercise")
+  performedRecords    SessionSetRecord[]   @relation("PerformedExercise")
+  exerciseDiagnostics ExerciseDiagnostic[]
+  personalRecords     PersonalRecord[]
+
+  @@index([gymId])
+  @@index([movementPattern, difficultyLevel])
+  @@map("exercises")
+  @@schema("app")
+}
+
+model ExerciseEquipment {
+  exerciseId    String    @map("exercise_id") @db.Uuid
+  equipmentCode String    @map("equipment_code")
+  exercise      Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  equipment     Equipment @relation(fields: [equipmentCode], references: [code], onDelete: Restrict)
+
+  @@id([exerciseId, equipmentCode])
+  @@map("exercise_equipment")
+  @@schema("app")
+}
+
+model ExerciseMuscle {
+  exerciseId    String              @map("exercise_id") @db.Uuid
+  muscleCode    String              @map("muscle_code")
+  participation MuscleParticipation
+  exercise      Exercise            @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  muscle        MuscleGroup         @relation(fields: [muscleCode], references: [code], onDelete: Restrict)
+
+  @@id([exerciseId, muscleCode])
+  @@map("exercise_muscles")
+  @@schema("app")
+}
+
+model ExerciseJoint {
+  exerciseId String   @map("exercise_id") @db.Uuid
+  jointCode  String   @map("joint_code")
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  joint      Joint    @relation(fields: [jointCode], references: [code], onDelete: Restrict)
+
+  @@id([exerciseId, jointCode])
+  @@map("exercise_joints")
+  @@schema("app")
+}
+
+model RoutineTemplate {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gymId           String          @map("gym_id") @db.Uuid
+  authorTrainerId String          @map("author_trainer_id") @db.Uuid
+  name            String
+  routineType     TrainingPurpose @map("routine_type")
+  active          Boolean         @default(true)
+  gym             Gym             @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  authorTrainer   TrainerProfile  @relation(fields: [authorTrainerId], references: [userId], onDelete: Restrict)
+  days            TemplateDay[]
+  routines        Routine[]
+
+  @@index([gymId, active])
+  @@index([authorTrainerId])
+  @@map("routine_templates")
+  @@schema("app")
+}
+
+model TemplateDay {
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId String             @map("template_id") @db.Uuid
+  position   Int
+  name       String
+  template   RoutineTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exercises  TemplateExercise[]
+
+  @@unique([templateId, position])
+  @@map("template_days")
+  @@schema("app")
+}
+
+model TemplateExercise {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateDayId String        @map("template_day_id") @db.Uuid
+  exerciseId    String        @map("exercise_id") @db.Uuid
+  position      Int
+  note          String?
+  templateDay   TemplateDay   @relation(fields: [templateDayId], references: [id], onDelete: Cascade)
+  exercise      Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  sets          TemplateSet[]
+
+  @@unique([templateDayId, position])
+  @@index([exerciseId])
+  @@map("template_exercises")
+  @@schema("app")
+}
+
+model TemplateSet {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateExerciseId String           @map("template_exercise_id") @db.Uuid
+  position           Int
+  minRepetitions     Int              @map("min_repetitions")
+  maxRepetitions     Int              @map("max_repetitions")
+  suggestedLoad      Decimal          @map("suggested_load") @db.Decimal(10, 2)
+  restSeconds        Int              @map("rest_seconds")
+  warmup             Boolean          @default(false)
+  templateExercise   TemplateExercise @relation(fields: [templateExerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([templateExerciseId, position])
+  @@map("template_sets")
+  @@schema("app")
+}
+
+model Routine {
+  id                       String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId                String              @map("student_id") @db.Uuid
+  sourceTemplateId         String?             @map("source_template_id") @db.Uuid
+  sourceGenerationResultId String?             @unique @map("source_generation_result_id") @db.Uuid
+  routineType              TrainingPurpose     @map("routine_type")
+  targetWeeklyFrequency    Int                 @map("target_weekly_frequency")
+  state                    RoutineState
+  origin                   RoutineOrigin
+  requestedByUserId        String?             @map("requested_by_user_id") @db.Uuid
+  requestedAt              DateTime            @default(now()) @map("requested_at") @db.Timestamptz(6)
+  student                  StudentProfile      @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  sourceTemplate           RoutineTemplate?    @relation(fields: [sourceTemplateId], references: [id], onDelete: Restrict)
+  sourceGenerationResult   AiGenerationResult? @relation(fields: [sourceGenerationResultId], references: [id], onDelete: Restrict)
+  requestedBy              User?               @relation("RoutineRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviews                  RoutineReview[]
+  versions                 RoutineVersion[]
+  trainingSessions         TrainingSession[]
+
+  @@index([studentId, state])
+  @@index([sourceTemplateId])
+  @@map("routines")
+  @@schema("app")
+}
+
+model RoutineReview {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routineId         String              @map("routine_id") @db.Uuid
+  reviewedVersionId String              @map("reviewed_version_id") @db.Uuid
+  reviewerTrainerId String              @map("reviewer_trainer_id") @db.Uuid
+  result            RoutineReviewResult
+  observation       String?
+  reviewedAt        DateTime            @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+  routine           Routine             @relation(fields: [routineId], references: [id], onDelete: Restrict)
+  reviewedVersion   RoutineVersion      @relation(fields: [reviewedVersionId], references: [id], onDelete: Restrict)
+  reviewerTrainer   TrainerProfile      @relation(fields: [reviewerTrainerId], references: [userId], onDelete: Restrict)
+
+  @@index([routineId, reviewedAt])
+  @@index([reviewerTrainerId, reviewedAt])
+  @@map("routine_reviews")
+  @@schema("app")
+}
+
+model RoutineVersion {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routineId            String                @map("routine_id") @db.Uuid
+  versionNumber        Int                   @map("version_number")
+  current              Boolean               @default(false)
+  createdByUserId      String                @map("created_by_user_id") @db.Uuid
+  adaptationProposalId String?               @unique @map("adaptation_proposal_id") @db.Uuid
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  routine              Routine               @relation(fields: [routineId], references: [id], onDelete: Restrict)
+  createdBy            User                  @relation("RoutineVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  days                 RoutineDay[]
+  reviews              RoutineReview[]
+  trainingSessions     TrainingSession[]
+  evolutionDiagnostics EvolutionDiagnostic[]
+  originatingProposal  AdaptationProposal?   @relation("OriginatingAdaptation", fields: [adaptationProposalId], references: [id], onDelete: Restrict)
+  resultingForProposal AdaptationProposal?   @relation("ResultingRoutineVersion")
+
+  @@unique([routineId, versionNumber])
+  @@map("routine_versions")
+  @@schema("app")
+}
+
+model RoutineDay {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routineVersionId String            @map("routine_version_id") @db.Uuid
+  position         Int
+  name             String
+  dominantPattern  MovementPattern   @map("dominant_pattern")
+  routineVersion   RoutineVersion    @relation(fields: [routineVersionId], references: [id], onDelete: Cascade)
+  exercises        RoutineExercise[]
+  trainingSessions TrainingSession[]
+
+  @@unique([routineVersionId, position])
+  @@map("routine_days")
+  @@schema("app")
+}
+
+model RoutineExercise {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routineDayId        String               @map("routine_day_id") @db.Uuid
+  exerciseId          String               @map("exercise_id") @db.Uuid
+  position            Int
+  note                String?
+  compatibilityState  CompatibilityState   @default(COMPATIBLE) @map("compatibility_state")
+  compatibilityReason String?              @map("compatibility_reason")
+  routineDay          RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  exercise            Exercise             @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  sets                PrescribedSet[]
+  proposedAdjustments ProposedAdjustment[]
+
+  @@unique([routineDayId, position])
+  @@index([exerciseId])
+  @@map("routine_exercises")
+  @@schema("app")
+}
+
+model PrescribedSet {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routineExerciseId String          @map("routine_exercise_id") @db.Uuid
+  position          Int
+  minRepetitions    Int             @map("min_repetitions")
+  maxRepetitions    Int             @map("max_repetitions")
+  suggestedLoad     Decimal         @map("suggested_load") @db.Decimal(10, 2)
+  restSeconds       Int             @map("rest_seconds")
+  warmup            Boolean         @default(false)
+  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([routineExerciseId, position])
+  @@map("prescribed_sets")
+  @@schema("app")
+}
+
+model TrainingSession {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId        String               @map("student_id") @db.Uuid
+  routineId        String               @map("routine_id") @db.Uuid
+  routineVersionId String               @map("routine_version_id") @db.Uuid
+  routineDayId     String               @map("routine_day_id") @db.Uuid
+  state            TrainingSessionState @default(EN_CURSO)
+  startedAt        DateTime             @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt      DateTime?            @map("completed_at") @db.Timestamptz(6)
+  occurredOn       DateTime             @map("occurred_on") @db.Date
+  simulated        Boolean              @default(false)
+  student          StudentProfile       @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  routine          Routine              @relation(fields: [routineId], references: [id], onDelete: Restrict)
+  routineVersion   RoutineVersion       @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)
+  routineDay       RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Restrict)
+  setRecords       SessionSetRecord[]
+  personalRecords  PersonalRecord[]
+
+  @@index([studentId, occurredOn])
+  @@index([routineId])
+  @@index([routineVersionId])
+  @@map("training_sessions")
+  @@schema("app")
+}
+
+model SessionSetRecord {
+  id                       String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId                String          @map("session_id") @db.Uuid
+  position                 Int
+  prescribedExerciseId     String          @map("prescribed_exercise_id") @db.Uuid
+  performedExerciseId      String?         @map("performed_exercise_id") @db.Uuid
+  prescribedMinRepetitions Int             @map("prescribed_min_repetitions")
+  prescribedMaxRepetitions Int             @map("prescribed_max_repetitions")
+  prescribedLoad           Decimal         @map("prescribed_load") @db.Decimal(10, 2)
+  warmup                   Boolean         @default(false)
+  performedLoad            Decimal?        @map("performed_load") @db.Decimal(10, 2)
+  performedRepetitions     Int?            @map("performed_repetitions")
+  perceivedEffort          Int?            @map("perceived_effort")
+  completed                Boolean         @default(false)
+  additional               Boolean         @default(false)
+  omissionReason           String?         @map("omission_reason")
+  atypicalConfirmed        Boolean         @default(false) @map("atypical_confirmed")
+  session                  TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  prescribedExercise       Exercise        @relation("PrescribedExercise", fields: [prescribedExerciseId], references: [id], onDelete: Restrict)
+  performedExercise        Exercise?       @relation("PerformedExercise", fields: [performedExerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, position])
+  @@index([prescribedExerciseId])
+  @@index([performedExerciseId])
+  @@map("session_set_records")
+  @@schema("app")
+}
+
+model Notice {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipientUserId String     @map("recipient_user_id") @db.Uuid
+  type            NoticeType
+  referenceType   String     @map("reference_type")
+  referenceId     String     @map("reference_id") @db.Uuid
+  text            String
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  readAt          DateTime?  @map("read_at") @db.Timestamptz(6)
+  expired         Boolean    @default(false)
+  recipient       User       @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, expired, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("notices")
+  @@schema("app")
+}
+
+model AuditLog {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId   String   @map("actor_user_id") @db.Uuid
+  operation     String
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id") @db.Uuid
+  previousValue Json?    @map("previous_value")
+  newValue      Json?    @map("new_value")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor         User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+  @@schema("app")
+}
+
+model EvolutionDiagnostic {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId            String               @map("student_id") @db.Uuid
+  routineVersionId     String               @map("routine_version_id") @db.Uuid
+  periodStart          DateTime             @map("period_start") @db.Date
+  periodEnd            DateTime             @map("period_end") @db.Date
+  globalSituation      EvolutionSituation   @map("global_situation")
+  adherence            Decimal?             @db.Decimal(5, 2)
+  componentVersion     String               @map("component_version")
+  criteriaNotEvaluated Json                 @map("criteria_not_evaluated")
+  calculatedAt         DateTime             @default(now()) @map("calculated_at") @db.Timestamptz(6)
+  student              StudentProfile       @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  routineVersion       RoutineVersion       @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)
+  exerciseDiagnostics  ExerciseDiagnostic[]
+  adaptationProposal   AdaptationProposal?
+
+  @@index([studentId, periodEnd])
+  @@index([routineVersionId, calculatedAt])
+  @@map("evolution_diagnostics")
+  @@schema("app")
+}
+
+model ExerciseDiagnostic {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diagnosticId String              @map("diagnostic_id") @db.Uuid
+  exerciseId   String              @map("exercise_id") @db.Uuid
+  situation    EvolutionSituation
+  metrics      Json
+  diagnostic   EvolutionDiagnostic @relation(fields: [diagnosticId], references: [id], onDelete: Restrict)
+  exercise     Exercise            @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([diagnosticId, exerciseId])
+  @@index([exerciseId])
+  @@map("exercise_diagnostics")
+  @@schema("app")
+}
+
+model AdaptationProposal {
+  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diagnosticId        String                  @unique @map("diagnostic_id") @db.Uuid
+  studentId           String                  @map("student_id") @db.Uuid
+  state               AdaptationProposalState @default(PENDIENTE)
+  resolvedByTrainerId String?                 @map("resolved_by_trainer_id") @db.Uuid
+  resultingVersionId  String?                 @unique @map("resulting_version_id") @db.Uuid
+  resolutionReason    String?                 @map("resolution_reason")
+  componentVersion    String                  @map("component_version")
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt          DateTime?               @map("resolved_at") @db.Timestamptz(6)
+  diagnostic          EvolutionDiagnostic     @relation(fields: [diagnosticId], references: [id], onDelete: Restrict)
+  student             StudentProfile          @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  resolvedByTrainer   TrainerProfile?         @relation("AdaptationResolver", fields: [resolvedByTrainerId], references: [userId], onDelete: Restrict)
+  resultingVersion    RoutineVersion?         @relation("ResultingRoutineVersion", fields: [resultingVersionId], references: [id], onDelete: Restrict)
+  originatedVersion   RoutineVersion?         @relation("OriginatingAdaptation")
+  adjustments         ProposedAdjustment[]
+
+  @@index([studentId, state, createdAt])
+  @@index([resolvedByTrainerId])
+  @@map("adaptation_proposals")
+  @@schema("app")
+}
+
+model ProposedAdjustment {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId        String                  @map("proposal_id") @db.Uuid
+  routineExerciseId String?                 @map("routine_exercise_id") @db.Uuid
+  type              AdjustmentType
+  previousValue     Json                    @map("previous_value")
+  proposedValue     Json                    @map("proposed_value")
+  criterion         String
+  supportingData    Json                    @map("supporting_data")
+  state             ProposedAdjustmentState @default(PENDIENTE)
+  proposal          AdaptationProposal      @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  routineExercise   RoutineExercise?        @relation(fields: [routineExerciseId], references: [id], onDelete: Restrict)
+
+  @@index([proposalId, state])
+  @@index([routineExerciseId])
+  @@map("proposed_adjustments")
+  @@schema("app")
+}
+
+model PersonalRecord {
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId  String             @map("student_id") @db.Uuid
+  exerciseId String             @map("exercise_id") @db.Uuid
+  sessionId  String             @map("session_id") @db.Uuid
+  type       PersonalRecordType
+  value      Decimal            @db.Decimal(12, 2)
+  achievedOn DateTime           @map("achieved_on") @db.Date
+  current    Boolean            @default(true)
+  student    StudentProfile     @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  exercise   Exercise           @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  session    TrainingSession    @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, exerciseId, type, achievedOn])
+  @@index([sessionId])
+  @@map("personal_records")
+  @@schema("app")
+}
+
+model AiGenerationRequest {
+  id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey   String                   @unique @map("idempotency_key")
+  state            AiGenerationRequestState @default(PENDIENTE)
+  minimizedContext Json                     @map("minimized_context")
+  preferences      Json
+  contextHash      String                   @map("context_hash")
+  availableAt      DateTime                 @default(now()) @map("available_at") @db.Timestamptz(6)
+  leaseOwner       String?                  @map("lease_owner")
+  leaseUntil       DateTime?                @map("lease_until") @db.Timestamptz(6)
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt       DateTime?                @map("finished_at") @db.Timestamptz(6)
+  retentionUntil   DateTime                 @map("retention_until") @db.Timestamptz(6)
+  attempts         AiGenerationAttempt[]
+
+  @@index([state, availableAt])
+  @@index([retentionUntil])
+  @@map("ai_generation_requests")
+  @@schema("ai_integration")
+}
+
+model AiGenerationAttempt {
+  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId            String                   @map("request_id") @db.Uuid
+  attemptNumber        Int                      @map("attempt_number")
+  state                AiGenerationAttemptState @default(PENDIENTE)
+  startedAt            DateTime?                @map("started_at") @db.Timestamptz(6)
+  finishedAt           DateTime?                @map("finished_at") @db.Timestamptz(6)
+  errorCode            String?                  @map("error_code")
+  modelVersion         String?                  @map("model_version")
+  configurationVersion String?                  @map("configuration_version")
+  contractVersion      String                   @map("contract_version")
+  inputHash            String                   @map("input_hash")
+  request              AiGenerationRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  result               AiGenerationResult?
+
+  @@unique([requestId, attemptNumber])
+  @@index([state, startedAt])
+  @@map("ai_generation_attempts")
+  @@schema("ai_integration")
+}
+
+model AiGenerationResult {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attemptId         String               @unique @map("attempt_id") @db.Uuid
+  structuredOutput  Json                 @map("structured_output")
+  outputHash        String               @map("output_hash")
+  structurallyValid Boolean              @map("structurally_valid")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  retentionUntil    DateTime             @map("retention_until") @db.Timestamptz(6)
+  attempt           AiGenerationAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  validations       AiResultValidation[]
+  routine           Routine?
+
+  @@index([retentionUntil])
+  @@map("ai_generation_results")
+  @@schema("ai_integration")
+}
+
+model AiResultValidation {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resultId         String             @map("result_id") @db.Uuid
+  validatorVersion String             @map("validator_version")
+  valid            Boolean
+  violations       Json
+  validatedAt      DateTime           @default(now()) @map("validated_at") @db.Timestamptz(6)
+  result           AiGenerationResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@index([resultId, validatedAt])
+  @@map("ai_result_validations")
+  @@schema("ai_integration")
+}
