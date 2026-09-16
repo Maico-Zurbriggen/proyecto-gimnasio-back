@@ -12,6 +12,7 @@ import {
   EstadoAvisoRenovacion,
   isNoticeDismissible,
   shouldDisplayNotice,
+  duracionCicloDias,
 } from './routine-renewal';
 
 describe('routine-renewal domain service', () => {
@@ -244,5 +245,20 @@ describe('routine-renewal domain service', () => {
         '2026-10-08',
       );
     });
+  });
+});
+
+describe('duracionCicloDias (HU01 - T1)', () => {
+  it('defines the cycle length for every routine type', () => {
+    expect(duracionCicloDias('FUERZA')).toBe(DURACION_CICLO_DIAS);
+    expect(duracionCicloDias('HIPERTROFIA')).toBe(DURACION_CICLO_DIAS);
+    expect(duracionCicloDias('RESISTENCIA_MUSCULAR')).toBe(DURACION_CICLO_DIAS);
+    expect(duracionCicloDias('ACONDICIONAMIENTO_GENERAL')).toBe(
+      DURACION_CICLO_DIAS,
+    );
+  });
+
+  it('falls back to the default for an unknown routine type', () => {
+    expect(duracionCicloDias('OTRO')).toBe(DURACION_CICLO_DIAS);
   });
 });

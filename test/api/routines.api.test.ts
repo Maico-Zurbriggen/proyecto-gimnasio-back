@@ -167,6 +167,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     const app = createApp({
       routinesRepository: mockRepo,
       clock: mockClock,
+      trainerAssignments: { isActive: vi.fn().mockResolvedValue(true) },
     });
 
     const response = await request(app)
@@ -374,5 +375,27 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
       .expect(200);
 
     expect(segunda.body.diasRestantesRenovacion).toBe(25);
+  });
+
+  it('returns 403 when an ENTRENADOR has no active assignment with the student (RF-066)', async () => {
+    const trainerId = '33333333-3333-4333-a333-333333333333';
+    const mockRepo: RoutinesRepository = {
+      findActiveByStudentId: vi.fn(),
+    };
+
+    const app = createApp({
+      routinesRepository: mockRepo,
+      clock: mockClock,
+      trainerAssignments: { isActive: vi.fn().mockResolvedValue(false) },
+    });
+
+    const response = await request(app)
+      .get(`/students/${studentId}/routines/active`)
+      .set('x-user-id', trainerId)
+      .set('x-user-roles', 'ENTRENADOR')
+      .expect(403);
+
+    expect(response.body).toEqual({ error: 'forbidden_not_assigned' });
+    expect(mockRepo.findActiveByStudentId).not.toHaveBeenCalled();
   });
 });

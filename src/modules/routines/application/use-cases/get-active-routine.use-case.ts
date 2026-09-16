@@ -2,7 +2,10 @@ import {
   RoutineNotActiveError,
   RoutineNotFoundError,
 } from '../../domain/errors/routine-errors';
-import { calculateRenewalNotice } from '../../domain/services/routine-renewal';
+import {
+  calculateRenewalNotice,
+  duracionCicloDias,
+} from '../../domain/services/routine-renewal';
 import type { ActiveRoutineResponseDto } from '../dto/active-routine.dto';
 import type { Clock } from '../ports/clock';
 import type { RoutinesRepository } from '../ports/routines.repository';
@@ -37,7 +40,13 @@ export class GetActiveRoutineUseCase {
     }
 
     const currentDate = this.clock.now();
-    const notice = calculateRenewalNotice(routine.startDate, currentDate);
+    // HU01 - T1: el ciclo lo define el tipo de rutina.
+    const cicloDias = duracionCicloDias(routine.routineType);
+    const notice = calculateRenewalNotice(
+      routine.startDate,
+      currentDate,
+      cicloDias,
+    );
 
     return {
       id: routine.id,
@@ -48,6 +57,7 @@ export class GetActiveRoutineUseCase {
       origin: routine.origin,
       startDate: routine.startDate.toISOString(),
       renewalDate: notice.fechaVencimiento.toISOString(),
+      duracionCicloDias: cicloDias,
       diasRestantesRenovacion: notice.diasRestantes,
       avisoRenovacion: {
         estado: notice.estado,
