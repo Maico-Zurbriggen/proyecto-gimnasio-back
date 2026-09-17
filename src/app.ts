@@ -6,6 +6,7 @@ import {
   prisma,
   type HealthCheck,
 } from './database/client';
+import { createRoutineGenerationGatewayFromEnv } from './integrations/ai/http-routine-generation.gateway';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
 import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
 import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
@@ -22,6 +23,19 @@ import { GetActiveRoutineUseCase } from './modules/routines/application/use-case
 import { RoutinesController } from './modules/routines/infrastructure/http/routines.controller';
 import { createRoutinesRouter } from './modules/routines/infrastructure/http/routines.routes';
 import { PrismaRoutinesRepository } from './modules/routines/infrastructure/persistence/prisma-routines.repository';
+import type { GenerationContextRepository } from './modules/routine-generations/application/ports/generation-context.repository';
+import {
+  CryptoIdGenerator,
+  type IdGenerator,
+} from './modules/routine-generations/application/ports/id-generator';
+import type { RoutineGenerationGateway } from './modules/routine-generations/application/ports/routine-generation.gateway';
+import type { RoutineGenerationsRepository } from './modules/routine-generations/application/ports/routine-generations.repository';
+import { GetRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/get-routine-generation.use-case';
+import { RequestRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/request-routine-generation.use-case';
+import { RoutineGenerationsController } from './modules/routine-generations/infrastructure/http/routine-generations.controller';
+import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
+import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
+import { PrismaRoutineGenerationsRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-generations.repository';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
 import type { TrainerAssignments } from './modules/students/application/ports/trainer-assignments.port';
 import { GetStudentStatusUseCase } from './modules/students/application/use-cases/get-student-status.use-case';
@@ -49,6 +63,10 @@ interface AppDependencies {
   proposalsRepository?: ProposalsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
+  generationContextRepository?: GenerationContextRepository;
+  routineGenerationGateway?: RoutineGenerationGateway;
+  routineGenerationsRepository?: RoutineGenerationsRepository;
+  idGenerator?: IdGenerator;
 }
 
 function parseAllowedOrigins(value: string | undefined): string[] {
@@ -83,6 +101,10 @@ export function createApp({
   proposalsRepository,
   trainerAssignments,
   clock,
+  generationContextRepository,
+  routineGenerationGateway,
+  routineGenerationsRepository,
+  idGenerator,
 }: AppDependencies = {}) {
   const app = express();
 
@@ -131,6 +153,35 @@ export function createApp({
   );
 
   app.use(routinesRouter);
+
+  const resolvedGenerationContextRepository =
+    generationContextRepository ??
+    new PrismaGenerationContextRepository(prisma);
+  const resolvedRoutineGenerationGateway =
+    routineGenerationGateway ?? createRoutineGenerationGatewayFromEnv();
+  const resolvedRoutineGenerationsRepository =
+    routineGenerationsRepository ??
+    new PrismaRoutineGenerationsRepository(prisma);
+  const resolvedIdGenerator = idGenerator ?? new CryptoIdGenerator();
+
+  const requestRoutineGenerationUseCase = new RequestRoutineGenerationUseCase(
+    resolvedGenerationContextRepository,
+    resolvedRoutineGenerationGateway,
+    resolvedIdGenerator,
+    resolvedClock,
+  );
+  const getRoutineGenerationUseCase = new GetRoutineGenerationUseCase(
+    resolvedRoutineGenerationsRepository,
+  );
+  const routineGenerationsController = new RoutineGenerationsController(
+    requestRoutineGenerationUseCase,
+    getRoutineGenerationUseCase,
+  );
+  const routineGenerationsRouter = createRoutineGenerationsRouter(
+    routineGenerationsController,
+  );
+
+  app.use(routineGenerationsRouter);
 
   const resolvedStudentsRepo =
     studentsRepository ?? new PrismaStudentsRepository(prisma);
