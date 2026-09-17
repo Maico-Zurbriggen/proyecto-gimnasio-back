@@ -13,6 +13,12 @@ import { ResolveProposalUseCase } from './modules/evolution/application/use-case
 import { ProposalsController } from './modules/evolution/infrastructure/http/proposals.controller';
 import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
+import type { InvitationsRepository } from './modules/invitations/application/ports/invitations.repository';
+import { CompleteAccountUseCase } from './modules/invitations/application/use-cases/complete-account.use-case';
+import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
+import { InvitationsController } from './modules/invitations/infrastructure/http/invitations.controller';
+import { createInvitationsRouter } from './modules/invitations/infrastructure/http/invitations.routes';
+import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
 import {
   SystemClock,
   type Clock,
@@ -47,6 +53,7 @@ interface AppDependencies {
   routinesRepository?: RoutinesRepository;
   studentsRepository?: StudentsRepository;
   proposalsRepository?: ProposalsRepository;
+  invitationsRepository?: InvitationsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
 }
@@ -81,6 +88,7 @@ export function createApp({
   routinesRepository,
   studentsRepository,
   proposalsRepository,
+  invitationsRepository,
   trainerAssignments,
   clock,
 }: AppDependencies = {}) {
@@ -163,6 +171,15 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+
+  const resolvedInvitationsRepo =
+    invitationsRepository ?? new PrismaInvitationsRepository(prisma);
+  const invitationsController = new InvitationsController(
+    new ValidateInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
+    new CompleteAccountUseCase(resolvedInvitationsRepo, resolvedClock),
+  );
+
+  app.use(createInvitationsRouter(invitationsController));
 
   const errorHandler: ErrorRequestHandler = (
     error,

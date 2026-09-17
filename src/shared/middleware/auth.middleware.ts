@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import type { UserRole } from '../types/auth';
+import { JwtTokenService } from '../../modules/invitations/domain/services/jwt-token.service';
 
 /**
  * Middleware para autenticar la petición.
@@ -11,25 +12,40 @@ export function authenticate(
   _res: Response,
   next: NextFunction,
 ): void {
-  if (!req.user) {
-    const userId = req.headers['x-user-id'];
-    const userRolesHeader = req.headers['x-user-roles'];
-    const gymId = req.headers['x-gym-id'];
-
-    if (typeof userId === 'string' && userId.trim().length > 0) {
-      const roles = (
-        typeof userRolesHeader === 'string'
-          ? userRolesHeader.split(',').map((r) => r.trim() as UserRole)
-          : ['ALUMNO']
-      ) as UserRole[];
-
-      req.user = {
-        id: userId,
-        gymId: typeof gymId === 'string' ? gymId : 'default-gym',
-        roles,
-      };
+    const authHeader = req.headers['authorization'];
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7).trim();
+      try {
+        const payload = JwtTokenService.verify(token);
+        req.user = {
+          id: payload.sub,
+          gymId: payload.gymId,
+          roles: payload.roles as UserRole[],
+        };
+      } catch {
+        // Token inválido o expirado, no se autentica la petición
+      }
     }
-  }
+
+    if (!req.user) {
+      const userId = req.headers['x-user-id'];
+      const userRolesHeader = req.headers['x-user-roles'];
+      const gymId = req.headers['x-gym-id'];
+
+      if (typeof userId === 'string' && userId.trim().length > 0) {
+        const roles = (
+          typeof userRolesHeader === 'string'
+            ? userRolesHeader.split(',').map((r) => r.trim() as UserRole)
+            : ['ALUMNO']
+        ) as UserRole[];
+
+        req.user = {
+          id: userId,
+          gymId: typeof gymId === 'string' ? gymId : 'default-gym',
+          roles,
+        };
+      }
+    }
 
   next();
 }
