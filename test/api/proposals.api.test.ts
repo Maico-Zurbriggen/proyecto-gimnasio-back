@@ -187,6 +187,47 @@ describe('Proposals API - HU04', () => {
     ).expect(400);
   });
 
+  it('Esc. 3: total acceptance (aprobación) creates a new version with all adjustments and resets the cycle without a second review', async () => {
+    const { app, proposalsRepository } = buildApp();
+
+    const response = await asTrainer(
+      request(app).post(`/proposals/${PROPOSAL}/resolution`),
+    )
+      .send({ decision: 'ACEPTADA_TOTAL' })
+      .expect(200);
+
+    expect(response.body).toEqual({
+      proposalId: PROPOSAL,
+      state: 'ACEPTADA_TOTAL',
+      resultingVersionNumber: 2,
+    });
+
+    const command = vi.mocked(proposalsRepository.persistResolution).mock
+      .calls[0]![0];
+    expect(command.plan).toMatchObject({
+      state: 'ACEPTADA_TOTAL',
+      acceptedIds: [ADJ_LOAD, ADJ_SCHEME],
+      rejectedIds: [],
+      // RN-35a: la resolución es la revisión y no se pide segunda revisión
+      reviewResult: 'APROBADA',
+    });
+    expect(command.routineId).toBe(ROUTINE);
+    expect(command.resolvedAt).toEqual(now);
+
+    const sets = command.newVersionDays![0]!.exercises[0]!.sets;
+    expect(sets.every((set) => set.suggestedLoad === 62.5)).toBe(true);
+    expect(
+      sets.every((set) => set.minRepetitions === 4 && set.maxRepetitions === 6),
+    ).toBe(true);
+    // Invariante RF-092: versión de origen conservada íntegra
+    expect(currentVersion.days[0]!.exercises[0]!.sets[0]!.suggestedLoad).toBe(
+      60,
+    );
+    expect(currentVersion.days[0]!.exercises[0]!.sets[0]!.minRepetitions).toBe(
+      3,
+    );
+  });
+
   it('Esc. 3: partial acceptance creates a new version with only the accepted adjustments', async () => {
     const { app, proposalsRepository } = buildApp();
 
