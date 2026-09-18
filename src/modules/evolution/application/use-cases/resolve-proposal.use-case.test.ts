@@ -6,7 +6,11 @@ import {
   ProposalNotPendingError,
   RoutineNotAvailableError,
 } from '../../domain/errors/proposal-errors';
-import type { CurrentVersionSnapshot, ProposalRecord, ProposalsRepository } from '../ports/proposals.repository';
+import type {
+  CurrentVersionSnapshot,
+  ProposalRecord,
+  ProposalsRepository,
+} from '../ports/proposals.repository';
 import { ResolveProposalUseCase } from './resolve-proposal.use-case';
 
 const TRAINER_ID = '33333333-3333-4333-a333-333333333333';
@@ -19,7 +23,9 @@ const ADJ_SCHEME_ID = '67000000-0000-4000-8000-000000000002';
 const resolvedAt = new Date('2026-09-17T12:00:00Z');
 const clock = { now: () => resolvedAt };
 
-function createProposalRecord(overrides: Partial<ProposalRecord> = {}): ProposalRecord {
+function createProposalRecord(
+  overrides: Partial<ProposalRecord> = {},
+): ProposalRecord {
   return {
     id: PROPOSAL_ID,
     state: 'PENDIENTE',
@@ -154,10 +160,16 @@ describe('ResolveProposalUseCase - HU04 / RF-092', () => {
       resultingVersionNumber: 2,
     });
 
-    expect(mockAssignments.isActive).toHaveBeenCalledWith(TRAINER_ID, STUDENT_ID);
-    expect(mockProposalsRepository.findCurrentVersion).toHaveBeenCalledWith(ROUTINE_ID);
+    expect(mockAssignments.isActive).toHaveBeenCalledWith(
+      TRAINER_ID,
+      STUDENT_ID,
+    );
+    expect(mockProposalsRepository.findCurrentVersion).toHaveBeenCalledWith(
+      ROUTINE_ID,
+    );
 
-    const command = vi.mocked(mockProposalsRepository.persistResolution).mock.calls[0]![0];
+    const command = vi.mocked(mockProposalsRepository.persistResolution).mock
+      .calls[0]![0];
     expect(command.proposalId).toBe(PROPOSAL_ID);
     expect(command.trainerId).toBe(TRAINER_ID);
     expect(command.studentId).toBe(STUDENT_ID);
@@ -177,14 +189,32 @@ describe('ResolveProposalUseCase - HU04 / RF-092', () => {
     expect(command.newVersionDays).toBeDefined();
     const newSets = command.newVersionDays![0]!.exercises[0]!.sets;
     // Set de calentamiento no se altera
-    expect(newSets[0]).toMatchObject({ warmup: true, suggestedLoad: 20, minRepetitions: 3 });
+    expect(newSets[0]).toMatchObject({
+      warmup: true,
+      suggestedLoad: 20,
+      minRepetitions: 3,
+    });
     // Sets de trabajo actualizados con carga y esquema
-    expect(newSets[1]).toMatchObject({ warmup: false, suggestedLoad: 65, minRepetitions: 4, maxRepetitions: 6 });
-    expect(newSets[2]).toMatchObject({ warmup: false, suggestedLoad: 65, minRepetitions: 4, maxRepetitions: 6 });
+    expect(newSets[1]).toMatchObject({
+      warmup: false,
+      suggestedLoad: 65,
+      minRepetitions: 4,
+      maxRepetitions: 6,
+    });
+    expect(newSets[2]).toMatchObject({
+      warmup: false,
+      suggestedLoad: 65,
+      minRepetitions: 4,
+      maxRepetitions: 6,
+    });
 
     // Invariante RF-092: La versión de origen se conserva íntegra sin mutaciones
-    expect(currentVersion.days[0]!.exercises[0]!.sets[1]!.suggestedLoad).toBe(60);
-    expect(currentVersion.days[0]!.exercises[0]!.sets[1]!.minRepetitions).toBe(3);
+    expect(currentVersion.days[0]!.exercises[0]!.sets[1]!.suggestedLoad).toBe(
+      60,
+    );
+    expect(currentVersion.days[0]!.exercises[0]!.sets[1]!.minRepetitions).toBe(
+      3,
+    );
   });
 
   it('Esc. 3: partial approval creates a new version with only the accepted adjustments (RN-88)', async () => {
@@ -221,7 +251,8 @@ describe('ResolveProposalUseCase - HU04 / RF-092', () => {
     expect(result.state).toBe('ACEPTADA_PARCIAL');
     expect(result.resultingVersionNumber).toBe(2);
 
-    const command = vi.mocked(mockProposalsRepository.persistResolution).mock.calls[0]![0];
+    const command = vi.mocked(mockProposalsRepository.persistResolution).mock
+      .calls[0]![0];
     expect(command.plan.reviewResult).toBe('APROBADA_CON_CAMBIOS');
     expect(command.plan.acceptedIds).toEqual([ADJ_LOAD_ID]);
     expect(command.plan.rejectedIds).toEqual([ADJ_SCHEME_ID]);
@@ -270,11 +301,14 @@ describe('ResolveProposalUseCase - HU04 / RF-092', () => {
 
     expect(mockProposalsRepository.findCurrentVersion).not.toHaveBeenCalled();
 
-    const command = vi.mocked(mockProposalsRepository.persistResolution).mock.calls[0]![0];
+    const command = vi.mocked(mockProposalsRepository.persistResolution).mock
+      .calls[0]![0];
     expect(command.newVersionDays).toBeNull();
     expect(command.routineId).toBeNull();
     expect(command.plan.reviewResult).toBeNull();
-    expect(command.plan.reason).toBe('Alumno con sobreentrenamiento, mantener descarga');
+    expect(command.plan.reason).toBe(
+      'Alumno con sobreentrenamiento, mantener descarga',
+    );
   });
 
   it('throws ProposalNotFoundError when proposal does not exist', async () => {
@@ -406,4 +440,3 @@ describe('ResolveProposalUseCase - HU04 / RF-092', () => {
     ).rejects.toThrow(ProposalNotPendingError);
   });
 });
-
