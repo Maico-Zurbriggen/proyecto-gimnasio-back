@@ -1,10 +1,83 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import type { ResolveSessionUseCase } from '../../modules/auth/application/use-cases/resolve-session.use-case';
+import { leerCookieDeSesion } from '../../modules/auth/infrastructure/http/session-cookie';
 import type { UserRole } from '../types/auth';
 
 /**
- * Middleware para autenticar la petición.
- * Permite resolver el usuario desde req.user (si fue inyectado previamente) o mediante headers para desarrollo/test.
+ * Atajo de identidad por headers, para desarrollo y pruebas.
+ *
+ * Existía antes del login (HU07) y se conserva **sólo fuera de producción**: los
+ * tests de API de todos los módulos lo usan para no tener que autenticarse en cada
+ * caso. En producción la única vía es la cookie de sesión.
+ */
+function identidadDeDesarrollo(req: Request): void {
+  if (process.env.NODE_ENV === 'production') {
+    return;
+  }
+
+  const userId = req.headers['x-user-id'];
+  const userRolesHeader = req.headers['x-user-roles'];
+  const gymId = req.headers['x-gym-id'];
+
+  if (typeof userId === 'string' && userId.trim().length > 0) {
+    const roles = (
+      typeof userRolesHeader === 'string'
+        ? userRolesHeader.split(',').map((r) => r.trim() as UserRole)
+        : ['ALUMNO']
+    ) as UserRole[];
+
+    req.user = {
+      id: userId,
+      gymId: typeof gymId === 'string' ? gymId : 'default-gym',
+      roles,
+    };
+  }
+}
+
+/**
+ * Resuelve la identidad de la petición (HU07 - T2 y T5).
+ *
+ * Orden: lo ya inyectado, después la cookie de sesión, y por último el atajo por
+ * headers fuera de producción. Nunca responde por sí mismo: dejar pasar sin
+ * usuario es tarea de `requireAuth`, que es el que devuelve 401.
+ */
+export function createAuthenticate(resolveSession?: ResolveSessionUseCase) {
+  return async (
+    req: Request,
+    _res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    if (req.user) {
+      next();
+      return;
+    }
+
+    const token = leerCookieDeSesion(req);
+    if (resolveSession && token) {
+      try {
+        const user = await resolveSession.execute(token);
+        if (user) {
+          req.user = user;
+          next();
+          return;
+        }
+      } catch {
+        // Una falla al resolver la sesión se trata como sesión ausente: el
+        // usuario queda sin autenticar y `requireAuth` responde 401.
+      }
+    }
+
+    identidadDeDesarrollo(req);
+    next();
+  };
+}
+
+/**
+ * Middleware de autenticación sin resolución de sesión.
+ *
+ * Se conserva para los módulos y pruebas que lo importan directamente; la app lo
+ * reemplaza por `createAuthenticate(resolveSession)` al construirse.
  */
 export function authenticate(
   req: Request,
@@ -12,25 +85,8 @@ export function authenticate(
   next: NextFunction,
 ): void {
   if (!req.user) {
-    const userId = req.headers['x-user-id'];
-    const userRolesHeader = req.headers['x-user-roles'];
-    const gymId = req.headers['x-gym-id'];
-
-    if (typeof userId === 'string' && userId.trim().length > 0) {
-      const roles = (
-        typeof userRolesHeader === 'string'
-          ? userRolesHeader.split(',').map((r) => r.trim() as UserRole)
-          : ['ALUMNO']
-      ) as UserRole[];
-
-      req.user = {
-        id: userId,
-        gymId: typeof gymId === 'string' ? gymId : 'default-gym',
-        roles,
-      };
-    }
+    identidadDeDesarrollo(req);
   }
-
   next();
 }
 
