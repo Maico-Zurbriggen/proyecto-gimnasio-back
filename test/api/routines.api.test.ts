@@ -179,6 +179,51 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     expect(response.body.studentId).toBe(studentId);
   });
 
+  it('allows an ALUMNO+ENTRENADOR to use the trainer permission for an assigned student', async () => {
+    const trainerId = '33333333-3333-4333-a333-333333333333';
+    const activeRoutine = new Routine({
+      id: '22222222-2222-4222-a222-222222222222',
+      studentId,
+      routineType: 'HIPERTROFIA',
+      targetWeeklyFrequency: 4,
+      state: 'VIGENTE',
+      origin: 'PLANTILLA_ENTRENADOR',
+      startDate: new Date('2026-08-09T00:00:00Z'),
+    });
+    const mockRepo: RoutinesRepository = {
+      findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+    };
+    const isActive = vi.fn().mockResolvedValue(true);
+    const app = createApp({
+      routinesRepository: mockRepo,
+      clock: mockClock,
+      trainerAssignments: { isActive },
+    });
+
+    await request(app)
+      .get(`/students/${studentId}/routines/active`)
+      .set('x-user-id', trainerId)
+      .set('x-user-roles', 'ALUMNO,ENTRENADOR')
+      .expect(200);
+
+    expect(isActive).toHaveBeenCalledWith(trainerId, studentId);
+  });
+
+  it('rejects an ADMINISTRADOR because routines are individual sensitive data', async () => {
+    const mockRepo: RoutinesRepository = {
+      findActiveByStudentId: vi.fn(),
+    };
+    const app = createApp({ routinesRepository: mockRepo, clock: mockClock });
+
+    await request(app)
+      .get(`/students/${studentId}/routines/active`)
+      .set('x-user-id', '44444444-4444-4444-a444-444444444444')
+      .set('x-user-roles', 'ADMINISTRADOR')
+      .expect(403, { error: 'forbidden_role' });
+
+    expect(mockRepo.findActiveByStudentId).not.toHaveBeenCalled();
+  });
+
   it('returns 401 Unauthorized when unauthenticated', async () => {
     const app = createApp();
 

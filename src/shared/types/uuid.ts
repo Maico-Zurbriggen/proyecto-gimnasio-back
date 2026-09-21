@@ -3,7 +3,8 @@ const UUID_PATTERN =
 
 /**
  * Evita consultar columnas `uuid` con identificadores mal formados, por ejemplo
- * un `x-user-id` inválido: Prisma respondería con un error en lugar de "no existe".
+ * una identidad inválida en pruebas: Prisma respondería con un error en lugar de
+ * "no existe".
  */
 export function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value);

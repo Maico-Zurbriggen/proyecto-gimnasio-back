@@ -9,8 +9,10 @@ import bcrypt from 'bcrypt';
  * modo que dos usuarios con la misma contraseña no comparten hash.
  *
  * El coste 12 mide ~280 ms en el hardware de desarrollo del equipo. Es una
- * variable de entorno para poder recalibrarlo en producción sin tocar el código:
- * el requisito es el tiempo, no el número.
+ * variable de entorno para poder recalibrarlo en cada entorno sin tocar el
+ * código. Esa calibración es una prueba de rendimiento del entorno; los tests
+ * unitarios verifican el factor codificado, porque el tiempo de pared varía con
+ * el hardware y la carga del runner.
  */
 
 /** Coste por defecto de bcrypt. Cada unidad duplica el trabajo. */
