@@ -87,7 +87,7 @@ function tokenDeCookie(setCookie: string[] | undefined): string | undefined {
 
 describe('Auth API - HU07', () => {
   describe('POST /auth/login (T1)', () => {
-    it('logs in with valid credentials and issues an httpOnly cookie', async () => {
+    it('issues an httpOnly SameSite=Lax cookie outside production', async () => {
       const passwordHash = await hashearContrasena(PASSWORD);
       const { repo, created } = createAuthRepo({ passwordHash });
       const app = createApp({ authRepository: repo, clock });
@@ -106,12 +106,40 @@ describe('Auth API - HU07', () => {
       // RNF-16: la cookie no es accesible desde el código de la página.
       expect(cookie).toContain('HttpOnly');
       expect(cookie).toContain('SameSite=Lax');
+      expect(cookie).not.toContain('SameSite=None');
+      expect(cookie).not.toContain('; Secure');
 
       // En base queda el hash del token, nunca el token utilizable.
       const token = tokenDeCookie(setCookie);
       expect(created).toHaveLength(1);
       expect(created[0]?.tokenHash).toBe(hashearToken(token ?? ''));
       expect(created[0]?.tokenHash).not.toBe(token);
+    });
+
+    it('issues a cross-site secure cookie in production deployments', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      try {
+        const passwordHash = await hashearContrasena(PASSWORD);
+        const { repo } = createAuthRepo({ passwordHash });
+        const app = createApp({ authRepository: repo, clock });
+
+        const response = await request(app)
+          .post('/auth/login')
+          .send({ email: 'alumno@gym.test', password: PASSWORD })
+          .expect(200);
+
+        const setCookie = response.headers['set-cookie'] as unknown as string[];
+        const cookie = setCookie.find((value) =>
+          value.startsWith('gym_session='),
+        );
+
+        expect(cookie).toContain('HttpOnly');
+        expect(cookie).toContain('Secure');
+        expect(cookie).toContain('SameSite=None');
+        expect(cookie).not.toContain('SameSite=Lax');
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
 
     it('T3: the session expires 30 days after the login', async () => {
@@ -226,7 +254,35 @@ describe('Auth API - HU07', () => {
 
       expect(revoked).toEqual([hashearToken(token ?? '')]);
       const cleared = logout.headers['set-cookie'] as unknown as string[];
-      expect(cleared.some((c) => c.startsWith('gym_session=;'))).toBe(true);
+      const clearedCookie = cleared.find((value) =>
+        value.startsWith('gym_session=;'),
+      );
+      expect(clearedCookie).toContain('HttpOnly');
+      expect(clearedCookie).toContain('SameSite=Lax');
+      expect(clearedCookie).not.toContain('SameSite=None');
+      expect(clearedCookie).not.toContain('; Secure');
+    });
+
+    it('clears the cross-site cookie with matching production attributes', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      try {
+        const { repo } = createAuthRepo({ passwordHash: 'unused' });
+        const app = createApp({ authRepository: repo, clock });
+
+        const logout = await request(app).post('/auth/logout').expect(204);
+
+        const cleared = logout.headers['set-cookie'] as unknown as string[];
+        const clearedCookie = cleared.find((value) =>
+          value.startsWith('gym_session=;'),
+        );
+
+        expect(clearedCookie).toContain('HttpOnly');
+        expect(clearedCookie).toContain('Secure');
+        expect(clearedCookie).toContain('SameSite=None');
+        expect(clearedCookie).not.toContain('SameSite=Lax');
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
 
     it('is idempotent: logging out without a session still succeeds', async () => {
