@@ -7,6 +7,13 @@ import {
   type HealthCheck,
 } from './database/client';
 import { createRoutineGenerationGatewayFromEnv } from './integrations/ai/http-routine-generation.gateway';
+import type { AuthRepository } from './modules/auth/application/ports/auth.repository';
+import { LoginUseCase } from './modules/auth/application/use-cases/login.use-case';
+import { LogoutUseCase } from './modules/auth/application/use-cases/logout.use-case';
+import { ResolveSessionUseCase } from './modules/auth/application/use-cases/resolve-session.use-case';
+import { AuthController } from './modules/auth/infrastructure/http/auth.controller';
+import { createAuthRouter } from './modules/auth/infrastructure/http/auth.routes';
+import { PrismaAuthRepository } from './modules/auth/infrastructure/persistence/prisma-auth.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
 import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
 import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
@@ -55,6 +62,7 @@ import { BlockUserOnInactivityUseCase } from './modules/users/application/use-ca
 import { UsersController } from './modules/users/infrastructure/http/users.controller';
 import { createUsersRouter } from './modules/users/infrastructure/http/users.routes';
 import { PrismaUsersRepository } from './modules/users/infrastructure/persistence/prisma-users.repository';
+import { createAuthenticate } from './shared/middleware/auth.middleware';
 import { requireTrainerAssignment } from './shared/middleware/assignment.middleware';
 
 class CorsOriginError extends Error {}
@@ -63,6 +71,7 @@ interface AppDependencies {
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
   usersRepository?: UsersRepository;
+  authRepository?: AuthRepository;
   routinesRepository?: RoutinesRepository;
   studentsRepository?: StudentsRepository;
   measurementsRepository?: MeasurementsRepository;
@@ -102,6 +111,7 @@ export function createApp({
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
   usersRepository,
+  authRepository,
   routinesRepository,
   studentsRepository,
   measurementsRepository,
@@ -135,6 +145,26 @@ export function createApp({
   const resolvedUsersRepository =
     usersRepository ?? new PrismaUsersRepository(prisma);
   const resolvedClock = clock ?? new SystemClock();
+
+  // HU07 - T2 y T5: la cookie de sesión se resuelve una vez, antes de los routers,
+  // para que el `authenticate` que cada módulo ya importa encuentre `req.user`
+  // resuelto y no haya que tocar sus rutas.
+  const resolvedAuthRepo = authRepository ?? new PrismaAuthRepository(prisma);
+  const authenticateWithSession = createAuthenticate(
+    new ResolveSessionUseCase(resolvedAuthRepo, resolvedClock),
+  );
+
+  app.use(authenticateWithSession);
+
+  app.use(
+    createAuthRouter(
+      new AuthController(
+        new LoginUseCase(resolvedAuthRepo, resolvedClock),
+        new LogoutUseCase(resolvedAuthRepo, resolvedClock),
+      ),
+      authenticateWithSession,
+    ),
+  );
   const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
     resolvedUsersRepository,
     resolvedClock,
