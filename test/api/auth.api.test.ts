@@ -114,6 +114,31 @@ describe('Auth API - HU07', () => {
       expect(created[0]?.tokenHash).not.toBe(token);
     });
 
+    it('issues a cross-site secure cookie in production deployments', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      try {
+        const passwordHash = await hashearContrasena(PASSWORD);
+        const { repo } = createAuthRepo({ passwordHash });
+        const app = createApp({ authRepository: repo, clock });
+
+        const response = await request(app)
+          .post('/auth/login')
+          .send({ email: 'alumno@gym.test', password: PASSWORD })
+          .expect(200);
+
+        const setCookie = response.headers['set-cookie'] as unknown as string[];
+        const cookie = setCookie.find((value) =>
+          value.startsWith('gym_session='),
+        );
+
+        expect(cookie).toContain('HttpOnly');
+        expect(cookie).toContain('Secure');
+        expect(cookie).toContain('SameSite=None');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
     it('T3: the session expires 30 days after the login', async () => {
       const passwordHash = await hashearContrasena(PASSWORD);
       const { repo, created } = createAuthRepo({ passwordHash });
