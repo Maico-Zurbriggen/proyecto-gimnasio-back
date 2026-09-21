@@ -6,6 +6,14 @@ import {
   prisma,
   type HealthCheck,
 } from './database/client';
+import { createRoutineGenerationGatewayFromEnv } from './integrations/ai/http-routine-generation.gateway';
+import type { AuthRepository } from './modules/auth/application/ports/auth.repository';
+import { LoginUseCase } from './modules/auth/application/use-cases/login.use-case';
+import { LogoutUseCase } from './modules/auth/application/use-cases/logout.use-case';
+import { ResolveSessionUseCase } from './modules/auth/application/use-cases/resolve-session.use-case';
+import { AuthController } from './modules/auth/infrastructure/http/auth.controller';
+import { createAuthRouter } from './modules/auth/infrastructure/http/auth.routes';
+import { PrismaAuthRepository } from './modules/auth/infrastructure/persistence/prisma-auth.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
 import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
 import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
@@ -22,6 +30,24 @@ import { GetActiveRoutineUseCase } from './modules/routines/application/use-case
 import { RoutinesController } from './modules/routines/infrastructure/http/routines.controller';
 import { createRoutinesRouter } from './modules/routines/infrastructure/http/routines.routes';
 import { PrismaRoutinesRepository } from './modules/routines/infrastructure/persistence/prisma-routines.repository';
+import type { GenerationContextRepository } from './modules/routine-generations/application/ports/generation-context.repository';
+import {
+  CryptoIdGenerator,
+  type IdGenerator,
+} from './modules/routine-generations/application/ports/id-generator';
+import type { RoutineGenerationGateway } from './modules/routine-generations/application/ports/routine-generation.gateway';
+import type { RoutineGenerationsRepository } from './modules/routine-generations/application/ports/routine-generations.repository';
+import { GetRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/get-routine-generation.use-case';
+import { RequestRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/request-routine-generation.use-case';
+import { RoutineGenerationsController } from './modules/routine-generations/infrastructure/http/routine-generations.controller';
+import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
+import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
+import { PrismaRoutineGenerationsRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-generations.repository';
+import type { MeasurementsRepository } from './modules/measurements/application/ports/measurements.repository';
+import { RecordMeasurementUseCase } from './modules/measurements/application/use-cases/record-measurement.use-case';
+import { MeasurementsController } from './modules/measurements/infrastructure/http/measurements.controller';
+import { createMeasurementsRouter } from './modules/measurements/infrastructure/http/measurements.routes';
+import { PrismaMeasurementsRepository } from './modules/measurements/infrastructure/persistence/prisma-measurements.repository';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
 import type { TrainerAssignments } from './modules/students/application/ports/trainer-assignments.port';
 import { GetStudentStatusUseCase } from './modules/students/application/use-cases/get-student-status.use-case';
@@ -36,6 +62,7 @@ import { BlockUserOnInactivityUseCase } from './modules/users/application/use-ca
 import { UsersController } from './modules/users/infrastructure/http/users.controller';
 import { createUsersRouter } from './modules/users/infrastructure/http/users.routes';
 import { PrismaUsersRepository } from './modules/users/infrastructure/persistence/prisma-users.repository';
+import { createAuthenticate } from './shared/middleware/auth.middleware';
 import { requireTrainerAssignment } from './shared/middleware/assignment.middleware';
 
 class CorsOriginError extends Error {}
@@ -44,11 +71,17 @@ interface AppDependencies {
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
   usersRepository?: UsersRepository;
+  authRepository?: AuthRepository;
   routinesRepository?: RoutinesRepository;
   studentsRepository?: StudentsRepository;
+  measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
+  generationContextRepository?: GenerationContextRepository;
+  routineGenerationGateway?: RoutineGenerationGateway;
+  routineGenerationsRepository?: RoutineGenerationsRepository;
+  idGenerator?: IdGenerator;
 }
 
 function parseAllowedOrigins(value: string | undefined): string[] {
@@ -78,11 +111,17 @@ export function createApp({
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
   usersRepository,
+  authRepository,
   routinesRepository,
   studentsRepository,
+  measurementsRepository,
   proposalsRepository,
   trainerAssignments,
   clock,
+  generationContextRepository,
+  routineGenerationGateway,
+  routineGenerationsRepository,
+  idGenerator,
 }: AppDependencies = {}) {
   const app = express();
 
@@ -106,6 +145,26 @@ export function createApp({
   const resolvedUsersRepository =
     usersRepository ?? new PrismaUsersRepository(prisma);
   const resolvedClock = clock ?? new SystemClock();
+
+  // HU07 - T2 y T5: la cookie de sesión se resuelve una vez, antes de los routers,
+  // para que el `authenticate` que cada módulo ya importa encuentre `req.user`
+  // resuelto y no haya que tocar sus rutas.
+  const resolvedAuthRepo = authRepository ?? new PrismaAuthRepository(prisma);
+  const authenticateWithSession = createAuthenticate(
+    new ResolveSessionUseCase(resolvedAuthRepo, resolvedClock),
+  );
+
+  app.use(authenticateWithSession);
+
+  app.use(
+    createAuthRouter(
+      new AuthController(
+        new LoginUseCase(resolvedAuthRepo, resolvedClock),
+        new LogoutUseCase(resolvedAuthRepo, resolvedClock),
+      ),
+      authenticateWithSession,
+    ),
+  );
   const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
     resolvedUsersRepository,
     resolvedClock,
@@ -132,6 +191,35 @@ export function createApp({
 
   app.use(routinesRouter);
 
+  const resolvedGenerationContextRepository =
+    generationContextRepository ??
+    new PrismaGenerationContextRepository(prisma);
+  const resolvedRoutineGenerationGateway =
+    routineGenerationGateway ?? createRoutineGenerationGatewayFromEnv();
+  const resolvedRoutineGenerationsRepository =
+    routineGenerationsRepository ??
+    new PrismaRoutineGenerationsRepository(prisma);
+  const resolvedIdGenerator = idGenerator ?? new CryptoIdGenerator();
+
+  const requestRoutineGenerationUseCase = new RequestRoutineGenerationUseCase(
+    resolvedGenerationContextRepository,
+    resolvedRoutineGenerationGateway,
+    resolvedIdGenerator,
+    resolvedClock,
+  );
+  const getRoutineGenerationUseCase = new GetRoutineGenerationUseCase(
+    resolvedRoutineGenerationsRepository,
+  );
+  const routineGenerationsController = new RoutineGenerationsController(
+    requestRoutineGenerationUseCase,
+    getRoutineGenerationUseCase,
+  );
+  const routineGenerationsRouter = createRoutineGenerationsRouter(
+    routineGenerationsController,
+  );
+
+  app.use(routineGenerationsRouter);
+
   const resolvedStudentsRepo =
     studentsRepository ?? new PrismaStudentsRepository(prisma);
   const studentsController = new StudentsController(
@@ -149,6 +237,15 @@ export function createApp({
   );
 
   app.use(createStudentsRouter(studentsController));
+
+  // HU02 - T1: carga de medidas del alumno desde el aviso de renovación.
+  const resolvedMeasurementsRepo =
+    measurementsRepository ?? new PrismaMeasurementsRepository(prisma);
+  const measurementsController = new MeasurementsController(
+    new RecordMeasurementUseCase(resolvedMeasurementsRepo, resolvedClock),
+  );
+
+  app.use(createMeasurementsRouter(measurementsController));
 
   const resolvedProposalsRepo =
     proposalsRepository ?? new PrismaProposalsRepository(prisma);
