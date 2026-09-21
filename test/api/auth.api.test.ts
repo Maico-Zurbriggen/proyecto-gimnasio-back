@@ -330,6 +330,23 @@ describe('Auth API - HU07', () => {
       await request(app).get('/auth/me').expect(401);
     });
 
+    it('does not trust simulated identity headers outside automated tests', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      try {
+        const { repo } = createAuthRepo({ passwordHash: 'unused' });
+        const app = createApp({ authRepository: repo, clock });
+
+        await request(app)
+          .get('/auth/me')
+          .set('x-user-id', USER_ID)
+          .set('x-user-roles', 'ALUMNO')
+          .set('x-gym-id', GYM_ID)
+          .expect(401);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
     it('T3 y T7: returns 401 with an expired session', async () => {
       const passwordHash = await hashearContrasena(PASSWORD);
       const { repo } = createAuthRepo({
