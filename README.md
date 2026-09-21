@@ -28,6 +28,8 @@ En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://local
 
 Usar `npm run db:status` para comprobar el estado de las migraciones y `GET /ready` para verificar la conexión de la API con PostgreSQL.
 
+El desarrollo local usa el mismo login por cookie que los despliegues. Los headers `x-user-*` se aceptan exclusivamente dentro de las pruebas automatizadas y no sustituyen una sesión al ejecutar `npm run dev`.
+
 ## Estructura del código
 
 El backend es un monolito modular con arquitectura hexagonal por dominio:
@@ -80,9 +82,9 @@ Después de aplicar la migración, ejecutar mediante el SQL Editor de Neon y en 
 
 1. `prisma/seeds/seed-reference.sql`: equipamiento, músculos y articulaciones.
 2. `prisma/seeds/seed-catalog.sql`: catálogo base de ejercicios y sus relaciones.
-3. `prisma/seeds/seed-demo.sql`: alumno y entrenador demo, rutina vigente y desempeño histórico simulado.
+3. `prisma/seeds/seed-test.sql`: usuarios ficticios multirrol, rutinas, sesiones y casos funcionales de Test.
 
-Los tres scripts son repetibles. `seed-demo.sql` es exclusivo de Test: sus sesiones llevan `simulated = true`, no crea solicitudes de IA y utiliza correos reservados bajo `example.invalid`. La contraseña intencionalmente no es utilizable hasta que autenticación defina y aplique el algoritmo de hash; no reemplazarla por una contraseña en texto plano.
+Los tres scripts son repetibles y exclusivos de Test. `seed-test.sql` utiliza correos `@gimnasio.test` y hashes bcrypt válidos; la contraseña compartida por el equipo no se versiona en texto plano. Al reejecutarlo sólo se actualiza `password_hash` para los usuarios de prueba existentes.
 
 ### Crear una migración
 
