@@ -36,6 +36,11 @@ import { RoutineGenerationsController } from './modules/routine-generations/infr
 import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
 import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
 import { PrismaRoutineGenerationsRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-generations.repository';
+import type { MeasurementsRepository } from './modules/measurements/application/ports/measurements.repository';
+import { RecordMeasurementUseCase } from './modules/measurements/application/use-cases/record-measurement.use-case';
+import { MeasurementsController } from './modules/measurements/infrastructure/http/measurements.controller';
+import { createMeasurementsRouter } from './modules/measurements/infrastructure/http/measurements.routes';
+import { PrismaMeasurementsRepository } from './modules/measurements/infrastructure/persistence/prisma-measurements.repository';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
 import type { TrainerAssignments } from './modules/students/application/ports/trainer-assignments.port';
 import { GetStudentStatusUseCase } from './modules/students/application/use-cases/get-student-status.use-case';
@@ -60,6 +65,7 @@ interface AppDependencies {
   usersRepository?: UsersRepository;
   routinesRepository?: RoutinesRepository;
   studentsRepository?: StudentsRepository;
+  measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
@@ -98,6 +104,7 @@ export function createApp({
   usersRepository,
   routinesRepository,
   studentsRepository,
+  measurementsRepository,
   proposalsRepository,
   trainerAssignments,
   clock,
@@ -200,6 +207,15 @@ export function createApp({
   );
 
   app.use(createStudentsRouter(studentsController));
+
+  // HU02 - T1: carga de medidas del alumno desde el aviso de renovación.
+  const resolvedMeasurementsRepo =
+    measurementsRepository ?? new PrismaMeasurementsRepository(prisma);
+  const measurementsController = new MeasurementsController(
+    new RecordMeasurementUseCase(resolvedMeasurementsRepo, resolvedClock),
+  );
+
+  app.use(createMeasurementsRouter(measurementsController));
 
   const resolvedProposalsRepo =
     proposalsRepository ?? new PrismaProposalsRepository(prisma);
