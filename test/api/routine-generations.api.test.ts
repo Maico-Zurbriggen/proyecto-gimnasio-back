@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/app';
 import type { Clock } from '../../src/modules/routines/application/ports/clock';
 import type { GenerationContextRepository } from '../../src/modules/routine-generations/application/ports/generation-context.repository';
+import type { GeneratedRoutinesRepository } from '../../src/modules/routine-generations/application/ports/generated-routines.repository';
 import type { IdGenerator } from '../../src/modules/routine-generations/application/ports/id-generator';
 import type { RoutineGenerationGateway } from '../../src/modules/routine-generations/application/ports/routine-generation.gateway';
 import type { RoutineGenerationsRepository } from '../../src/modules/routine-generations/application/ports/routine-generations.repository';
@@ -12,6 +13,11 @@ describe('Routine Generations API', () => {
   const fixedNow = new Date('2026-09-14T00:00:00Z');
   const mockClock: Clock = { now: () => fixedNow };
   const mockIdGenerator: IdGenerator = { generate: () => 'generated-key' };
+  const trainerAssignments = { isActive: vi.fn().mockResolvedValue(true) };
+  const ownershipRepository: RoutineGenerationsRepository = {
+    registerOwnership: vi.fn().mockResolvedValue(undefined),
+    findById: vi.fn(),
+  };
 
   const studentId = '11111111-1111-4111-a111-111111111111';
   const trainerId = '33333333-3333-4333-a333-333333333333';
@@ -44,10 +50,12 @@ describe('Routine Generations API', () => {
       };
 
       const app = createApp({
+        trainerAssignments,
         clock: mockClock,
         idGenerator: mockIdGenerator,
         generationContextRepository,
         routineGenerationGateway,
+        routineGenerationsRepository: ownershipRepository,
       });
 
       const response = await request(app)
@@ -85,10 +93,12 @@ describe('Routine Generations API', () => {
       };
 
       const app = createApp({
+        trainerAssignments,
         clock: mockClock,
         idGenerator: mockIdGenerator,
         generationContextRepository,
         routineGenerationGateway,
+        routineGenerationsRepository: ownershipRepository,
       });
 
       const response = await request(app)
@@ -140,6 +150,7 @@ describe('Routine Generations API', () => {
       };
 
       const app = createApp({
+        trainerAssignments,
         clock: mockClock,
         generationContextRepository,
       });
@@ -163,6 +174,7 @@ describe('Routine Generations API', () => {
       };
 
       const app = createApp({
+        trainerAssignments,
         clock: mockClock,
         generationContextRepository,
       });
@@ -184,6 +196,7 @@ describe('Routine Generations API', () => {
       };
 
       const app = createApp({
+        trainerAssignments,
         clock: mockClock,
         generationContextRepository,
       });
@@ -214,6 +227,7 @@ describe('Routine Generations API', () => {
       };
 
       const app = createApp({
+        trainerAssignments,
         clock: mockClock,
         generationContextRepository,
         routineGenerationGateway,
@@ -242,10 +256,15 @@ describe('Routine Generations API', () => {
         error: null,
       };
       const routineGenerationsRepository: RoutineGenerationsRepository = {
+        registerOwnership: vi.fn(),
         findById: vi.fn().mockResolvedValue(snapshot),
       };
 
-      const app = createApp({ clock: mockClock, routineGenerationsRepository });
+      const app = createApp({
+        clock: mockClock,
+        trainerAssignments,
+        routineGenerationsRepository,
+      });
 
       const response = await request(app)
         .get(`/students/${studentId}/routine-generations/${requestId}`)
@@ -270,10 +289,15 @@ describe('Routine Generations API', () => {
 
     it('returns 404 when the request does not exist', async () => {
       const routineGenerationsRepository: RoutineGenerationsRepository = {
+        registerOwnership: vi.fn(),
         findById: vi.fn().mockResolvedValue(null),
       };
 
-      const app = createApp({ clock: mockClock, routineGenerationsRepository });
+      const app = createApp({
+        clock: mockClock,
+        trainerAssignments,
+        routineGenerationsRepository,
+      });
 
       const response = await request(app)
         .get(`/students/${studentId}/routine-generations/${requestId}`)
@@ -282,6 +306,65 @@ describe('Routine Generations API', () => {
         .expect(404);
 
       expect(response.body).toEqual({ error: 'routine_generation_not_found' });
+    });
+  });
+
+  describe('POST /students/:studentId/routine-generations/:requestId/finalize', () => {
+    const requestId = '55555555-5555-4555-a555-555555555555';
+
+    it('creates a PROPUESTA explicitly after the generation completed', async () => {
+      const generatedRoutinesRepository: GeneratedRoutinesRepository = {
+        finalize: vi.fn().mockResolvedValue({
+          routineId: '66666666-6666-4666-a666-666666666666',
+          status: 'PROPUESTA',
+        }),
+      };
+      const app = createApp({
+        clock: mockClock,
+        trainerAssignments,
+        generatedRoutinesRepository,
+      });
+
+      const response = await request(app)
+        .post(
+          `/students/${studentId}/routine-generations/${requestId}/finalize`,
+        )
+        .set('x-user-id', trainerId)
+        .set('x-user-roles', 'ENTRENADOR')
+        .send({})
+        .expect(201);
+
+      expect(response.body).toEqual({
+        routineId: '66666666-6666-4666-a666-666666666666',
+        status: 'PROPUESTA',
+      });
+      expect(generatedRoutinesRepository.finalize).toHaveBeenCalledWith({
+        requestId,
+        studentId,
+        requestedByUserId: trainerId,
+      });
+    });
+
+    it('returns 403 when the trainer is not assigned to the student', async () => {
+      const generatedRoutinesRepository: GeneratedRoutinesRepository = {
+        finalize: vi.fn(),
+      };
+      const app = createApp({
+        clock: mockClock,
+        trainerAssignments: { isActive: vi.fn().mockResolvedValue(false) },
+        generatedRoutinesRepository,
+      });
+
+      await request(app)
+        .post(
+          `/students/${studentId}/routine-generations/${requestId}/finalize`,
+        )
+        .set('x-user-id', trainerId)
+        .set('x-user-roles', 'ENTRENADOR')
+        .send({})
+        .expect(403, { error: 'forbidden_not_assigned' });
+
+      expect(generatedRoutinesRepository.finalize).not.toHaveBeenCalled();
     });
   });
 });

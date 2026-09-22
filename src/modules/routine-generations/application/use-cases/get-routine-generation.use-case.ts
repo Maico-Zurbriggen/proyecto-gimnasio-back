@@ -4,6 +4,8 @@ import type { RoutineGenerationsRepository } from '../ports/routine-generations.
 
 export interface GetRoutineGenerationQuery {
   requestId: string;
+  studentId: string;
+  requestedByUserId: string;
 }
 
 export class GetRoutineGenerationUseCase {
@@ -14,9 +16,7 @@ export class GetRoutineGenerationUseCase {
   async execute(
     query: GetRoutineGenerationQuery,
   ): Promise<RoutineGenerationSnapshot> {
-    const snapshot = await this.routineGenerationsRepository.findById(
-      query.requestId,
-    );
+    const snapshot = await this.routineGenerationsRepository.findById(query);
 
     if (!snapshot) {
       throw new RoutineGenerationNotFoundError(

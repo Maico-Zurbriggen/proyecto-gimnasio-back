@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 
 import {
   authenticate,
@@ -9,19 +9,19 @@ import type { RoutineGenerationsController } from './routine-generations.control
 
 export function createRoutineGenerationsRouter(
   controller: RoutineGenerationsController,
+  requireAssignment: RequestHandler,
 ): Router {
   const router = Router();
 
   // POST /students/:studentId/routine-generations
-  // Solo ENTRENADOR/ADMINISTRADOR: el alumno nunca ve un candidato de rutina sin
-  // aprobar (gate RoutineReview), y ai_generation_requests no guarda studentId
-  // (boundary sin FK a app), así que no hay forma de probar ownership 403 para
-  // ALUMNO sobre este recurso -- se lo excluye en vez de exponer un IDOR.
+  // Sólo el entrenador actualmente asignado puede solicitar y consultar la
+  // generación. La asociación request/alumno/solicitante evita IDOR durante polling.
   router.post(
     '/students/:studentId/routine-generations',
     authenticate,
     requireAuth,
-    requireRoles('ENTRENADOR', 'ADMINISTRADOR'),
+    requireRoles('ENTRENADOR'),
+    requireAssignment,
     controller.request,
   );
 
@@ -30,8 +30,18 @@ export function createRoutineGenerationsRouter(
     '/students/:studentId/routine-generations/:requestId',
     authenticate,
     requireAuth,
-    requireRoles('ENTRENADOR', 'ADMINISTRADOR'),
+    requireRoles('ENTRENADOR'),
+    requireAssignment,
     controller.getById,
+  );
+
+  router.post(
+    '/students/:studentId/routine-generations/:requestId/finalize',
+    authenticate,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    requireAssignment,
+    controller.finalize,
   );
 
   return router;

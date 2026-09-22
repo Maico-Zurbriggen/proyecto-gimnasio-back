@@ -9,12 +9,17 @@ import {
 import type { GenerationContextRepository } from '../ports/generation-context.repository';
 import type { IdGenerator } from '../ports/id-generator';
 import type { RoutineGenerationGateway } from '../ports/routine-generation.gateway';
+import type { RoutineGenerationsRepository } from '../ports/routine-generations.repository';
 import { RequestRoutineGenerationUseCase } from './request-routine-generation.use-case';
 
 describe('RequestRoutineGenerationUseCase', () => {
   const fixedNow = new Date('2026-09-14T00:00:00Z');
   const clock: Clock = { now: () => fixedNow };
   const idGenerator: IdGenerator = { generate: () => 'generated-key' };
+  const generationsRepository: RoutineGenerationsRepository = {
+    registerOwnership: vi.fn().mockResolvedValue(undefined),
+    findById: vi.fn(),
+  };
 
   const studentId = '11111111-1111-4111-a111-111111111111';
   const requestedByUserId = '33333333-3333-4333-a333-333333333333';
@@ -44,6 +49,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       gateway,
       idGenerator,
       clock,
+      generationsRepository,
     );
 
     await expect(
@@ -64,6 +70,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       gateway,
       idGenerator,
       clock,
+      generationsRepository,
     );
 
     await expect(
@@ -89,6 +96,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       gateway,
       idGenerator,
       clock,
+      generationsRepository,
     );
 
     await expect(
@@ -120,6 +128,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       gateway,
       idGenerator,
       clock,
+      generationsRepository,
     );
 
     const result = await useCase.execute({
@@ -143,6 +152,11 @@ describe('RequestRoutineGenerationUseCase', () => {
       prefilteredCatalog: catalog,
       minimizedContext,
     });
+    expect(contextRepository.getPrefilteredCatalog).toHaveBeenCalledWith(
+      studentId,
+      'gym-1',
+      fixedNow,
+    );
   });
 
   it('uses the caller-supplied idempotencyKey instead of generating one', async () => {
@@ -165,6 +179,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       gateway,
       idGenerator,
       clock,
+      generationsRepository,
     );
 
     await useCase.execute({

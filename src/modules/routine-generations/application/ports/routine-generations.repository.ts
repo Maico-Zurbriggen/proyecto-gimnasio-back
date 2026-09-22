@@ -4,8 +4,18 @@ export interface RoutineGenerationSnapshot {
   estructuraCandidata: unknown | null;
   violaciones: string[] | null;
   error: string | null;
+  routineId: string | null;
+}
+
+export interface RoutineGenerationOwner {
+  requestId: string;
+  studentId: string;
+  requestedByUserId: string;
 }
 
 export interface RoutineGenerationsRepository {
-  findById(requestId: string): Promise<RoutineGenerationSnapshot | null>;
+  registerOwnership(owner: RoutineGenerationOwner): Promise<void>;
+  findById(
+    owner: RoutineGenerationOwner,
+  ): Promise<RoutineGenerationSnapshot | null>;
 }
