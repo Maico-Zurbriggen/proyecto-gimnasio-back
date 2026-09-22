@@ -11,6 +11,7 @@ import type {
   RoutineGenerationAcceptedResult,
   RoutineGenerationGateway,
 } from '../ports/routine-generation.gateway';
+import type { RoutineGenerationsRepository } from '../ports/routine-generations.repository';
 
 export interface RequestRoutineGenerationCommand {
   studentId: string;
@@ -26,6 +27,7 @@ export class RequestRoutineGenerationUseCase {
     private readonly gateway: RoutineGenerationGateway,
     private readonly idGenerator: IdGenerator,
     private readonly clock: Clock,
+    private readonly routineGenerationsRepository: RoutineGenerationsRepository,
   ) {}
 
   async execute(
@@ -45,7 +47,11 @@ export class RequestRoutineGenerationUseCase {
     }
 
     const prefilteredCatalog =
-      await this.contextRepository.getPrefilteredCatalog(studentContext.gymId);
+      await this.contextRepository.getPrefilteredCatalog(
+        command.studentId,
+        studentContext.gymId,
+        this.clock.now(),
+      );
 
     if (prefilteredCatalog.length === 0) {
       throw new EmptyPrefilteredCatalogError(
@@ -53,7 +59,7 @@ export class RequestRoutineGenerationUseCase {
       );
     }
 
-    return this.gateway.requestGeneration({
+    const accepted = await this.gateway.requestGeneration({
       idempotencyKey: command.idempotencyKey ?? this.idGenerator.generate(),
       gymId: studentContext.gymId,
       studentId: command.studentId,
@@ -63,5 +69,13 @@ export class RequestRoutineGenerationUseCase {
       prefilteredCatalog,
       minimizedContext: studentContext.minimizedContext,
     });
+
+    await this.routineGenerationsRepository.registerOwnership({
+      requestId: accepted.requestId,
+      studentId: command.studentId,
+      requestedByUserId: command.requestedByUserId,
+    });
+
+    return accepted;
   }
 }

@@ -10,6 +10,7 @@ import type { TrainerAssignments } from '../../modules/students/application/port
 export function requireTrainerAssignment(
   assignments: TrainerAssignments,
   paramName = 'studentId',
+  administratorsBypass = true,
 ) {
   return async (
     req: Request,
@@ -28,7 +29,12 @@ export function requireTrainerAssignment(
     const esAdministrador = user.roles.includes('ADMINISTRADOR');
     const esEntrenador = user.roles.includes('ENTRENADOR');
 
-    if (!studentId || esElPropioAlumno || esAdministrador || !esEntrenador) {
+    if (
+      !studentId ||
+      esElPropioAlumno ||
+      (esAdministrador && administratorsBypass) ||
+      !esEntrenador
+    ) {
       next();
       return;
     }

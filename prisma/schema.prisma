@@ -967,11 +967,24 @@ model AiGenerationRequest {
   finishedAt       DateTime?                @map("finished_at") @db.Timestamptz(6)
   retentionUntil   DateTime                 @map("retention_until") @db.Timestamptz(6)
   attempts         AiGenerationAttempt[]
+  ownership        RoutineGenerationOwnership?
 
   @@index([state, availableAt])
   @@index([retentionUntil])
   @@map("ai_generation_requests")
   @@schema("ai_integration")
+}
+
+model RoutineGenerationOwnership {
+  requestId         String              @id @map("request_id") @db.Uuid
+  studentId         String              @map("student_id") @db.Uuid
+  requestedByUserId String              @map("requested_by_user_id") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  request           AiGenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("routine_generation_ownership")
+  @@schema("app")
 }
 
 model AiGenerationAttempt {

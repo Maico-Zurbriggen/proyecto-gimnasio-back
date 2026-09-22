@@ -55,11 +55,19 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
     };
   }
 
-  async getPrefilteredCatalog(gymId: string): Promise<CatalogExerciseRef[]> {
-    const [exercises, presentEquipment] = await Promise.all([
+  async getPrefilteredCatalog(
+    studentId: string,
+    gymId: string,
+    asOf: Date,
+  ): Promise<CatalogExerciseRef[]> {
+    const [student, exercises, presentEquipment] = await Promise.all([
+      this.prisma.studentProfile.findUnique({
+        where: { userId: studentId },
+        include: { physicalConditions: true },
+      }),
       this.prisma.exercise.findMany({
         where: { OR: [{ gymId }, { origin: 'CATALOGO_BASE' }] },
-        include: { equipment: true },
+        include: { equipment: true, muscles: true, joints: true },
       }),
       this.prisma.gymEquipment.findMany({
         where: { gymId, present: true },
@@ -71,12 +79,36 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       presentEquipment.map((equipment) => equipment.equipmentCode),
     );
 
+    if (!student) {
+      return [];
+    }
+    const levelRank = { PRINCIPIANTE: 0, INTERMEDIO: 1, AVANZADO: 2 } as const;
+    const activeConditions = student.physicalConditions.filter(
+      (condition) =>
+        condition.startsOn <= asOf &&
+        (condition.endsOn === null || condition.endsOn >= asOf),
+    );
+
     return exercises
       .filter(
         (exercise) =>
-          exercise.equipment.length === 0 ||
-          exercise.equipment.every((requirement) =>
-            availableEquipmentCodes.has(requirement.equipmentCode),
+          levelRank[exercise.difficultyLevel] <=
+            levelRank[student.experienceLevel] &&
+          (exercise.equipment.length === 0 ||
+            exercise.equipment.every((requirement) =>
+              availableEquipmentCodes.has(requirement.equipmentCode),
+            )) &&
+          !activeConditions.some(
+            (condition) =>
+              condition.severity !== 'LEVE' &&
+              (exercise.muscles.some(
+                (muscle) =>
+                  muscle.participation === 'PRIMARIA' &&
+                  muscle.muscleCode === condition.bodyZoneCode,
+              ) ||
+                exercise.joints.some(
+                  (joint) => joint.jointCode === condition.bodyZoneCode,
+                )),
           ),
       )
       .map((exercise) => ({
