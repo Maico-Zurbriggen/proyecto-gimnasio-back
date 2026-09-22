@@ -1,18 +1,6 @@
-import type {
-  CatalogExerciseRef,
-  MinimizedContext,
-  RoutineGenerationParameters,
-} from '../dto/routine-generation-context.dto';
-
-export interface RoutineGenerationRequestPayload {
-  idempotencyKey: string;
-  gymId: string;
-  studentId: string;
-  requestedByUserId: string;
-  freeText: string | null;
-  parameters: RoutineGenerationParameters | null;
-  prefilteredCatalog: CatalogExerciseRef[];
-  minimizedContext: MinimizedContext;
+export interface DispatchGenerationResult {
+  requestId: string;
+  status: string;
 }
 
 export interface RoutineGenerationAcceptedResult {
@@ -22,7 +10,5 @@ export interface RoutineGenerationAcceptedResult {
 }
 
 export interface RoutineGenerationGateway {
-  requestGeneration(
-    payload: RoutineGenerationRequestPayload,
-  ): Promise<RoutineGenerationAcceptedResult>;
+  dispatchGeneration(requestId: string): Promise<DispatchGenerationResult>;
 }

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import type { DetectExpiredCyclesUseCase } from '../../application/use-cases/detect-expired-cycles.use-case';
 import type { GetActiveRoutineUseCase } from '../../application/use-cases/get-active-routine.use-case';
 import {
   RoutineNotActiveError,
@@ -10,6 +11,7 @@ import { getActiveRoutineParamsSchema } from './routines.schemas';
 export class RoutinesController {
   constructor(
     private readonly getActiveRoutineUseCase: GetActiveRoutineUseCase,
+    private readonly detectExpiredCyclesUseCase: DetectExpiredCyclesUseCase,
   ) {}
 
   getActive = async (
@@ -52,6 +54,20 @@ export class RoutinesController {
         return;
       }
 
+      next(error);
+    }
+  };
+
+  checkRenewal = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const result = await this.detectExpiredCyclesUseCase.execute();
+
+      res.status(200).json(result);
+    } catch (error) {
       next(error);
     }
   };

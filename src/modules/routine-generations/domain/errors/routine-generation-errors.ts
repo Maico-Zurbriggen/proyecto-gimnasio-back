@@ -20,9 +20,17 @@ export class EmptyPrefilteredCatalogError extends Error {
 }
 
 export class RoutineGenerationUnavailableError extends Error {
-  constructor(message = 'AI service unavailable', options?: ErrorOptions) {
+  readonly requestId: string | null;
+  readonly requestStatus: string | null;
+
+  constructor(
+    message = 'AI service unavailable',
+    options?: ErrorOptions & { requestId?: string; requestStatus?: string },
+  ) {
     super(message, options);
     this.name = 'RoutineGenerationUnavailableError';
+    this.requestId = options?.requestId ?? null;
+    this.requestStatus = options?.requestStatus ?? null;
   }
 }
 
@@ -30,5 +38,12 @@ export class RoutineGenerationNotFoundError extends Error {
   constructor(message = 'Routine generation request not found') {
     super(message);
     this.name = 'RoutineGenerationNotFoundError';
+  }
+}
+
+export class RoutineGenerationAlreadyExistsError extends Error {
+  constructor(message = 'Routine generation request already exists') {
+    super(message);
+    this.name = 'RoutineGenerationAlreadyExistsError';
   }
 }

@@ -93,3 +93,27 @@ export function requireStudentOwnership(paramName = 'studentId') {
     next();
   };
 }
+
+/**
+ * Autorización para recursos que el personal gestiona por cualquier alumno y
+ * el alumno sólo por sí mismo: ENTRENADOR/ADMINISTRADOR pasan siempre; un
+ * usuario sin rol de personal debe coincidir con el studentId del recurso.
+ */
+export function requireSelfOrStaff(paramName = 'studentId') {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const isStaff = req.user.roles.some(
+      (role) => role === 'ENTRENADOR' || role === 'ADMINISTRADOR',
+    );
+    if (!isStaff && req.user.id !== req.params[paramName]) {
+      res.status(403).json({ error: 'forbidden_student_access' });
+      return;
+    }
+
+    next();
+  };
+}

@@ -38,6 +38,27 @@ actualizan por código natural y el resto usa UUID fijos con `DO NOTHING`.
 - Autenticación: una sesión activa, una revocada, un token de recupero
   pendiente y uno usado.
 
+## Credenciales de prueba (solo Neon Test)
+
+Todos los usuarios semilla comparten la contraseña `GimnasioTest2026!`.
+
+| Correo                             | Rol                 |
+| ---------------------------------- | ------------------- |
+| `admin.test@gimnasio.test`         | ADMINISTRADOR       |
+| `entrenador.lucia@gimnasio.test`   | ENTRENADOR          |
+| `entrenador.marco@gimnasio.test`   | ENTRENADOR + ALUMNO |
+| `alumno.martin@gimnasio.test`      | ALUMNO              |
+| `alumna.sofia@gimnasio.test`       | ALUMNO              |
+| `alumno.diego@gimnasio.test`       | ALUMNO              |
+| `alumna.valen@gimnasio.test`       | ALUMNO              |
+
+Notas:
+
+- La contraseña rige en las filas vivas de Neon Test. `seed-test.sql`
+  conserva un hash ficticio (`FAKE.HASH...`) y, por `ON CONFLICT DO NOTHING`,
+  re-ejecutarlo no pisa el hash real de las filas existentes.
+- Jamás usar estas credenciales fuera del ambiente Test.
+
 ## Compatibilidad con la primera migración
 
 Los scripts usan los nombres, tipos y restricciones de la migración Prisma

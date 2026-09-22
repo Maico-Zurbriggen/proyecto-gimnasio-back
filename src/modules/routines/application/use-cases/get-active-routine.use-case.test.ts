@@ -31,6 +31,7 @@ describe('GetActiveRoutineUseCase', () => {
 
     const mockRepository: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const useCase = new GetActiveRoutineUseCase(mockRepository, mockClock);
@@ -66,6 +67,7 @@ describe('GetActiveRoutineUseCase', () => {
 
     const mockRepository: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const useCase = new GetActiveRoutineUseCase(mockRepository, mockClock);
@@ -91,6 +93,7 @@ describe('GetActiveRoutineUseCase', () => {
 
     const mockRepository: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const useCase = new GetActiveRoutineUseCase(mockRepository, mockClock);
@@ -104,6 +107,7 @@ describe('GetActiveRoutineUseCase', () => {
     const studentId = '11111111-1111-1111-1111-111111111111';
     const mockRepository: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(null),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const useCase = new GetActiveRoutineUseCase(mockRepository, mockClock);
@@ -126,6 +130,7 @@ describe('GetActiveRoutineUseCase', () => {
 
     const mockRepository: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(nonActiveRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const useCase = new GetActiveRoutineUseCase(mockRepository, mockClock);

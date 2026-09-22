@@ -10,6 +10,7 @@ import {
   differenceInCalendarDays,
   DURACION_CICLO_DIAS,
   EstadoAvisoRenovacion,
+  isCycleExpired,
   isNoticeDismissible,
   shouldDisplayNotice,
   duracionCicloDias,
@@ -260,5 +261,32 @@ describe('duracionCicloDias (HU01 - T1)', () => {
 
   it('falls back to the default for an unknown routine type', () => {
     expect(duracionCicloDias('OTRO')).toBe(DURACION_CICLO_DIAS);
+  });
+});
+
+describe('isCycleExpired (HU03 - T1)', () => {
+  const hoy = new Date('2026-09-08T10:00:00Z');
+
+  it('returns false when the cycle still has days remaining', () => {
+    expect(isCycleExpired(new Date('2026-08-09T00:00:00Z'), hoy)).toBe(false);
+  });
+
+  it('returns true on the exact day the cycle completes (inclusive boundary)', () => {
+    expect(isCycleExpired(new Date('2026-07-10T00:00:00Z'), hoy)).toBe(true);
+  });
+
+  it('returns true when the cycle expired days ago', () => {
+    expect(isCycleExpired(new Date('2026-06-30T00:00:00Z'), hoy)).toBe(true);
+  });
+
+  it('compares calendar days in UTC regardless of the time of day', () => {
+    expect(isCycleExpired(new Date('2026-07-10T23:59:59Z'), hoy)).toBe(true);
+    expect(isCycleExpired(new Date('2026-07-11T00:00:01Z'), hoy)).toBe(false);
+  });
+
+  it('honours an explicit cycle length in days', () => {
+    const start = new Date('2026-08-09T00:00:00Z');
+    expect(isCycleExpired(start, hoy, 30)).toBe(true);
+    expect(isCycleExpired(start, hoy, 31)).toBe(false);
   });
 });

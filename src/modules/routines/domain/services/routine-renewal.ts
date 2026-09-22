@@ -96,6 +96,28 @@ export function calculateDaysUntilRenewal(
 }
 
 /**
+ * Determina si el ciclo de rutina está cumplido (HU03 - T1).
+ *
+ * El ciclo se cumple el día en que se alcanzan los días de duración: un ciclo
+ * iniciado hace exactamente 60 días vence hoy y ya cuenta como cumplido (los
+ * días restantes son 0). Por eso el borde es inclusivo (<= 0), a diferencia del
+ * estado `VENCIDO` del aviso, que sólo marca los días posteriores.
+ *
+ * Nota sobre "3 meses": el título de HU03 habla de 3 meses, pero sus escenarios
+ * de aceptación cuentan sobre 60 días ("rutina vigente cumplió 60 días"), igual
+ * que el ciclo de HU01. Se implementa 60, que es lo verificable, con el mismo
+ * criterio documentado en DURACION_CICLO_POR_TIPO.
+ */
+export function isCycleExpired(
+  startDate: Date,
+  currentDate: Date,
+  cycleDays: number = DURACION_CICLO_DIAS,
+): boolean {
+  const renewalDate = calculateRenewalDate(startDate, cycleDays);
+  return calculateDaysUntilRenewal(renewalDate, currentDate) <= 0;
+}
+
+/**
  * Define el estado del aviso según la fecha (pendiente / cerrado hoy / vencido).
  * - Pendiente: días restantes > 0 (la fecha de renovación es posterior a la actual)
  * - Cerrado hoy: días restantes === 0 (la renovación vence hoy)

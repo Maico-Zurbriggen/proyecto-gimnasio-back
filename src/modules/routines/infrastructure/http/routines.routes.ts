@@ -38,5 +38,16 @@ export function createRoutinesRouter(
     controller.getActive,
   );
 
+  // Job periódico de renovación (HU03 - T1): POST /routines/renewal-check
+  // Sólo ADMINISTRADOR: lo invoca el programador externo. Es un job separado
+  // del diagnóstico quincenal de RN-78, con el que comparte el motor de dominio.
+  router.post(
+    '/routines/renewal-check',
+    authenticate,
+    requireAuth,
+    requireRoles('ADMINISTRADOR'),
+    controller.checkRenewal,
+  );
+
   return router;
 }

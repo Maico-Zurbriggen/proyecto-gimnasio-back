@@ -31,6 +31,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
 
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -73,6 +74,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
 
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -108,6 +110,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
 
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -130,6 +133,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
   it("returns 403 Forbidden when an ALUMNO tries to access another student's routine (prueba 403 de acceso ajeno)", async () => {
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn(),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -162,6 +166,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
 
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -192,6 +197,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
   it('returns 404 Not Found when student has no active routine', async () => {
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(null),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -233,6 +239,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
 
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -266,6 +273,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     const app = createApp({
       routinesRepository: {
         findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+        findVigentesForRenewalCheck: vi.fn(),
       },
       clock: mockClock,
     });
@@ -295,6 +303,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     const app = createApp({
       routinesRepository: {
         findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+        findVigentesForRenewalCheck: vi.fn(),
       },
       clock: mockClock,
     });
@@ -324,6 +333,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     const app = createApp({
       routinesRepository: {
         findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+        findVigentesForRenewalCheck: vi.fn(),
       },
       clock: mockClock,
     });
@@ -353,6 +363,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     const app = createApp({
       routinesRepository: {
         findActiveByStudentId: vi.fn().mockResolvedValue(activeRoutine),
+        findVigentesForRenewalCheck: vi.fn(),
       },
       clock: { now: () => currentDate },
     });
@@ -381,6 +392,7 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
     const trainerId = '33333333-3333-4333-a333-333333333333';
     const mockRepo: RoutinesRepository = {
       findActiveByStudentId: vi.fn(),
+      findVigentesForRenewalCheck: vi.fn(),
     };
 
     const app = createApp({
@@ -397,5 +409,120 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
 
     expect(response.body).toEqual({ error: 'forbidden_not_assigned' });
     expect(mockRepo.findActiveByStudentId).not.toHaveBeenCalled();
+  });
+});
+
+describe('Routines API - Renewal Check Job (HU03 - T1)', () => {
+  const fixedNow = new Date('2026-09-08T10:00:00Z');
+  const mockClock: Clock = {
+    now: () => fixedNow,
+  };
+
+  const studentId = '11111111-1111-4111-a111-111111111111';
+  const adminId = '55555555-5555-4555-a555-555555555555';
+
+  function routine(startDate: string, id: string) {
+    return new Routine({
+      id,
+      studentId,
+      routineType: 'HIPERTROFIA',
+      targetWeeklyFrequency: 4,
+      state: 'VIGENTE',
+      origin: 'PLANTILLA_ENTRENADOR',
+      startDate: new Date(startDate),
+      currentVersionNumber: 1,
+    });
+  }
+
+  it('returns only the expired cycles for an ADMINISTRADOR', async () => {
+    const mockRepo: RoutinesRepository = {
+      findActiveByStudentId: vi.fn(),
+      findVigentesForRenewalCheck: vi.fn().mockResolvedValue([
+        {
+          routine: routine(
+            '2026-06-30T00:00:00Z',
+            'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
+          ),
+          measurementDates: [new Date('2026-08-01T00:00:00Z')],
+          previousProposalDates: [],
+        },
+        {
+          routine: routine(
+            '2026-08-09T00:00:00Z',
+            'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',
+          ),
+          measurementDates: [],
+          previousProposalDates: [],
+        },
+      ]),
+    };
+
+    const app = createApp({
+      routinesRepository: mockRepo,
+      clock: mockClock,
+    });
+
+    const response = await request(app)
+      .post('/routines/renewal-check')
+      .set('x-user-id', adminId)
+      .set('x-user-roles', 'ADMINISTRADOR')
+      .expect(200);
+
+    expect(response.body).toEqual({
+      evaluatedAt: fixedNow.toISOString(),
+      expiredCycles: [
+        {
+          routineId: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
+          studentId,
+          routineType: 'HIPERTROFIA',
+          cycleStart: '2026-06-30T00:00:00.000Z',
+          dueDate: '2026-08-29T00:00:00.000Z',
+          daysOverdue: 10,
+          measurementDates: ['2026-08-01T00:00:00.000Z'],
+          hasNewMeasurement: true,
+          previousProposalDates: [],
+        },
+      ],
+    });
+  });
+
+  it('returns 401 when unauthenticated', async () => {
+    const mockRepo: RoutinesRepository = {
+      findActiveByStudentId: vi.fn(),
+      findVigentesForRenewalCheck: vi.fn(),
+    };
+
+    const app = createApp({
+      routinesRepository: mockRepo,
+      clock: mockClock,
+    });
+
+    const response = await request(app)
+      .post('/routines/renewal-check')
+      .expect(401);
+
+    expect(response.body).toEqual({ error: 'unauthorized' });
+    expect(mockRepo.findVigentesForRenewalCheck).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when the caller is not an ADMINISTRADOR', async () => {
+    const mockRepo: RoutinesRepository = {
+      findActiveByStudentId: vi.fn(),
+      findVigentesForRenewalCheck: vi.fn(),
+    };
+
+    const app = createApp({
+      routinesRepository: mockRepo,
+      clock: mockClock,
+    });
+
+    const response = await request(app)
+      .post('/routines/renewal-check')
+      .set('x-user-id', studentId)
+      .set('x-user-roles', 'ENTRENADOR')
+      .expect(403);
+
+    expect(response.body).toEqual({ error: 'forbidden_role' });
+    expect(mockRepo.findVigentesForRenewalCheck).not.toHaveBeenCalled();
   });
 });
