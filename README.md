@@ -28,6 +28,10 @@ En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://local
 
 Usar `npm run db:status` para comprobar el estado de las migraciones y `GET /ready` para verificar la conexión de la API con PostgreSQL.
 
+### Generación de rutinas
+
+El alumno crea para sí una solicitud con `POST /students/:studentId/routine-generations` y consulta su estado con `GET /students/:studentId/routine-generations/:requestId`. Cuando el estado es `COMPLETADA`, el frontend ejecuta `POST /students/:studentId/routine-generations/:requestId/finalize`: backend vuelve a validar catálogo, compatibilidad y rangos, registra la validación y crea idempotentemente una rutina `PROPUESTA`. Esto no la aprueba ni la pone en vigencia: el entrenador asignado conserva la revisión obligatoria. La consulta de estado no modifica datos y una propuesta previa nunca se descarta de forma implícita.
+
 El desarrollo local usa el mismo login por cookie que los despliegues. Los headers `x-user-*` se aceptan exclusivamente dentro de las pruebas automatizadas y no sustituyen una sesión al ejecutar `npm run dev`.
 
 ## Estructura del código

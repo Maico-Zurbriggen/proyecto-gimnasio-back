@@ -48,6 +48,7 @@ import { RoutinesController } from './modules/routines/infrastructure/http/routi
 import { createRoutinesRouter } from './modules/routines/infrastructure/http/routines.routes';
 import { PrismaRoutinesRepository } from './modules/routines/infrastructure/persistence/prisma-routines.repository';
 import type { GenerationContextRepository } from './modules/routine-generations/application/ports/generation-context.repository';
+import type { GeneratedRoutinesRepository } from './modules/routine-generations/application/ports/generated-routines.repository';
 import {
   CryptoIdGenerator,
   type IdGenerator,
@@ -55,10 +56,12 @@ import {
 import type { RoutineGenerationGateway } from './modules/routine-generations/application/ports/routine-generation.gateway';
 import type { RoutineGenerationsRepository } from './modules/routine-generations/application/ports/routine-generations.repository';
 import { GetRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/get-routine-generation.use-case';
+import { FinalizeRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/finalize-routine-generation.use-case';
 import { RequestRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/request-routine-generation.use-case';
 import { RoutineGenerationsController } from './modules/routine-generations/infrastructure/http/routine-generations.controller';
 import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
 import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
+import { PrismaGeneratedRoutinesRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generated-routines.repository';
 import { PrismaRoutineGenerationsRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-generations.repository';
 import type { MeasurementsRepository } from './modules/measurements/application/ports/measurements.repository';
 import { RecordMeasurementUseCase } from './modules/measurements/application/use-cases/record-measurement.use-case';
@@ -100,6 +103,7 @@ interface AppDependencies {
   generationContextRepository?: GenerationContextRepository;
   routineGenerationGateway?: RoutineGenerationGateway;
   routineGenerationsRepository?: RoutineGenerationsRepository;
+  generatedRoutinesRepository?: GeneratedRoutinesRepository;
   idGenerator?: IdGenerator;
 }
 
@@ -142,6 +146,7 @@ export function createApp({
   generationContextRepository,
   routineGenerationGateway,
   routineGenerationsRepository,
+  generatedRoutinesRepository,
   idGenerator,
 }: AppDependencies = {}) {
   const app = express();
@@ -257,12 +262,16 @@ export function createApp({
     routineGenerationsRepository ??
     new PrismaRoutineGenerationsRepository(prisma);
   const resolvedIdGenerator = idGenerator ?? new CryptoIdGenerator();
+  const resolvedGeneratedRoutinesRepository =
+    generatedRoutinesRepository ??
+    new PrismaGeneratedRoutinesRepository(prisma);
 
   const requestRoutineGenerationUseCase = new RequestRoutineGenerationUseCase(
     resolvedGenerationContextRepository,
     resolvedRoutineGenerationGateway,
     resolvedIdGenerator,
     resolvedClock,
+    resolvedRoutineGenerationsRepository,
   );
   const getRoutineGenerationUseCase = new GetRoutineGenerationUseCase(
     resolvedRoutineGenerationsRepository,
@@ -270,6 +279,7 @@ export function createApp({
   const routineGenerationsController = new RoutineGenerationsController(
     requestRoutineGenerationUseCase,
     getRoutineGenerationUseCase,
+    new FinalizeRoutineGenerationUseCase(resolvedGeneratedRoutinesRepository),
   );
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,

@@ -4,6 +4,7 @@ import {
   authenticate,
   requireAuth,
   requireRoles,
+  requireSelf,
 } from '../../../../shared/middleware/auth.middleware';
 import type { RoutineGenerationsController } from './routine-generations.controller';
 
@@ -13,15 +14,15 @@ export function createRoutineGenerationsRouter(
   const router = Router();
 
   // POST /students/:studentId/routine-generations
-  // Solo ENTRENADOR/ADMINISTRADOR: el alumno nunca ve un candidato de rutina sin
-  // aprobar (gate RoutineReview), y ai_generation_requests no guarda studentId
-  // (boundary sin FK a app), así que no hay forma de probar ownership 403 para
-  // ALUMNO sobre este recurso -- se lo excluye en vez de exponer un IDOR.
+  // Sólo el alumno puede iniciar una generación y exclusivamente para sí.
+  // La salida validada se materializa como PROPUESTA y no entra en vigencia
+  // hasta que el entrenador asignado la aprueba por el flujo de revisión.
   router.post(
     '/students/:studentId/routine-generations',
     authenticate,
     requireAuth,
-    requireRoles('ENTRENADOR', 'ADMINISTRADOR'),
+    requireRoles('ALUMNO'),
+    requireSelf(),
     controller.request,
   );
 
@@ -30,8 +31,18 @@ export function createRoutineGenerationsRouter(
     '/students/:studentId/routine-generations/:requestId',
     authenticate,
     requireAuth,
-    requireRoles('ENTRENADOR', 'ADMINISTRADOR'),
+    requireRoles('ALUMNO'),
+    requireSelf(),
     controller.getById,
+  );
+
+  router.post(
+    '/students/:studentId/routine-generations/:requestId/finalize',
+    authenticate,
+    requireAuth,
+    requireRoles('ALUMNO'),
+    requireSelf(),
+    controller.finalize,
   );
 
   return router;
