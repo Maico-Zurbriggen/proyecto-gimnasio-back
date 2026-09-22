@@ -21,6 +21,23 @@ import { ResolveProposalUseCase } from './modules/evolution/application/use-case
 import { ProposalsController } from './modules/evolution/infrastructure/http/proposals.controller';
 import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
+import type { InvitationsRepository } from './modules/invitations/application/ports/invitations.repository';
+import { CompleteAccountUseCase } from './modules/invitations/application/use-cases/complete-account.use-case';
+import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
+import { InvitationsController } from './modules/invitations/infrastructure/http/invitations.controller';
+import { createInvitationsRouter } from './modules/invitations/infrastructure/http/invitations.routes';
+import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
+import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
+import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
+import {
+  GetRoutineContentUseCase,
+  ListRoutineTemplatesUseCase,
+  ListStudentRoutinesUseCase,
+} from './modules/prescriptions/application/use-cases/read-prescriptions.use-cases';
+import { ReviewRoutineUseCase } from './modules/prescriptions/application/use-cases/review-routine.use-case';
+import { PrescriptionsController } from './modules/prescriptions/infrastructure/http/prescriptions.controller';
+import { createPrescriptionsRouter } from './modules/prescriptions/infrastructure/http/prescriptions.routes';
+import { PrismaPrescriptionsRepository } from './modules/prescriptions/infrastructure/persistence/prisma-prescriptions.repository';
 import {
   SystemClock,
   type Clock,
@@ -76,6 +93,8 @@ interface AppDependencies {
   studentsRepository?: StudentsRepository;
   measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
+  invitationsRepository?: InvitationsRepository;
+  prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
   generationContextRepository?: GenerationContextRepository;
@@ -116,6 +135,8 @@ export function createApp({
   studentsRepository,
   measurementsRepository,
   proposalsRepository,
+  invitationsRepository,
+  prescriptionsRepository,
   trainerAssignments,
   clock,
   generationContextRepository,
@@ -165,6 +186,24 @@ export function createApp({
       authenticateWithSession,
     ),
   );
+
+  // HU06: completar la cuenta desde la invitación. Va junto al router de auth
+  // porque comparte su mecanismo de sesión: al completarla se emite la misma
+  // cookie que emite el login.
+  const resolvedInvitationsRepo =
+    invitationsRepository ?? new PrismaInvitationsRepository(prisma);
+  app.use(
+    createInvitationsRouter(
+      new InvitationsController(
+        new ValidateInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
+        new CompleteAccountUseCase(
+          resolvedInvitationsRepo,
+          resolvedAuthRepo,
+          resolvedClock,
+        ),
+      ),
+    ),
+  );
   const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
     resolvedUsersRepository,
     resolvedClock,
@@ -190,6 +229,24 @@ export function createApp({
   );
 
   app.use(routinesRouter);
+
+  // CAP-4: asignar una plantilla como rutina del alumno, revisarla y leerla.
+  // Se registra después del router de rutinas para que `/routines/active` gane
+  // el match frente a `/routines/:routineId`.
+  const resolvedPrescriptionsRepo =
+    prescriptionsRepository ?? new PrismaPrescriptionsRepository(prisma);
+  app.use(
+    createPrescriptionsRouter(
+      new PrescriptionsController(
+        new ListRoutineTemplatesUseCase(resolvedPrescriptionsRepo),
+        new AssignRoutineFromTemplateUseCase(resolvedPrescriptionsRepo),
+        new ListStudentRoutinesUseCase(resolvedPrescriptionsRepo),
+        new GetRoutineContentUseCase(resolvedPrescriptionsRepo),
+        new ReviewRoutineUseCase(resolvedPrescriptionsRepo),
+      ),
+      requireTrainerAssignment(resolvedAssignments),
+    ),
+  );
 
   const resolvedGenerationContextRepository =
     generationContextRepository ??
