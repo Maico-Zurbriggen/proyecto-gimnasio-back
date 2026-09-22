@@ -126,6 +126,27 @@ export function requireRoles(...allowedRoles: readonly UserRole[]) {
 }
 
 /**
+ * Exige que el identificador de la ruta sea el del usuario autenticado.
+ * No habilita un bypass por roles adicionales: una cuenta con los roles
+ * ALUMNO y ENTRENADOR sigue solicitando rutinas solamente para si misma.
+ */
+export function requireSelf(paramName = 'studentId') {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    if (req.user.id !== req.params[paramName]) {
+      res.status(403).json({ error: 'forbidden_student_access' });
+      return;
+    }
+
+    next();
+  };
+}
+
+/**
  * Autorización en dos pasos para recursos de alumno (AGENTS.md):
  * Si el usuario autenticado es ALUMNO, sólo puede acceder a recursos con su propio studentId.
  * El acceso a datos de otro alumno devuelve 403 Forbidden.

@@ -283,7 +283,6 @@ export function createApp({
   );
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,
-    requireTrainerAssignment(resolvedAssignments, 'studentId', false),
   );
 
   app.use(routineGenerationsRouter);

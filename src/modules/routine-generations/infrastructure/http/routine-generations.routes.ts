@@ -1,27 +1,28 @@
-import { Router, type RequestHandler } from 'express';
+import { Router } from 'express';
 
 import {
   authenticate,
   requireAuth,
   requireRoles,
+  requireSelf,
 } from '../../../../shared/middleware/auth.middleware';
 import type { RoutineGenerationsController } from './routine-generations.controller';
 
 export function createRoutineGenerationsRouter(
   controller: RoutineGenerationsController,
-  requireAssignment: RequestHandler,
 ): Router {
   const router = Router();
 
   // POST /students/:studentId/routine-generations
-  // Sólo el entrenador actualmente asignado puede solicitar y consultar la
-  // generación. La asociación request/alumno/solicitante evita IDOR durante polling.
+  // Sólo el alumno puede iniciar una generación y exclusivamente para sí.
+  // La salida validada se materializa como PROPUESTA y no entra en vigencia
+  // hasta que el entrenador asignado la aprueba por el flujo de revisión.
   router.post(
     '/students/:studentId/routine-generations',
     authenticate,
     requireAuth,
-    requireRoles('ENTRENADOR'),
-    requireAssignment,
+    requireRoles('ALUMNO'),
+    requireSelf(),
     controller.request,
   );
 
@@ -30,8 +31,8 @@ export function createRoutineGenerationsRouter(
     '/students/:studentId/routine-generations/:requestId',
     authenticate,
     requireAuth,
-    requireRoles('ENTRENADOR'),
-    requireAssignment,
+    requireRoles('ALUMNO'),
+    requireSelf(),
     controller.getById,
   );
 
@@ -39,8 +40,8 @@ export function createRoutineGenerationsRouter(
     '/students/:studentId/routine-generations/:requestId/finalize',
     authenticate,
     requireAuth,
-    requireRoles('ENTRENADOR'),
-    requireAssignment,
+    requireRoles('ALUMNO'),
+    requireSelf(),
     controller.finalize,
   );
 
