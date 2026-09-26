@@ -26,7 +26,8 @@ export interface TrainerStudentDto extends StudentStatusDto {
     diasRestantesRenovacion: number;
     estadoAviso: EstadoAvisoRenovacion;
   } | null;
-  propuestasPendientes: number;
+  rutinasPendientesRevision: number;
+  propuestasAdaptacionPendientes: number;
 }
 
 export function toDateOnly(date: Date): string {
@@ -74,6 +75,7 @@ export function toTrainerStudentDto(
             estadoAviso: notice.estado,
           }
         : null,
-    propuestasPendientes: record.pendingProposals,
+    rutinasPendientesRevision: record.pendingRoutineReviews,
+    propuestasAdaptacionPendientes: record.pendingAdaptationProposals,
   };
 }
