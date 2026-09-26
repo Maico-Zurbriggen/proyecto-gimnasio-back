@@ -24,7 +24,9 @@ export class ListTrainerStudentsUseCase {
       .sort(
         (a, b) =>
           Number(b.bloqueado) - Number(a.bloqueado) ||
-          b.propuestasPendientes - a.propuestasPendientes ||
+          b.rutinasPendientesRevision +
+            b.propuestasAdaptacionPendientes -
+            (a.rutinasPendientesRevision + a.propuestasAdaptacionPendientes) ||
           a.displayName.localeCompare(b.displayName, 'es'),
       );
   }

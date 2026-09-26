@@ -76,7 +76,10 @@ export class PrismaStudentsRepository implements StudentsRepository {
           },
         },
         _count: {
-          select: { adaptationProposals: { where: { state: 'PENDIENTE' } } },
+          select: {
+            routines: { where: { state: 'PROPUESTA' } },
+            adaptationProposals: { where: { state: 'PENDIENTE' } },
+          },
         },
       },
     });
@@ -96,7 +99,8 @@ export class PrismaStudentsRepository implements StudentsRepository {
                 routine.requestedAt,
             }
           : null,
-        pendingProposals: row._count.adaptationProposals,
+        pendingRoutineReviews: row._count.routines,
+        pendingAdaptationProposals: row._count.adaptationProposals,
       };
     });
   }
