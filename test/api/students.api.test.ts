@@ -176,13 +176,15 @@ describe('Students API - HU05', () => {
       lastMeasurementOn: daysAgo(5),
       goal: 'FUERZA',
       activeRoutine: { routineType: 'FUERZA', cycleStart: daysAgo(55) },
-      pendingProposals: 0,
+      pendingRoutineReviews: 1,
+      pendingAdaptationProposals: 2,
     };
     const blocked: AssignedStudentRecord = {
       ...blockedStudent(),
       goal: null,
       activeRoutine: null,
-      pendingProposals: 0,
+      pendingRoutineReviews: 0,
+      pendingAdaptationProposals: 0,
     };
     const { app, studentsRepository } = buildApp({
       assignedStudents: [active, blocked],
@@ -207,6 +209,8 @@ describe('Students API - HU05', () => {
         diasRestantesRenovacion: 5,
         estadoAviso: 'pendiente',
       },
+      rutinasPendientesRevision: 1,
+      propuestasAdaptacionPendientes: 2,
     });
   });
 });

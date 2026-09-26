@@ -12,7 +12,8 @@ export interface StudentRecord {
 export interface AssignedStudentRecord extends StudentRecord {
   goal: string | null;
   activeRoutine: { routineType: string; cycleStart: Date } | null;
-  pendingProposals: number;
+  pendingRoutineReviews: number;
+  pendingAdaptationProposals: number;
 }
 
 export interface UnlockStudentCommand {
