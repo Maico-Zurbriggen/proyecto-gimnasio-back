@@ -51,6 +51,7 @@ export class RecordMeasurementUseCase {
       weightKg: input.weightKg,
       heightCm: input.heightCm,
       measuredOn,
+      recordedAt: now,
     });
 
     if (!record) {
@@ -63,6 +64,7 @@ export class RecordMeasurementUseCase {
       heightCm: record.heightCm,
       measuredOn: record.measuredOn.toISOString().slice(0, 10),
       replacedPrevious: record.replacedPrevious,
+      measurementBlockState: record.measurementBlockState,
     };
   }
 }

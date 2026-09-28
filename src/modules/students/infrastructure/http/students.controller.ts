@@ -1,14 +1,17 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import type { GetStudentStatusUseCase } from '../../application/use-cases/get-student-status.use-case';
+import type { GetOwnMeasurementBlockUseCase } from '../../application/use-cases/get-own-measurement-block.use-case';
 import type { ListTrainerStudentsUseCase } from '../../application/use-cases/list-trainer-students.use-case';
 import type { UnlockStudentUseCase } from '../../application/use-cases/unlock-student.use-case';
 import {
+  MeasurementBlockAlreadyResolvedError,
+  PendingMeasurementRequiredError,
   StudentNotBlockedError,
   StudentNotFoundError,
   TrainerNotAssignedError,
 } from '../../domain/errors/student-errors';
-import { studentParamsSchema, unlockBodySchema } from './students.schemas';
+import { studentParamsSchema } from './students.schemas';
 
 function sendStudentError(
   error: unknown,
@@ -27,6 +30,14 @@ function sendStudentError(
     res.status(409).json({ error: 'student_not_blocked' });
     return;
   }
+  if (error instanceof PendingMeasurementRequiredError) {
+    res.status(409).json({ error: 'pending_measurement_required' });
+    return;
+  }
+  if (error instanceof MeasurementBlockAlreadyResolvedError) {
+    res.status(409).json({ error: 'measurement_block_already_resolved' });
+    return;
+  }
   next(error);
 }
 
@@ -34,6 +45,7 @@ export class StudentsController {
   constructor(
     private readonly listTrainerStudents: ListTrainerStudentsUseCase,
     private readonly getStudentStatus: GetStudentStatusUseCase,
+    private readonly getOwnMeasurementBlock: GetOwnMeasurementBlockUseCase,
     private readonly unlockStudent: UnlockStudentUseCase,
   ) {}
 
@@ -47,6 +59,21 @@ export class StudentsController {
         trainerId: req.user?.id ?? '',
       });
       res.status(200).json(students);
+    } catch (error) {
+      sendStudentError(error, res, next);
+    }
+  };
+
+  getOwnBlock = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const status = await this.getOwnMeasurementBlock.execute(
+        req.user?.id ?? '',
+      );
+      res.status(200).json(status);
     } catch (error) {
       sendStudentError(error, res, next);
     }
@@ -92,32 +119,9 @@ export class StudentsController {
         return;
       }
 
-      const rawBody: unknown = req.body ?? {};
-      const hasMeasurement =
-        typeof rawBody === 'object' &&
-        rawBody !== null &&
-        'weightKg' in rawBody &&
-        'heightCm' in rawBody;
-      // HU05, Esc. 2: sin la medición adeudada el desbloqueo se rechaza.
-      if (!hasMeasurement) {
-        res.status(400).json({ error: 'pending_measurement_required' });
-        return;
-      }
-
-      const body = unlockBodySchema.safeParse(rawBody);
-      if (!body.success) {
-        res.status(400).json({
-          error: 'invalid_request_body',
-          details: body.error.flatten(),
-        });
-        return;
-      }
-
       const status = await this.unlockStudent.execute({
         trainerId: req.user?.id ?? '',
         studentId: params.data.studentId,
-        weightKg: body.data.weightKg,
-        heightCm: body.data.heightCm,
       });
       res.status(200).json(status);
     } catch (error) {

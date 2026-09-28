@@ -6,6 +6,7 @@ import type {
   MeasurementsRepository,
   RecordMeasurementCommand,
 } from '../../src/modules/measurements/application/ports/measurements.repository';
+import { MeasurementRegularizationAlreadySubmittedError } from '../../src/modules/measurements/domain/errors/measurement-errors';
 
 const STUDENT = '11111111-1111-4111-8111-111111111111';
 const OTHER_STUDENT = '22222222-2222-4222-8222-222222222222';
@@ -27,6 +28,7 @@ function createRepo(exists = true) {
         heightCm: command.heightCm,
         measuredOn: command.measuredOn,
         replacedPrevious: calls.length > 1,
+        measurementBlockState: 'NORMAL',
       };
     }),
   };
@@ -53,6 +55,7 @@ describe('Measurements API - HU02', () => {
     expect(response.body.weightKg).toBe(75.5);
     expect(response.body.heightCm).toBe(178);
     expect(response.body.measuredOn).toBe('2026-09-17');
+    expect(response.body.measurementBlockState).toBe('NORMAL');
     expect(calls).toHaveLength(1);
   });
 
@@ -177,5 +180,20 @@ describe('Measurements API - HU02', () => {
     const app = createApp({ measurementsRepository: repo, clock });
 
     await post(app).send({ weightKg: 75, heightCm: 178 }).expect(404);
+  });
+
+  it('returns 409 when regularization is already pending trainer approval', async () => {
+    const repo: MeasurementsRepository = {
+      record: vi
+        .fn()
+        .mockRejectedValue(
+          new MeasurementRegularizationAlreadySubmittedError(),
+        ),
+    };
+    const app = createApp({ measurementsRepository: repo, clock });
+
+    await post(app).send({ weightKg: 75, heightCm: 178 }).expect(409, {
+      error: 'measurement_regularization_already_submitted',
+    });
   });
 });

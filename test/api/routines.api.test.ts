@@ -16,6 +16,30 @@ describe('Routines API - Active Routine Endpoint (T2 & T3)', () => {
   const studentId = '11111111-1111-4111-a111-111111111111';
   const otherStudentId = '99999999-9999-4999-a999-999999999999';
 
+  it('blocks normal student operations while measurement regularization is pending', async () => {
+    const mockRepo: RoutinesRepository = {
+      findActiveByStudentId: vi.fn(),
+    };
+    const app = createApp({
+      routinesRepository: mockRepo,
+      clock: mockClock,
+      studentMeasurementAccess: {
+        findActiveBlockState: vi.fn().mockResolvedValue('PENDIENTE_APROBACION'),
+      },
+    });
+
+    await request(app)
+      .get('/routines/active')
+      .set('x-user-id', studentId)
+      .set('x-user-roles', 'ALUMNO')
+      .expect(423, {
+        error: 'student_measurement_blocked',
+        measurementBlockState: 'PENDIENTE_APROBACION',
+      });
+
+    expect(mockRepo.findActiveByStudentId).not.toHaveBeenCalled();
+  });
+
   it('exposes diasRestantesRenovacion and estado aviso "pendiente" when renewal is in the future', async () => {
     // Routine started on 2026-08-09 -> renewal is 2026-10-08 (60-day cycle; 30 days remaining from 2026-09-08)
     const activeRoutine = new Routine({

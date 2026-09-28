@@ -12,10 +12,14 @@ export interface StudentStatusDto {
   studentId: string;
   displayName: string;
   bloqueado: boolean;
+  measurementBlockState:
+    'NORMAL' | 'PENDIENTE_MEDICION' | 'PENDIENTE_APROBACION';
   motivoBloqueo: string | null;
   /** Fecha `YYYY-MM-DD` de la última medición corporal registrada. */
   fechaUltimaMedicion: string | null;
   faltasConsecutivas: number;
+  blockedAt: string | null;
+  submittedAt: string | null;
   alturaCm: number;
 }
 
@@ -34,21 +38,18 @@ export function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function toStudentStatusDto(
-  record: StudentRecord,
-  now: Date,
-): StudentStatusDto {
+export function toStudentStatusDto(record: StudentRecord): StudentStatusDto {
   const block = evaluateStudentBlock({
-    state: record.state,
-    lastMeasurementOn: record.lastMeasurementOn,
-    registeredAt: record.registeredAt,
-    now,
+    activeBlock: record.activeMeasurementBlock,
+    checkpointResults: record.checkpointResults,
   });
 
   return {
     studentId: record.id,
     displayName: record.displayName,
     ...block,
+    blockedAt: block.blockedAt?.toISOString() ?? null,
+    submittedAt: block.submittedAt?.toISOString() ?? null,
     fechaUltimaMedicion: record.lastMeasurementOn
       ? toDateOnly(record.lastMeasurementOn)
       : null,
@@ -65,7 +66,7 @@ export function toTrainerStudentDto(
     : null;
 
   return {
-    ...toStudentStatusDto(record, now),
+    ...toStudentStatusDto(record),
     objetivo: record.goal,
     rutinaVigente:
       record.activeRoutine && notice

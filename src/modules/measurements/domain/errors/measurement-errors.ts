@@ -15,3 +15,11 @@ export class StudentNotFoundError extends Error {
     this.name = 'StudentNotFoundError';
   }
 }
+
+/** El alumno ya presentó la regularización y debe esperar la aprobación. */
+export class MeasurementRegularizationAlreadySubmittedError extends Error {
+  constructor(message = 'Measurement regularization was already submitted') {
+    super(message);
+    this.name = 'MeasurementRegularizationAlreadySubmittedError';
+  }
+}
