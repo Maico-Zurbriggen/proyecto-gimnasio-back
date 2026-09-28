@@ -80,6 +80,27 @@ enum BodyMeasurementType {
   @@schema("app")
 }
 
+enum MeasurementCheckpointResult {
+  CUMPLIDO
+  FALTA
+
+  @@schema("app")
+}
+
+enum MeasurementBlockState {
+  PENDIENTE_MEDICION
+  PENDIENTE_APROBACION
+  RESUELTO
+
+  @@schema("app")
+}
+
+enum MeasurementBlockReason {
+  TRES_FALTAS_CONSECUTIVAS
+
+  @@schema("app")
+}
+
 enum MovementPattern {
   EMPUJE_HORIZONTAL
   EMPUJE_VERTICAL
@@ -398,38 +419,42 @@ model Joint {
 }
 
 model StudentProfile {
-  userId               String                     @id @map("user_id") @db.Uuid
-  birthDate            DateTime                   @map("birth_date") @db.Date
-  sex                  String
-  heightCm             Decimal                    @map("height_cm") @db.Decimal(5, 2)
-  experienceLevel      ExperienceLevel            @map("experience_level")
-  availableDaysPerWeek Int                        @map("available_days_per_week")
-  user                 User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  goals                Goal[]
-  physicalConditions   PhysicalCondition[]
-  fitnessClearances    FitnessClearance[]
-  bodyMeasurements     BodyMeasurement[]
-  trainerAssignments   TrainerStudentAssignment[]
-  routines             Routine[]
-  trainingSessions     TrainingSession[]
-  evolutionDiagnostics EvolutionDiagnostic[]
-  adaptationProposals  AdaptationProposal[]
-  personalRecords      PersonalRecord[]
+  userId                 String                         @id @map("user_id") @db.Uuid
+  birthDate              DateTime                       @map("birth_date") @db.Date
+  sex                    String
+  heightCm               Decimal                        @map("height_cm") @db.Decimal(5, 2)
+  heightUpdatedAt        DateTime                       @default(now()) @map("height_updated_at") @db.Timestamptz(6)
+  experienceLevel        ExperienceLevel                @map("experience_level")
+  availableDaysPerWeek   Int                            @map("available_days_per_week")
+  user                   User                           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  goals                  Goal[]
+  physicalConditions     PhysicalCondition[]
+  fitnessClearances      FitnessClearance[]
+  bodyMeasurements       BodyMeasurement[]
+  trainerAssignments     TrainerStudentAssignment[]
+  routines               Routine[]
+  trainingSessions       TrainingSession[]
+  evolutionDiagnostics   EvolutionDiagnostic[]
+  adaptationProposals    AdaptationProposal[]
+  personalRecords        PersonalRecord[]
+  measurementCheckpoints StudentMeasurementCheckpoint[]
+  measurementBlocks      StudentMeasurementBlock[]
 
   @@map("student_profiles")
   @@schema("app")
 }
 
 model TrainerProfile {
-  userId             String                     @id @map("user_id") @db.Uuid
-  specialty          String
-  experienceYears    Int                        @map("experience_years")
-  presentation       String
-  user               User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  studentAssignments TrainerStudentAssignment[]
-  routineTemplates   RoutineTemplate[]
-  routineReviews     RoutineReview[]
-  resolvedProposals  AdaptationProposal[]       @relation("AdaptationResolver")
+  userId                    String                     @id @map("user_id") @db.Uuid
+  specialty                 String
+  experienceYears           Int                        @map("experience_years")
+  presentation              String
+  user                      User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  studentAssignments        TrainerStudentAssignment[]
+  routineTemplates          RoutineTemplate[]
+  routineReviews            RoutineReview[]
+  resolvedProposals         AdaptationProposal[]       @relation("AdaptationResolver")
+  approvedMeasurementBlocks StudentMeasurementBlock[]  @relation("MeasurementBlockApprover")
 
   @@map("trainer_profiles")
   @@schema("app")
@@ -479,12 +504,14 @@ model FitnessClearance {
 }
 
 model BodyMeasurement {
-  id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentId  String              @map("student_id") @db.Uuid
-  type       BodyMeasurementType
-  value      Decimal             @db.Decimal(10, 2)
-  measuredOn DateTime            @map("measured_on") @db.Date
-  student    StudentProfile      @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  id                  String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId           String                        @map("student_id") @db.Uuid
+  type                BodyMeasurementType
+  value               Decimal                       @db.Decimal(10, 2)
+  measuredOn          DateTime                      @map("measured_on") @db.Date
+  student             StudentProfile                @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  checkpointEvidence  StudentMeasurementCheckpoint? @relation("CheckpointWeightMeasurement")
+  blockRegularization StudentMeasurementBlock?      @relation("BlockRegularizationWeight")
 
   @@unique([studentId, type, measuredOn])
   @@map("body_measurements")
@@ -652,23 +679,24 @@ model TemplateSet {
 }
 
 model Routine {
-  id                       String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentId                String              @map("student_id") @db.Uuid
-  sourceTemplateId         String?             @map("source_template_id") @db.Uuid
-  sourceGenerationResultId String?             @unique @map("source_generation_result_id") @db.Uuid
-  routineType              TrainingPurpose     @map("routine_type")
-  targetWeeklyFrequency    Int                 @map("target_weekly_frequency")
+  id                       String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId                String                         @map("student_id") @db.Uuid
+  sourceTemplateId         String?                        @map("source_template_id") @db.Uuid
+  sourceGenerationResultId String?                        @unique @map("source_generation_result_id") @db.Uuid
+  routineType              TrainingPurpose                @map("routine_type")
+  targetWeeklyFrequency    Int                            @map("target_weekly_frequency")
   state                    RoutineState
   origin                   RoutineOrigin
-  requestedByUserId        String?             @map("requested_by_user_id") @db.Uuid
-  requestedAt              DateTime            @default(now()) @map("requested_at") @db.Timestamptz(6)
-  student                  StudentProfile      @relation(fields: [studentId], references: [userId], onDelete: Restrict)
-  sourceTemplate           RoutineTemplate?    @relation(fields: [sourceTemplateId], references: [id], onDelete: Restrict)
-  sourceGenerationResult   AiGenerationResult? @relation(fields: [sourceGenerationResultId], references: [id], onDelete: Restrict)
-  requestedBy              User?               @relation("RoutineRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  requestedByUserId        String?                        @map("requested_by_user_id") @db.Uuid
+  requestedAt              DateTime                       @default(now()) @map("requested_at") @db.Timestamptz(6)
+  student                  StudentProfile                 @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  sourceTemplate           RoutineTemplate?               @relation(fields: [sourceTemplateId], references: [id], onDelete: Restrict)
+  sourceGenerationResult   AiGenerationResult?            @relation(fields: [sourceGenerationResultId], references: [id], onDelete: Restrict)
+  requestedBy              User?                          @relation("RoutineRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   reviews                  RoutineReview[]
   versions                 RoutineVersion[]
   trainingSessions         TrainingSession[]
+  measurementCheckpoints   StudentMeasurementCheckpoint[]
 
   @@index([studentId, state])
   @@index([sourceTemplateId])
@@ -695,24 +723,73 @@ model RoutineReview {
 }
 
 model RoutineVersion {
-  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  routineId            String                @map("routine_id") @db.Uuid
-  versionNumber        Int                   @map("version_number")
-  current              Boolean               @default(false)
-  createdByUserId      String                @map("created_by_user_id") @db.Uuid
-  adaptationProposalId String?               @unique @map("adaptation_proposal_id") @db.Uuid
-  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  routine              Routine               @relation(fields: [routineId], references: [id], onDelete: Restrict)
-  createdBy            User                  @relation("RoutineVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  days                 RoutineDay[]
-  reviews              RoutineReview[]
-  trainingSessions     TrainingSession[]
-  evolutionDiagnostics EvolutionDiagnostic[]
-  originatingProposal  AdaptationProposal?   @relation("OriginatingAdaptation", fields: [adaptationProposalId], references: [id], onDelete: Restrict)
-  resultingForProposal AdaptationProposal?   @relation("ResultingRoutineVersion")
+  id                     String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routineId              String                         @map("routine_id") @db.Uuid
+  versionNumber          Int                            @map("version_number")
+  current                Boolean                        @default(false)
+  createdByUserId        String                         @map("created_by_user_id") @db.Uuid
+  adaptationProposalId   String?                        @unique @map("adaptation_proposal_id") @db.Uuid
+  createdAt              DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  routine                Routine                        @relation(fields: [routineId], references: [id], onDelete: Restrict)
+  createdBy              User                           @relation("RoutineVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  days                   RoutineDay[]
+  reviews                RoutineReview[]
+  trainingSessions       TrainingSession[]
+  evolutionDiagnostics   EvolutionDiagnostic[]
+  originatingProposal    AdaptationProposal?            @relation("OriginatingAdaptation", fields: [adaptationProposalId], references: [id], onDelete: Restrict)
+  resultingForProposal   AdaptationProposal?            @relation("ResultingRoutineVersion")
+  measurementCheckpoints StudentMeasurementCheckpoint[]
 
   @@unique([routineId, versionNumber])
   @@map("routine_versions")
+  @@schema("app")
+}
+
+model StudentMeasurementCheckpoint {
+  id                  String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId           String                      @map("student_id") @db.Uuid
+  routineId           String                      @map("routine_id") @db.Uuid
+  routineVersionId    String                      @map("routine_version_id") @db.Uuid
+  cycleStartsOn       DateTime                    @map("cycle_starts_on") @db.Date
+  dueOn               DateTime                    @map("due_on") @db.Date
+  result              MeasurementCheckpointResult
+  weightMeasurementId String?                     @unique @map("weight_measurement_id") @db.Uuid
+  heightConfirmedAt   DateTime?                   @map("height_confirmed_at") @db.Timestamptz(6)
+  evaluatedAt         DateTime                    @default(now()) @map("evaluated_at") @db.Timestamptz(6)
+  student             StudentProfile              @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  routine             Routine                     @relation(fields: [routineId], references: [id], onDelete: Restrict)
+  routineVersion      RoutineVersion              @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)
+  weightMeasurement   BodyMeasurement?            @relation("CheckpointWeightMeasurement", fields: [weightMeasurementId], references: [id], onDelete: Restrict)
+  triggeredBlock      StudentMeasurementBlock?    @relation("TriggeringMeasurementCheckpoint")
+
+  @@unique([studentId, dueOn])
+  @@index([studentId, evaluatedAt])
+  @@index([result, dueOn])
+  @@map("student_measurement_checkpoints")
+  @@schema("app")
+}
+
+model StudentMeasurementBlock {
+  id                                String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId                         String                       @map("student_id") @db.Uuid
+  state                             MeasurementBlockState        @default(PENDIENTE_MEDICION)
+  reason                            MeasurementBlockReason       @default(TRES_FALTAS_CONSECUTIVAS)
+  consecutiveMissesAtBlock          Int                          @map("consecutive_misses_at_block")
+  triggeringCheckpointId            String                       @unique @map("triggering_checkpoint_id") @db.Uuid
+  blockedAt                         DateTime                     @default(now()) @map("blocked_at") @db.Timestamptz(6)
+  regularizationWeightMeasurementId String?                      @unique @map("regularization_weight_measurement_id") @db.Uuid
+  regularizationHeightConfirmedAt   DateTime?                    @map("regularization_height_confirmed_at") @db.Timestamptz(6)
+  submittedAt                       DateTime?                    @map("submitted_at") @db.Timestamptz(6)
+  approvedByTrainerId               String?                      @map("approved_by_trainer_id") @db.Uuid
+  approvedAt                        DateTime?                    @map("approved_at") @db.Timestamptz(6)
+  student                           StudentProfile               @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  triggeringCheckpoint              StudentMeasurementCheckpoint @relation("TriggeringMeasurementCheckpoint", fields: [triggeringCheckpointId], references: [id], onDelete: Restrict)
+  regularizationWeightMeasurement   BodyMeasurement?             @relation("BlockRegularizationWeight", fields: [regularizationWeightMeasurementId], references: [id], onDelete: Restrict)
+  approvedByTrainer                 TrainerProfile?              @relation("MeasurementBlockApprover", fields: [approvedByTrainerId], references: [userId], onDelete: Restrict)
+
+  @@index([studentId, state])
+  @@index([approvedByTrainerId, approvedAt])
+  @@map("student_measurement_blocks")
   @@schema("app")
 }
 
@@ -954,18 +1031,18 @@ model PersonalRecord {
 }
 
 model AiGenerationRequest {
-  id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  idempotencyKey   String                   @unique @map("idempotency_key")
-  state            AiGenerationRequestState @default(PENDIENTE)
-  minimizedContext Json                     @map("minimized_context")
+  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey   String                      @unique @map("idempotency_key")
+  state            AiGenerationRequestState    @default(PENDIENTE)
+  minimizedContext Json                        @map("minimized_context")
   preferences      Json
-  contextHash      String                   @map("context_hash")
-  availableAt      DateTime                 @default(now()) @map("available_at") @db.Timestamptz(6)
-  leaseOwner       String?                  @map("lease_owner")
-  leaseUntil       DateTime?                @map("lease_until") @db.Timestamptz(6)
-  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  finishedAt       DateTime?                @map("finished_at") @db.Timestamptz(6)
-  retentionUntil   DateTime                 @map("retention_until") @db.Timestamptz(6)
+  contextHash      String                      @map("context_hash")
+  availableAt      DateTime                    @default(now()) @map("available_at") @db.Timestamptz(6)
+  leaseOwner       String?                     @map("lease_owner")
+  leaseUntil       DateTime?                   @map("lease_until") @db.Timestamptz(6)
+  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt       DateTime?                   @map("finished_at") @db.Timestamptz(6)
+  retentionUntil   DateTime                    @map("retention_until") @db.Timestamptz(6)
   attempts         AiGenerationAttempt[]
   ownership        RoutineGenerationOwnership?
 

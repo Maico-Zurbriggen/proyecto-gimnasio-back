@@ -69,12 +69,20 @@ import { MeasurementsController } from './modules/measurements/infrastructure/ht
 import { createMeasurementsRouter } from './modules/measurements/infrastructure/http/measurements.routes';
 import { PrismaMeasurementsRepository } from './modules/measurements/infrastructure/persistence/prisma-measurements.repository';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
+import type { MeasurementCheckpointsRepository } from './modules/students/application/ports/measurement-checkpoints.repository';
+import type { StudentMeasurementAccess } from './modules/students/application/ports/student-measurement-access.port';
 import type { TrainerAssignments } from './modules/students/application/ports/trainer-assignments.port';
+import { EvaluateMeasurementCheckpointsUseCase } from './modules/students/application/use-cases/evaluate-measurement-checkpoints.use-case';
+import { GetOwnMeasurementBlockUseCase } from './modules/students/application/use-cases/get-own-measurement-block.use-case';
 import { GetStudentStatusUseCase } from './modules/students/application/use-cases/get-student-status.use-case';
 import { ListTrainerStudentsUseCase } from './modules/students/application/use-cases/list-trainer-students.use-case';
 import { UnlockStudentUseCase } from './modules/students/application/use-cases/unlock-student.use-case';
 import { StudentsController } from './modules/students/infrastructure/http/students.controller';
 import { createStudentsRouter } from './modules/students/infrastructure/http/students.routes';
+import { MeasurementCheckpointsController } from './modules/students/infrastructure/http/measurement-checkpoints.controller';
+import { createMeasurementCheckpointsRouter } from './modules/students/infrastructure/http/measurement-checkpoints.routes';
+import { PrismaMeasurementCheckpointsRepository } from './modules/students/infrastructure/persistence/prisma-measurement-checkpoints.repository';
+import { PrismaStudentMeasurementAccess } from './modules/students/infrastructure/persistence/prisma-student-measurement-access';
 import { PrismaStudentsRepository } from './modules/students/infrastructure/persistence/prisma-students.repository';
 import { PrismaTrainerAssignments } from './modules/students/infrastructure/persistence/prisma-trainer-assignments.repository';
 import type { UsersRepository } from './modules/users/application/ports/users.repository';
@@ -84,6 +92,7 @@ import { createUsersRouter } from './modules/users/infrastructure/http/users.rou
 import { PrismaUsersRepository } from './modules/users/infrastructure/persistence/prisma-users.repository';
 import { createAuthenticate } from './shared/middleware/auth.middleware';
 import { requireTrainerAssignment } from './shared/middleware/assignment.middleware';
+import { requireStudentMeasurementAccess } from './shared/middleware/student-measurement-access.middleware';
 
 class CorsOriginError extends Error {}
 
@@ -94,6 +103,8 @@ interface AppDependencies {
   authRepository?: AuthRepository;
   routinesRepository?: RoutinesRepository;
   studentsRepository?: StudentsRepository;
+  measurementCheckpointsRepository?: MeasurementCheckpointsRepository;
+  studentMeasurementAccess?: StudentMeasurementAccess;
   measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
   invitationsRepository?: InvitationsRepository;
@@ -137,6 +148,8 @@ export function createApp({
   authRepository,
   routinesRepository,
   studentsRepository,
+  measurementCheckpointsRepository,
+  studentMeasurementAccess,
   measurementsRepository,
   proposalsRepository,
   invitationsRepository,
@@ -220,6 +233,14 @@ export function createApp({
 
   const resolvedAssignments =
     trainerAssignments ?? new PrismaTrainerAssignments(prisma);
+  const resolvedStudentMeasurementAccess =
+    studentMeasurementAccess ??
+    (process.env.NODE_ENV === 'test'
+      ? { findActiveBlockState: async () => null }
+      : new PrismaStudentMeasurementAccess(prisma));
+  const requireMeasurementAccess = requireStudentMeasurementAccess(
+    resolvedStudentMeasurementAccess,
+  );
 
   const resolvedRoutinesRepo =
     routinesRepository ?? new PrismaRoutinesRepository(prisma);
@@ -231,6 +252,7 @@ export function createApp({
   const routinesRouter = createRoutinesRouter(
     routinesController,
     requireTrainerAssignment(resolvedAssignments),
+    requireMeasurementAccess,
   );
 
   app.use(routinesRouter);
@@ -250,6 +272,7 @@ export function createApp({
         new ReviewRoutineUseCase(resolvedPrescriptionsRepo),
       ),
       requireTrainerAssignment(resolvedAssignments),
+      requireMeasurementAccess,
     ),
   );
 
@@ -283,6 +306,7 @@ export function createApp({
   );
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,
+    requireMeasurementAccess,
   );
 
   app.use(routineGenerationsRouter);
@@ -291,19 +315,26 @@ export function createApp({
     studentsRepository ?? new PrismaStudentsRepository(prisma);
   const studentsController = new StudentsController(
     new ListTrainerStudentsUseCase(resolvedStudentsRepo, resolvedClock),
-    new GetStudentStatusUseCase(
-      resolvedStudentsRepo,
-      resolvedAssignments,
-      resolvedClock,
-    ),
-    new UnlockStudentUseCase(
-      resolvedStudentsRepo,
-      resolvedAssignments,
-      resolvedClock,
-    ),
+    new GetStudentStatusUseCase(resolvedStudentsRepo, resolvedAssignments),
+    new GetOwnMeasurementBlockUseCase(resolvedStudentsRepo),
+    new UnlockStudentUseCase(resolvedStudentsRepo, resolvedClock),
   );
 
   app.use(createStudentsRouter(studentsController));
+
+  const resolvedMeasurementCheckpointsRepo =
+    measurementCheckpointsRepository ??
+    new PrismaMeasurementCheckpointsRepository(prisma);
+  app.use(
+    createMeasurementCheckpointsRouter(
+      new MeasurementCheckpointsController(
+        new EvaluateMeasurementCheckpointsUseCase(
+          resolvedMeasurementCheckpointsRepo,
+          resolvedClock,
+        ),
+      ),
+    ),
+  );
 
   // HU02 - T1: carga de medidas del alumno desde el aviso de renovación.
   const resolvedMeasurementsRepo =

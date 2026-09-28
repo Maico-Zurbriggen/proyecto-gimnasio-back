@@ -19,3 +19,17 @@ export class StudentNotBlockedError extends Error {
     this.name = 'StudentNotBlockedError';
   }
 }
+
+export class PendingMeasurementRequiredError extends Error {
+  constructor(message = 'The student must submit pending measurements first') {
+    super(message);
+    this.name = 'PendingMeasurementRequiredError';
+  }
+}
+
+export class MeasurementBlockAlreadyResolvedError extends Error {
+  constructor(message = 'Measurement block was already resolved') {
+    super(message);
+    this.name = 'MeasurementBlockAlreadyResolvedError';
+  }
+}

@@ -1,12 +1,13 @@
-import type { StudentAccountState } from '../../domain/services/student-block';
+import type { ActiveMeasurementBlock } from '../../domain/services/student-block';
 
 export interface StudentRecord {
   id: string;
   displayName: string;
-  state: StudentAccountState;
   registeredAt: Date;
   heightCm: number;
   lastMeasurementOn: Date | null;
+  activeMeasurementBlock: ActiveMeasurementBlock | null;
+  checkpointResults: Array<'CUMPLIDO' | 'FALTA'>;
 }
 
 export interface AssignedStudentRecord extends StudentRecord {
@@ -19,18 +20,22 @@ export interface AssignedStudentRecord extends StudentRecord {
 export interface UnlockStudentCommand {
   studentId: string;
   trainerId: string;
-  weightKg: number;
-  heightCm: number;
-  measuredOn: Date;
+  approvedAt: Date;
 }
+
+export type UnlockStudentResult =
+  | 'APPROVED'
+  | 'NOT_ASSIGNED'
+  | 'PENDING_MEASUREMENT'
+  | 'NOT_BLOCKED'
+  | 'ALREADY_RESOLVED';
 
 export interface StudentsRepository {
   findById(studentId: string): Promise<StudentRecord | null>;
   findAssignedToTrainer(trainerId: string): Promise<AssignedStudentRecord[]>;
   /**
-   * Registra la medición adeudada, actualiza la altura y reactiva al alumno en una
-   * única transacción (HU05 - T1). Devuelve `false` si al confirmar el alumno ya no
-   * estaba SUSPENDIDO; en ese caso no persiste nada.
+   * Aprueba la regularización ya cargada. La asignación y el estado se vuelven a
+   * comprobar dentro de la transacción.
    */
-  unlock(command: UnlockStudentCommand): Promise<boolean>;
+  unlock(command: UnlockStudentCommand): Promise<UnlockStudentResult>;
 }

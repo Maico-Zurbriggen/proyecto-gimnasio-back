@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import type { RecordMeasurementUseCase } from '../../application/use-cases/record-measurement.use-case';
 import {
+  MeasurementRegularizationAlreadySubmittedError,
   MeasurementOutOfRangeError,
   StudentNotFoundError,
 } from '../../domain/errors/measurement-errors';
@@ -32,6 +33,12 @@ function sendMeasurementError(
   }
   if (error instanceof StudentNotFoundError) {
     res.status(404).json({ error: 'student_not_found' });
+    return;
+  }
+  if (error instanceof MeasurementRegularizationAlreadySubmittedError) {
+    res.status(409).json({
+      error: 'measurement_regularization_already_submitted',
+    });
     return;
   }
   next(error);

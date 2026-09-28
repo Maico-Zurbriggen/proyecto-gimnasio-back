@@ -11,6 +11,7 @@ import type { RoutinesController } from './routines.controller';
 export function createRoutinesRouter(
   controller: RoutinesController,
   requireAssignment: RequestHandler,
+  requireMeasurementAccess: RequestHandler,
 ): Router {
   const router = Router();
 
@@ -26,6 +27,7 @@ export function createRoutinesRouter(
     requireAuth,
     requireRoles('ALUMNO', 'ENTRENADOR'),
     requireStudentOwnership('studentId'),
+    requireMeasurementAccess,
     requireAssignment,
     controller.getActive,
   );
@@ -36,6 +38,7 @@ export function createRoutinesRouter(
     authenticate,
     requireAuth,
     requireRoles('ALUMNO'),
+    requireMeasurementAccess,
     controller.getActive,
   );
 
