@@ -2,60 +2,68 @@ import { describe, expect, it } from 'vitest';
 
 import { evaluateStudentBlock } from './student-block';
 
-const now = new Date('2026-09-15T12:00:00Z');
-const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000);
-
-describe('evaluateStudentBlock (HU05 - T2)', () => {
-  it('Esc. 1: a suspended student is blocked with a reason and the derived strikes', () => {
+describe('evaluateStudentBlock', () => {
+  it('reports the persisted block while the measurement is pending', () => {
     const status = evaluateStudentBlock({
-      state: 'SUSPENDIDO',
-      lastMeasurementOn: daysAgo(200),
-      registeredAt: daysAgo(400),
-      now,
+      activeBlock: {
+        state: 'PENDIENTE_MEDICION',
+        reason: 'TRES_FALTAS_CONSECUTIVAS',
+        consecutiveMissesAtBlock: 3,
+        blockedAt: new Date('2026-09-15T12:00:00Z'),
+        submittedAt: null,
+      },
+      checkpointResults: ['FALTA', 'FALTA', 'FALTA'],
+    });
+
+    expect(status).toMatchObject({
+      bloqueado: true,
+      measurementBlockState: 'PENDIENTE_MEDICION',
+      faltasConsecutivas: 3,
+      submittedAt: null,
+    });
+    expect(status.motivoBloqueo).toContain('faltas consecutivas');
+  });
+
+  it('remains blocked while trainer approval is pending', () => {
+    const submittedAt = new Date('2026-09-16T09:00:00Z');
+    const status = evaluateStudentBlock({
+      activeBlock: {
+        state: 'PENDIENTE_APROBACION',
+        reason: 'TRES_FALTAS_CONSECUTIVAS',
+        consecutiveMissesAtBlock: 3,
+        blockedAt: new Date('2026-09-15T12:00:00Z'),
+        submittedAt,
+      },
+      checkpointResults: ['FALTA', 'FALTA', 'FALTA'],
     });
 
     expect(status.bloqueado).toBe(true);
-    expect(status.faltasConsecutivas).toBe(3);
-    expect(status.motivoBloqueo).toContain('3ª falta consecutiva');
+    expect(status.measurementBlockState).toBe('PENDIENTE_APROBACION');
+    expect(status.submittedAt).toEqual(submittedAt);
   });
 
-  it('an active student is not blocked and has no reason', () => {
+  it('counts only the latest consecutive misses without an active block', () => {
     const status = evaluateStudentBlock({
-      state: 'ACTIVO',
-      lastMeasurementOn: daysAgo(10),
-      registeredAt: daysAgo(400),
-      now,
+      activeBlock: null,
+      checkpointResults: ['FALTA', 'FALTA', 'CUMPLIDO', 'FALTA'],
     });
 
     expect(status).toEqual({
       bloqueado: false,
+      measurementBlockState: 'NORMAL',
       motivoBloqueo: null,
-      faltasConsecutivas: 0,
+      faltasConsecutivas: 2,
+      blockedAt: null,
+      submittedAt: null,
     });
   });
 
-  it('Esc. 4: a measurement registered today resets the strikes to 0', () => {
-    const status = evaluateStudentBlock({
-      state: 'ACTIVO',
-      lastMeasurementOn: now,
-      registeredAt: daysAgo(400),
-      now,
-    });
-
-    expect(status.faltasConsecutivas).toBe(0);
-  });
-
-  it('uses the registration date when the student never measured', () => {
-    const status = evaluateStudentBlock({
-      state: 'SUSPENDIDO',
-      lastMeasurementOn: null,
-      registeredAt: daysAgo(130),
-      now,
-    });
-
-    expect(status.faltasConsecutivas).toBe(2);
-    expect(status.motivoBloqueo).toBe(
-      'Bloqueado por faltas consecutivas a la renovación de rutina.',
-    );
+  it('a fulfilled latest checkpoint resets the streak', () => {
+    expect(
+      evaluateStudentBlock({
+        activeBlock: null,
+        checkpointResults: ['CUMPLIDO', 'FALTA', 'FALTA'],
+      }).faltasConsecutivas,
+    ).toBe(0);
   });
 });

@@ -72,6 +72,7 @@ Vercel detecta `src/app.ts` como la entrada Express. `src/main.ts` se usa solame
 - Preview asociado a `test`: `DATABASE_URL` de `backend_test` y URL del frontend Test en `CORS_ORIGINS`.
 - Production asociado a `main`: `DATABASE_URL` de `backend_production` y URL del frontend productivo en `CORS_ORIGINS`.
 - `AI_SERVICE_URL` apunta al deployment equivalente del repo IA y `AI_SERVICE_API_KEY` coincide con el secreto configurado allí.
+- `CRON_SECRET` es un secreto aleatorio de al menos 16 caracteres. Vercel lo envía como `Authorization: Bearer ...` al job diario `/internal/jobs/measurement-blocks`; usar valores distintos en Test y Producción.
 - No configurar roles `migrator` ni credenciales administrativas en Vercel.
 
 Tras cambiar una variable de entorno, volver a desplegar para aplicarla.

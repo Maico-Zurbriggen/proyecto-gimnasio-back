@@ -15,6 +15,14 @@ export function createStudentsRouter(controller: StudentsController): Router {
   // Cartera del entrenador autenticado.
   router.get('/trainers/me/students', ...trainerOnly, controller.listMine);
 
+  router.get(
+    '/students/me/measurement-block',
+    authenticate,
+    requireAuth,
+    requireRoles('ALUMNO'),
+    controller.getOwnBlock,
+  );
+
   // HU05 - T2: estado de bloqueo, motivo y fecha de la última medición.
   router.get(
     '/students/:studentId/status',
@@ -22,7 +30,7 @@ export function createStudentsRouter(controller: StudentsController): Router {
     controller.getStatus,
   );
 
-  // HU05 - T1: desbloqueo transaccional con la medición adeudada.
+  // HU05 - T1: aprobación transaccional de la medición cargada por el alumno.
   router.post('/students/:studentId/unlock', ...trainerOnly, controller.unlock);
 
   return router;

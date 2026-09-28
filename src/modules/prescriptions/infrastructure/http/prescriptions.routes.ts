@@ -11,6 +11,7 @@ import type { PrescriptionsController } from './prescriptions.controller';
 export function createPrescriptionsRouter(
   controller: PrescriptionsController,
   requireAssignment: RequestHandler,
+  requireMeasurementAccess: RequestHandler,
 ): Router {
   const router = Router();
 
@@ -28,6 +29,7 @@ export function createPrescriptionsRouter(
     requireAuth,
     requireRoles('ALUMNO', 'ENTRENADOR'),
     requireStudentOwnership('studentId'),
+    requireMeasurementAccess,
     requireAssignment,
   ];
 

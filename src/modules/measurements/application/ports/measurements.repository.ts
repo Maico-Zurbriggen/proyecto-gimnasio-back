@@ -5,6 +5,8 @@ export interface RecordMeasurementCommand {
   heightCm: number;
   /** Día al que se imputa la medición, a medianoche UTC. */
   measuredOn: Date;
+  /** Instante real de la carga; se usa como confirmación de altura. */
+  recordedAt: Date;
 }
 
 /** Lo que quedó registrado tras la carga. */
@@ -15,6 +17,7 @@ export interface MeasurementRecord {
   measuredOn: Date;
   /** `true` cuando sustituyó una medición previa del mismo tipo y fecha. */
   replacedPrevious: boolean;
+  measurementBlockState: 'NORMAL' | 'PENDIENTE_APROBACION';
 }
 
 export interface MeasurementsRepository {

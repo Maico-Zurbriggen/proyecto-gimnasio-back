@@ -1,4 +1,3 @@
-import type { Clock } from '../../../routines/application/ports/clock';
 import {
   StudentNotFoundError,
   TrainerNotAssignedError,
@@ -20,7 +19,6 @@ export class GetStudentStatusUseCase {
   constructor(
     private readonly students: StudentsRepository,
     private readonly assignments: TrainerAssignments,
-    private readonly clock: Clock,
   ) {}
 
   async execute(query: GetStudentStatusQuery): Promise<StudentStatusDto> {
@@ -34,6 +32,6 @@ export class GetStudentStatusUseCase {
       throw new StudentNotFoundError();
     }
 
-    return toStudentStatusDto(student, this.clock.now());
+    return toStudentStatusDto(student);
   }
 }

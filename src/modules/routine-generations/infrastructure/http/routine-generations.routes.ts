@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 
 import {
   authenticate,
@@ -10,6 +10,7 @@ import type { RoutineGenerationsController } from './routine-generations.control
 
 export function createRoutineGenerationsRouter(
   controller: RoutineGenerationsController,
+  requireMeasurementAccess: RequestHandler,
 ): Router {
   const router = Router();
 
@@ -23,6 +24,7 @@ export function createRoutineGenerationsRouter(
     requireAuth,
     requireRoles('ALUMNO'),
     requireSelf(),
+    requireMeasurementAccess,
     controller.request,
   );
 
@@ -33,6 +35,7 @@ export function createRoutineGenerationsRouter(
     requireAuth,
     requireRoles('ALUMNO'),
     requireSelf(),
+    requireMeasurementAccess,
     controller.getById,
   );
 
@@ -42,6 +45,7 @@ export function createRoutineGenerationsRouter(
     requireAuth,
     requireRoles('ALUMNO'),
     requireSelf(),
+    requireMeasurementAccess,
     controller.finalize,
   );
 

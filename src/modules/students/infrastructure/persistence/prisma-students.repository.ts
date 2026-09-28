@@ -9,11 +9,18 @@ import type {
 } from '../../application/ports/students.repository';
 
 const studentInclude = {
-  user: { select: { displayName: true, state: true, createdAt: true } },
+  user: { select: { displayName: true, createdAt: true } },
   bodyMeasurements: {
     select: { measuredOn: true },
     orderBy: { measuredOn: 'desc' },
     take: 1,
+  },
+  measurementBlocks: {
+    orderBy: { blockedAt: 'desc' },
+  },
+  measurementCheckpoints: {
+    select: { result: true, evaluatedAt: true },
+    orderBy: { dueOn: 'desc' },
   },
 } satisfies Prisma.StudentProfileInclude;
 
@@ -22,13 +29,37 @@ type StudentRow = Prisma.StudentProfileGetPayload<{
 }>;
 
 function toRecord(row: StudentRow): StudentRecord {
+  const activeBlock = row.measurementBlocks.find(
+    ({ state }) => state !== 'RESUELTO',
+  );
+  const latestResolution = row.measurementBlocks.find(
+    ({ state }) => state === 'RESUELTO',
+  )?.approvedAt;
+
   return {
     id: row.userId,
     displayName: row.user.displayName,
-    state: row.user.state,
     registeredAt: row.user.createdAt,
     heightCm: Number(row.heightCm),
     lastMeasurementOn: row.bodyMeasurements[0]?.measuredOn ?? null,
+    activeMeasurementBlock: activeBlock
+      ? {
+          state:
+            activeBlock.state === 'PENDIENTE_MEDICION'
+              ? 'PENDIENTE_MEDICION'
+              : 'PENDIENTE_APROBACION',
+          reason: activeBlock.reason,
+          consecutiveMissesAtBlock: activeBlock.consecutiveMissesAtBlock,
+          blockedAt: activeBlock.blockedAt,
+          submittedAt: activeBlock.submittedAt,
+        }
+      : null,
+    checkpointResults: row.measurementCheckpoints
+      .filter(
+        ({ evaluatedAt }) =>
+          !latestResolution || evaluatedAt > latestResolution,
+      )
+      .map(({ result }) => result),
   };
 }
 
@@ -105,56 +136,67 @@ export class PrismaStudentsRepository implements StudentsRepository {
     });
   }
 
-  async unlock(command: UnlockStudentCommand): Promise<boolean> {
+  async unlock(command: UnlockStudentCommand) {
     return this.prisma.$transaction(async (tx) => {
-      const reactivated = await tx.user.updateMany({
-        where: { id: command.studentId, state: 'SUSPENDIDO' },
-        data: { state: 'ACTIVO' },
+      const assignment = await tx.trainerStudentAssignment.findFirst({
+        where: {
+          studentId: command.studentId,
+          trainerId: command.trainerId,
+          startsAt: { lte: command.approvedAt },
+          OR: [{ endsAt: null }, { endsAt: { gt: command.approvedAt } }],
+        },
+        select: { id: true },
       });
-      if (reactivated.count === 0) {
-        return false;
+      if (!assignment) {
+        return 'NOT_ASSIGNED' as const;
       }
 
-      await tx.bodyMeasurement.upsert({
+      const block = await tx.studentMeasurementBlock.findFirst({
         where: {
-          studentId_type_measuredOn: {
-            studentId: command.studentId,
-            type: 'PESO_CORPORAL',
-            measuredOn: command.measuredOn,
-          },
-        },
-        create: {
           studentId: command.studentId,
-          type: 'PESO_CORPORAL',
-          value: command.weightKg,
-          measuredOn: command.measuredOn,
+          state: { in: ['PENDIENTE_MEDICION', 'PENDIENTE_APROBACION'] },
         },
-        update: { value: command.weightKg },
+        orderBy: { blockedAt: 'desc' },
+        select: { id: true, state: true, submittedAt: true },
       });
+      if (!block) {
+        return 'NOT_BLOCKED' as const;
+      }
+      if (block.state === 'PENDIENTE_MEDICION') {
+        return 'PENDING_MEASUREMENT' as const;
+      }
 
-      // La altura no es una medición fechada en el esquema: vive en el perfil.
-      await tx.studentProfile.update({
-        where: { userId: command.studentId },
-        data: { heightCm: command.heightCm },
+      const approved = await tx.studentMeasurementBlock.updateMany({
+        where: { id: block.id, state: 'PENDIENTE_APROBACION' },
+        data: {
+          state: 'RESUELTO',
+          approvedByTrainerId: command.trainerId,
+          approvedAt: command.approvedAt,
+        },
       });
+      if (approved.count === 0) {
+        return 'ALREADY_RESOLVED' as const;
+      }
 
       await tx.auditLog.create({
         data: {
           actorUserId: command.trainerId,
-          operation: 'DESBLOQUEO_ALUMNO',
-          entityType: 'USER',
-          entityId: command.studentId,
-          previousValue: { state: 'SUSPENDIDO' },
+          operation: 'APROBACION_REGULARIZACION_MEDICIONES',
+          entityType: 'STUDENT_MEASUREMENT_BLOCK',
+          entityId: block.id,
+          previousValue: {
+            state: 'PENDIENTE_APROBACION',
+            submittedAt: block.submittedAt?.toISOString() ?? null,
+          },
           newValue: {
-            state: 'ACTIVO',
-            pesoKg: command.weightKg,
-            alturaCm: command.heightCm,
-            medidoEl: command.measuredOn.toISOString().slice(0, 10),
+            state: 'RESUELTO',
+            approvedByTrainerId: command.trainerId,
+            approvedAt: command.approvedAt.toISOString(),
           },
         },
       });
 
-      return true;
+      return 'APPROVED' as const;
     });
   }
 }

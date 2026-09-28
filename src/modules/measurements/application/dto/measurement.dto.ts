@@ -7,4 +7,5 @@ export interface MeasurementResponseDto {
   measuredOn: string;
   /** `true` cuando sustituyó una medición previa del mismo tipo y fecha. */
   replacedPrevious: boolean;
+  measurementBlockState: 'NORMAL' | 'PENDIENTE_APROBACION';
 }
