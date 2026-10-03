@@ -40,6 +40,13 @@ export class RoutineGenerationOwnershipConflictError extends Error {
   }
 }
 
+export class RoutineGenerationIdempotencyConflictError extends Error {
+  constructor(message = 'Idempotency key was reused with different input') {
+    super(message);
+    this.name = 'RoutineGenerationIdempotencyConflictError';
+  }
+}
+
 export class RoutineGenerationNotCompletedError extends Error {
   constructor(message = 'Routine generation is not completed') {
     super(message);
@@ -61,5 +68,12 @@ export class ProposedRoutineAlreadyExistsError extends Error {
   constructor(message = 'A proposed routine already exists for the student') {
     super(message);
     this.name = 'ProposedRoutineAlreadyExistsError';
+  }
+}
+
+export class RoutineRegenerationNotAllowedError extends Error {
+  constructor(message = 'Test regeneration is only available locally') {
+    super(message);
+    this.name = 'RoutineRegenerationNotAllowedError';
   }
 }

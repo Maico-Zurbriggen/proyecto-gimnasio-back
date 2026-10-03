@@ -7,7 +7,7 @@ export interface PrescribedSetPlan {
   position: number;
   minRepetitions: number;
   maxRepetitions: number;
-  suggestedLoad: number;
+  suggestedLoad: number | null;
   restSeconds: number;
   warmup: boolean;
 }

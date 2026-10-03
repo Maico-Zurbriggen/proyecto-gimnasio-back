@@ -115,6 +115,9 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
         id: exercise.id,
         nombre: exercise.name,
         patronMovimiento: exercise.movementPattern,
+        musculosPrimarios: exercise.muscles
+          .filter((muscle) => muscle.participation === 'PRIMARIA')
+          .map((muscle) => muscle.muscleCode),
       }));
   }
 }

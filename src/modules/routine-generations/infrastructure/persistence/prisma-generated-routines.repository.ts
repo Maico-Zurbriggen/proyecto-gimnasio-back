@@ -1,5 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { adaptRoutineGenerationOutput } from '../../../../integrations/ai/routine-generation-output.mapper';
+
 import type {
   FinalizedGeneratedRoutine,
   GeneratedRoutinesRepository,
@@ -12,8 +14,12 @@ import {
   RoutineGenerationNotFoundError,
 } from '../../domain/errors/routine-generation-errors';
 import { validateGeneratedRoutine } from '../../domain/services/generated-routine-validator';
+import {
+  extractMuscleCountRequirements,
+  validateMuscleCountRequirements,
+} from '../../domain/services/generation-request-requirements';
 
-const VALIDATOR_VERSION = 'routine-generation-backend@1.0';
+const VALIDATOR_VERSION = 'routine-generation-backend@1.2';
 const LEVEL_RANK = { PRINCIPIANTE: 0, INTERMEDIO: 1, AVANZADO: 2 } as const;
 
 interface Compatibility {
@@ -22,7 +28,10 @@ interface Compatibility {
 }
 
 export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly allowLocalRegeneration = false,
+  ) {}
 
   async finalize(
     owner: RoutineGenerationOwner,
@@ -55,12 +64,12 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     if (request.state !== 'COMPLETADA' || !result) {
       throw new RoutineGenerationNotCompletedError();
     }
-    if (
-      await this.prisma.routine.findFirst({
-        where: { studentId: owner.studentId, state: 'PROPUESTA' },
-        select: { id: true },
-      })
-    ) {
+    const replacementId = this.replacementRoutineId(request.preferences);
+    const proposed = await this.prisma.routine.findFirst({
+      where: { studentId: owner.studentId, state: 'PROPUESTA' },
+      select: { id: true },
+    });
+    if (proposed && proposed.id !== replacementId) {
       throw new ProposedRoutineAlreadyExistsError();
     }
 
@@ -73,7 +82,10 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     });
     if (!student) throw new RoutineGenerationNotFoundError('Student not found');
 
-    const exerciseIds = this.extractExerciseIds(result.structuredOutput);
+    const generatedOutput = adaptRoutineGenerationOutput(
+      result.structuredOutput,
+    );
+    const exerciseIds = this.extractExerciseIds(generatedOutput);
     const [exercises, equipment] = await Promise.all([
       this.prisma.exercise.findMany({
         where: {
@@ -141,7 +153,7 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
 
     const validation = result.structurallyValid
       ? validateGeneratedRoutine(
-          result.structuredOutput,
+          generatedOutput,
           compatibleExercises.map((exercise) => ({
             id: exercise.id,
             movementPattern: exercise.movementPattern,
@@ -152,6 +164,31 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
           violations: ['El servicio IA marcó la salida como inválida.'],
         };
 
+    if (validation.routine) {
+      const preferences = request.preferences;
+      const text =
+        preferences &&
+        typeof preferences === 'object' &&
+        !Array.isArray(preferences) &&
+        typeof preferences.free_text === 'string'
+          ? preferences.free_text
+          : null;
+      const violations = validateMuscleCountRequirements(
+        validation.routine.days,
+        compatibleExercises.map((exercise) => ({
+          id: exercise.id,
+          primaryMuscles: exercise.muscles
+            .filter((muscle) => muscle.participation === 'PRIMARIA')
+            .map((muscle) => muscle.muscleCode),
+        })),
+        extractMuscleCountRequirements(text),
+      );
+      if (violations.length) {
+        await this.saveInvalidValidation(result.id, violations);
+        throw new GeneratedRoutineInvalidError(violations);
+      }
+    }
+
     if (!validation.routine) {
       await this.saveInvalidValidation(result.id, validation.violations);
       throw new GeneratedRoutineInvalidError(validation.violations);
@@ -160,18 +197,47 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     try {
       const routine = validation.routine;
       const created = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          SELECT user_id FROM app.student_profiles
+          WHERE user_id = ${owner.studentId}::uuid FOR UPDATE
+        `;
         const existing = await tx.routine.findUnique({
           where: { sourceGenerationResultId: result.id },
           select: { id: true },
         });
         if (existing) return existing;
-        if (
-          await tx.routine.findFirst({
-            where: { studentId: owner.studentId, state: 'PROPUESTA' },
-            select: { id: true },
-          })
-        ) {
-          throw new ProposedRoutineAlreadyExistsError();
+        const pending = await tx.routine.findFirst({
+          where: { studentId: owner.studentId, state: 'PROPUESTA' },
+          select: { id: true },
+        });
+        if (pending) {
+          if (pending.id !== replacementId) {
+            throw new ProposedRoutineAlreadyExistsError();
+          }
+          const discarded = await tx.routine.updateMany({
+            where: {
+              id: pending.id,
+              studentId: owner.studentId,
+              state: 'PROPUESTA',
+            },
+            data: { state: 'DESCARTADA' },
+          });
+          if (discarded.count !== 1) {
+            throw new ProposedRoutineAlreadyExistsError();
+          }
+          await tx.auditLog.create({
+            data: {
+              actorUserId: owner.requestedByUserId,
+              operation: 'LOCAL_ROUTINE_REGENERATION',
+              entityType: 'ROUTINE',
+              entityId: pending.id,
+              previousValue: { state: 'PROPUESTA' },
+              newValue: {
+                state: 'DESCARTADA',
+                generationRequestId: owner.requestId,
+              },
+            },
+          });
         }
 
         const storedValidation = await tx.aiResultValidation.findFirst({
@@ -204,7 +270,7 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
             versions: {
               create: {
                 versionNumber: 1,
-                current: true,
+                current: false,
                 createdByUserId: owner.requestedByUserId,
                 days: {
                   create: routine.days.map((day) => ({
@@ -228,9 +294,10 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
                               position: set.position,
                               minRepetitions: set.minRepetitions,
                               maxRepetitions: set.maxRepetitions,
-                              suggestedLoad: new Prisma.Decimal(
-                                set.suggestedLoad,
-                              ),
+                              suggestedLoad:
+                                set.suggestedLoad === null
+                                  ? null
+                                  : new Prisma.Decimal(set.suggestedLoad),
                               restSeconds: set.restSeconds,
                               warmup: set.warmup,
                             })),
@@ -259,6 +326,28 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     }
   }
 
+  private replacementRoutineId(preferences: unknown): string | null {
+    if (
+      !this.allowLocalRegeneration ||
+      !preferences ||
+      typeof preferences !== 'object' ||
+      !('local_test_regeneration' in preferences)
+    ) {
+      return null;
+    }
+    const replacement = preferences.local_test_regeneration;
+    if (
+      !replacement ||
+      typeof replacement !== 'object' ||
+      !('replaces_proposed_routine_id' in replacement)
+    ) {
+      return null;
+    }
+    return typeof replacement.replaces_proposed_routine_id === 'string'
+      ? replacement.replaces_proposed_routine_id
+      : null;
+  }
+
   private async saveInvalidValidation(
     resultId: string,
     violations: string[],
@@ -278,10 +367,10 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     }
   }
 
-  private extractExerciseIds(output: Prisma.JsonValue): string[] {
+  private extractExerciseIds(output: unknown): string[] {
     if (!output || typeof output !== 'object' || Array.isArray(output))
       return [];
-    const days = output.dias;
+    const days = (output as Record<string, unknown>).dias;
     if (!Array.isArray(days)) return [];
     const ids = new Set<string>();
     for (const day of days) {

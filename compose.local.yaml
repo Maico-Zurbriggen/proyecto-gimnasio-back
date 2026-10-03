@@ -1,0 +1,22 @@
+name: gimnasio-local
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gym_local
+      POSTGRES_USER: gym_migrator
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gym_migrator -d gym_local']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    ports:
+      - '127.0.0.1:${LOCAL_DATABASE_PORT:-55432}:5432'
+    volumes:
+      - gym_local_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  gym_local_postgres_data:
