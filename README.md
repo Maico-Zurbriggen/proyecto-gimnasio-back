@@ -1,14 +1,13 @@
 # Proyecto Gimnasio — Backend
 
-API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, persiste en Neon y orquesta solicitudes hacia el servicio Python desplegado también en Vercel. El servicio IA es el único que accede al LLM del Polo mediante Cloudflare Tunnel.
+API REST Express + TypeScript, Prisma y PostgreSQL. En desarrollo usa una base local en Docker; los despliegues reciben su base y servicio IA mediante variables de entorno. El servicio IA es el único que accede al LLM mediante la API autenticada del Polo.
 
 ## Requisitos
 
 - Node.js 24 o superior;
 - npm 11.6 o superior;
-- acceso autorizado a Neon Test;
-- URL y credencial test del servicio IA cuando se prueba integración real;
-- Docker Desktop, únicamente para quienes creen migraciones.
+- Docker Desktop para PostgreSQL local;
+- credencial del Polo en `AI/.env.local` para probar generación real.
 
 ## Inicio local
 
@@ -16,23 +15,58 @@ API REST Express + TypeScript, Prisma y PostgreSQL. Se despliega en Vercel, pers
 npm ci
 cp .env.example .env
 npm run db:generate
+docker compose -f compose.local.yaml up -d --wait
+npm run db:deploy
 npm run dev
 ```
 
-En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://localhost:3000`.
+En PowerShell, usar `Copy-Item .env.example .env`. La API queda en `http://localhost:3000`. El volumen `gym_local_postgres_data` conserva la base entre reinicios y el puerto queda limitado a `127.0.0.1:55432`.
+
+Si Windows reserva ese puerto, configurar `LOCAL_DATABASE_PORT` con uno libre y actualizar `DATABASE_URL` del backend y de IA al mismo puerto. El procedimiento está en [la operación local de la base](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion/blob/develop/operations/local-database.md). Para generar, mantener también activo `AI/dev_server.py`; `npm run dev` inicia únicamente el backend.
+
+Para poblar los datos ficticios locales después de aplicar las migraciones:
+
+```powershell
+Get-Content -Raw prisma/local-ai-role.sql | docker compose -f compose.local.yaml exec -T postgres psql -U gym_migrator -d gym_local -v ON_ERROR_STOP=1
+Get-Content -Raw prisma/seeds/seed-reference.sql | docker compose -f compose.local.yaml exec -T postgres psql -U gym_migrator -d gym_local -v ON_ERROR_STOP=1
+Get-Content -Raw prisma/seeds/seed-test.sql | docker compose -f compose.local.yaml exec -T postgres psql -U gym_migrator -d gym_local -v ON_ERROR_STOP=1
+```
+
+`seed-test.sql` contiene identidades ficticias y sólo se ejecuta en esta base local.
+El servicio IA usa `postgresql://gym_ai_local@127.0.0.1:55432/gym_local`, sin el
+parámetro `schema` de Prisma y con permisos limitados a sus tablas de integración.
+Para habilitar el login del alumno de prueba, definir una clave sólo durante el
+comando (no queda guardada en el repositorio):
+
+```powershell
+$env:LOCAL_TEST_PASSWORD = 'GymLocal2026!'
+npm run db:seed:local-login
+Remove-Item Env:LOCAL_TEST_PASSWORD
+```
+
+El login es `alumno.martin@gimnasio.test`. El comando valida que la URL sea la
+base local `gym_local` antes de cambiar la contraseña.
 
 - `GET /health` verifica que el proceso HTTP esté disponible.
-- `GET /ready` ejecuta una consulta mínima contra PostgreSQL y devuelve `503` si Neon no está disponible.
+- `GET /ready` comprueba PostgreSQL configurado para el ambiente local.
 
-`DATABASE_URL` debe ser la conexión pooled de `backend_test`; el hostname de Neon contiene `-pooler`. `CORS_ORIGINS` acepta orígenes separados por comas y debe incluir `http://localhost:5173` para desarrollo local.
+`DATABASE_URL` apunta a PostgreSQL local. `CORS_ORIGINS` acepta orígenes separados por comas y debe incluir `http://localhost:5173` para desarrollo local.
 
 Usar `npm run db:status` para comprobar el estado de las migraciones y `GET /ready` para verificar la conexión de la API con PostgreSQL.
 
 ### Generación de rutinas
 
-El alumno crea para sí una solicitud con `POST /students/:studentId/routine-generations` y consulta su estado con `GET /students/:studentId/routine-generations/:requestId`. Cuando el estado es `COMPLETADA`, el frontend ejecuta `POST /students/:studentId/routine-generations/:requestId/finalize`: backend vuelve a validar catálogo, compatibilidad y rangos, registra la validación y crea idempotentemente una rutina `PROPUESTA`. Esto no la aprueba ni la pone en vigencia: el entrenador asignado conserva la revisión obligatoria. La consulta de estado no modifica datos y una propuesta previa nunca se descarta de forma implícita.
+El contenido de cada rutina generada devuelve `generationPrompt` con el texto de su solicitud. Los pedidos explícitos de cantidades por músculo y por día se persisten como `muscle_counts_per_day` y se validan contra los músculos primarios del catálogo. Si faltan ejercicios compatibles, la API devuelve `422 generation_preferences_unsatisfiable` con el motivo. Los resultados que ignoran esas cantidades no reemplazan la propuesta anterior.
+
+Para ampliar el catálogo ficticio local: `npm run db:seed:local-generation-catalog`. El archivo `scripts/local-exercise-catalog.cjs` contiene 132 ejercicios y variantes para los 17 grupos musculares, con instrucciones propias en español, participación primaria y secundaria, articulaciones, nivel y equipamiento. El importador evita duplicados por nombre normalizado, conserva los ejercicios e historiales existentes y comprueba dentro de la transacción al menos cinco ejercicios primarios por grupo. Es idempotente y sólo permite PostgreSQL local en el puerto configurado y la base `gym_local`; no cambia el perfil del alumno ni el inventario. Los metadatos de estos fixtures requieren curación por un entrenador antes de usarse como catálogo real.
+
+La generación selecciona hasta 32 ejercicios compatibles de forma reproducible: prioriza las cantidades y músculos indicados, reserva la cobertura mínima de patrones y completa con variedad muscular. Persiste el subconjunto completo que recibe IA, para evitar que un catálogo grande supere el contexto del modelo.
+
+El alumno crea para sí una solicitud con `POST /students/:studentId/routine-generations`. Backend persiste con idempotencia el contexto minimizado y el catálogo compatible, registra el ownership y envía sólo el UUID al servicio IA para despacharlo a la cola. Consulta el estado con `GET /students/:studentId/routine-generations/:requestId`. Cuando el estado es `COMPLETADA`, el frontend ejecuta `POST /students/:studentId/routine-generations/:requestId/finalize`: backend vuelve a validar catálogo, compatibilidad y rangos, registra la validación y crea idempotentemente una rutina `PROPUESTA`. Esto no la aprueba ni la pone en vigencia: el entrenador asignado conserva la revisión obligatoria. La consulta de estado no modifica datos y una propuesta previa nunca se descarta de forma implícita.
 
 El desarrollo local usa el mismo login por cookie que los despliegues. Los headers `x-user-*` se aceptan exclusivamente dentro de las pruebas automatizadas y no sustituyen una sesión al ejecutar `npm run dev`.
+
+Para probar otro prompt con una propuesta pendiente, activar `LOCAL_GENERATION_TESTING=true` con `NODE_ENV=development` y la base `gym_local` en el puerto local `55432`. `POST /students/:studentId/routine-generations` admite entonces `regenerar: true`. El reemplazo se realiza al finalizar una salida válida: sólo la propuesta capturada al solicitar se descarta, con auditoría, dentro de la misma transacción que crea la nueva. La propuesta anterior se conserva si falla la generación. Esta capacidad no se habilita con una conexión remota ni en producción.
 
 ## Estructura del código
 

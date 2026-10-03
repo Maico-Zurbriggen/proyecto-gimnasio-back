@@ -173,7 +173,8 @@ export class PrismaProposalsRepository implements ProposalsRepository {
             position: set.position,
             minRepetitions: set.minRepetitions,
             maxRepetitions: set.maxRepetitions,
-            suggestedLoad: Number(set.suggestedLoad),
+            suggestedLoad:
+              set.suggestedLoad === null ? null : Number(set.suggestedLoad),
             restSeconds: set.restSeconds,
             warmup: set.warmup,
           })),

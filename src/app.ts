@@ -6,6 +6,7 @@ import {
   prisma,
   type HealthCheck,
 } from './database/client';
+import { isLocalGenerationTestingEnabled } from './database/local-generation-testing';
 import { createRoutineGenerationGatewayFromEnv } from './integrations/ai/http-routine-generation.gateway';
 import type { AuthRepository } from './modules/auth/application/ports/auth.repository';
 import { LoginUseCase } from './modules/auth/application/use-cases/login.use-case';
@@ -97,6 +98,7 @@ import { requireStudentMeasurementAccess } from './shared/middleware/student-mea
 class CorsOriginError extends Error {}
 
 interface AppDependencies {
+  localGenerationTesting?: boolean;
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
   usersRepository?: UsersRepository;
@@ -142,6 +144,7 @@ function createCorsOptions(allowedOrigins: readonly string[]): CorsOptions {
 }
 
 export function createApp({
+  localGenerationTesting = isLocalGenerationTestingEnabled(),
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
   usersRepository,
@@ -287,7 +290,7 @@ export function createApp({
   const resolvedIdGenerator = idGenerator ?? new CryptoIdGenerator();
   const resolvedGeneratedRoutinesRepository =
     generatedRoutinesRepository ??
-    new PrismaGeneratedRoutinesRepository(prisma);
+    new PrismaGeneratedRoutinesRepository(prisma, localGenerationTesting);
 
   const requestRoutineGenerationUseCase = new RequestRoutineGenerationUseCase(
     resolvedGenerationContextRepository,
@@ -295,6 +298,7 @@ export function createApp({
     resolvedIdGenerator,
     resolvedClock,
     resolvedRoutineGenerationsRepository,
+    localGenerationTesting,
   );
   const getRoutineGenerationUseCase = new GetRoutineGenerationUseCase(
     resolvedRoutineGenerationsRepository,

@@ -63,7 +63,7 @@ export interface PrescribedSetContent {
   position: number;
   minRepetitions: number;
   maxRepetitions: number;
-  suggestedLoad: number;
+  suggestedLoad: number | null;
   restSeconds: number;
   warmup: boolean;
 }
@@ -114,6 +114,7 @@ export interface RoutineSummary {
 
 /** Rutina con su contenido, para la pantalla del alumno y la revisión. */
 export interface RoutineContent extends RoutineSummary {
+  generationPrompt: string | null;
   days: {
     position: number;
     name: string;
