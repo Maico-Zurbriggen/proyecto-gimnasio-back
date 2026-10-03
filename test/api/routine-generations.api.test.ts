@@ -14,10 +14,18 @@ describe('Routine Generations API', () => {
   const mockClock: Clock = { now: () => fixedNow };
   const mockIdGenerator: IdGenerator = { generate: () => 'generated-key' };
   const trainerAssignments = { isActive: vi.fn().mockResolvedValue(true) };
-  const ownershipRepository: RoutineGenerationsRepository = {
+  const createGenerationRepository = (
+    request = {
+      requestId: 'req-1',
+      status: 'PENDIENTE',
+      alreadyExisted: false,
+    },
+  ): RoutineGenerationsRepository => ({
+    findProposedRoutineId: vi.fn().mockResolvedValue('old-routine'),
+    createOrGetRequest: vi.fn().mockResolvedValue(request),
     registerOwnership: vi.fn().mockResolvedValue(undefined),
     findById: vi.fn(),
-  };
+  });
 
   const studentId = '11111111-1111-4111-a111-111111111111';
   const trainerId = '33333333-3333-4333-a333-333333333333';
@@ -34,6 +42,77 @@ describe('Routine Generations API', () => {
   ];
 
   describe('POST /students/:studentId/routine-generations', () => {
+    it('explains a prompt that cannot be fulfilled instead of dispatching a generic routine', async () => {
+      const gateway = { dispatchGeneration: vi.fn() };
+      const app = createApp({
+        generationContextRepository: {
+          getStudentContext: vi
+            .fn()
+            .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
+          getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+        },
+        routineGenerationGateway: gateway,
+        routineGenerationsRepository: createGenerationRepository(),
+      });
+      const response = await request(app)
+        .post(`/students/${studentId}/routine-generations`)
+        .set('x-user-id', studentId)
+        .set('x-user-roles', 'ALUMNO')
+        .send({ textoLibre: '3 ejercicios de tríceps por día' })
+        .expect(422);
+      expect(response.body).toMatchObject({
+        error: 'generation_preferences_unsatisfiable',
+        violations: [expect.stringContaining('hay 0 compatibles')],
+      });
+      expect(gateway.dispatchGeneration).not.toHaveBeenCalled();
+    });
+    it('accepts test regeneration only when the local capability is enabled', async () => {
+      const routineGenerationsRepository = createGenerationRepository();
+      const app = createApp({
+        localGenerationTesting: true,
+        clock: mockClock,
+        generationContextRepository: {
+          getStudentContext: vi
+            .fn()
+            .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
+          getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+        },
+        routineGenerationsRepository,
+        routineGenerationGateway: { dispatchGeneration: vi.fn() },
+      });
+      await request(app)
+        .post(`/students/${studentId}/routine-generations`)
+        .set('x-user-id', studentId)
+        .set('x-user-roles', 'ALUMNO')
+        .send({
+          textoLibre: 'otro prompt',
+          idempotencyKey: 'regeneration-key',
+          regenerar: true,
+        })
+        .expect(202);
+      expect(
+        routineGenerationsRepository.createOrGetRequest,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preferences: expect.objectContaining({
+            local_test_regeneration: {
+              replaces_proposed_routine_id: 'old-routine',
+            },
+          }),
+        }),
+      );
+    });
+
+    it('rejects test regeneration when the local capability is disabled', async () => {
+      const app = createApp({ localGenerationTesting: false });
+      const response = await request(app)
+        .post(`/students/${studentId}/routine-generations`)
+        .set('x-user-id', studentId)
+        .set('x-user-roles', 'ALUMNO')
+        .send({ textoLibre: 'otro prompt', regenerar: true })
+        .expect(403);
+      expect(response.body.error).toBe('routine_regeneration_not_allowed');
+    });
     it('accepts a self request from an ALUMNO and returns 202 with the request id', async () => {
       const generationContextRepository: GenerationContextRepository = {
         getStudentContext: vi
@@ -42,12 +121,9 @@ describe('Routine Generations API', () => {
         getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
       };
       const routineGenerationGateway: RoutineGenerationGateway = {
-        requestGeneration: vi.fn().mockResolvedValue({
-          requestId: 'req-1',
-          status: 'pending',
-          alreadyExisted: false,
-        }),
+        dispatchGeneration: vi.fn().mockResolvedValue(undefined),
       };
+      const routineGenerationsRepository = createGenerationRepository();
 
       const app = createApp({
         trainerAssignments,
@@ -55,7 +131,7 @@ describe('Routine Generations API', () => {
         idGenerator: mockIdGenerator,
         generationContextRepository,
         routineGenerationGateway,
-        routineGenerationsRepository: ownershipRepository,
+        routineGenerationsRepository,
       });
 
       const response = await request(app)
@@ -65,15 +141,37 @@ describe('Routine Generations API', () => {
         .send({ textoLibre: 'quiero ganar fuerza' })
         .expect(202);
 
-      expect(response.body).toEqual({ requestId: 'req-1', status: 'pending' });
-      expect(routineGenerationGateway.requestGeneration).toHaveBeenCalledWith(
+      expect(response.body).toEqual({
+        requestId: 'req-1',
+        status: 'PENDIENTE',
+      });
+      expect(
+        routineGenerationsRepository.createOrGetRequest,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           idempotencyKey: 'generated-key',
-          gymId: 'gym-1',
-          studentId,
-          requestedByUserId: studentId,
-          freeText: 'quiero ganar fuerza',
+          minimizedContext,
+          preferences: expect.objectContaining({
+            free_text: 'quiero ganar fuerza',
+            allowed_catalog: [
+              {
+                id: 'ex-1',
+                name: 'Sentadilla',
+                movement_pattern: 'DOMINANTE_RODILLA',
+              },
+            ],
+          }),
         }),
+      );
+      expect(
+        routineGenerationsRepository.registerOwnership,
+      ).toHaveBeenCalledWith({
+        requestId: 'req-1',
+        studentId,
+        requestedByUserId: studentId,
+      });
+      expect(routineGenerationGateway.dispatchGeneration).toHaveBeenCalledWith(
+        'req-1',
       );
     });
 
@@ -85,12 +183,13 @@ describe('Routine Generations API', () => {
         getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
       };
       const routineGenerationGateway: RoutineGenerationGateway = {
-        requestGeneration: vi.fn().mockResolvedValue({
-          requestId: 'req-1',
-          status: 'processing',
-          alreadyExisted: true,
-        }),
+        dispatchGeneration: vi.fn().mockResolvedValue(undefined),
       };
+      const routineGenerationsRepository = createGenerationRepository({
+        requestId: 'req-1',
+        status: 'PROCESANDO',
+        alreadyExisted: true,
+      });
 
       const app = createApp({
         trainerAssignments,
@@ -98,7 +197,7 @@ describe('Routine Generations API', () => {
         idGenerator: mockIdGenerator,
         generationContextRepository,
         routineGenerationGateway,
-        routineGenerationsRepository: ownershipRepository,
+        routineGenerationsRepository,
       });
 
       const response = await request(app)
@@ -113,8 +212,11 @@ describe('Routine Generations API', () => {
 
       expect(response.body).toEqual({
         requestId: 'req-1',
-        status: 'processing',
+        status: 'PROCESANDO',
       });
+      expect(routineGenerationGateway.dispatchGeneration).toHaveBeenCalledWith(
+        'req-1',
+      );
     });
 
     it('returns 403 when an ENTRENADOR attempts to request a generation', async () => {
@@ -234,16 +336,18 @@ describe('Routine Generations API', () => {
       const { RoutineGenerationUnavailableError } =
         await import('../../src/modules/routine-generations/domain/errors/routine-generation-errors');
       const routineGenerationGateway: RoutineGenerationGateway = {
-        requestGeneration: vi
+        dispatchGeneration: vi
           .fn()
           .mockRejectedValue(new RoutineGenerationUnavailableError()),
       };
+      const routineGenerationsRepository = createGenerationRepository();
 
       const app = createApp({
         trainerAssignments,
         clock: mockClock,
         generationContextRepository,
         routineGenerationGateway,
+        routineGenerationsRepository,
       });
 
       const response = await request(app)
@@ -254,6 +358,7 @@ describe('Routine Generations API', () => {
         .expect(503);
 
       expect(response.body).toEqual({ error: 'ai_service_unavailable' });
+      expect(routineGenerationsRepository.registerOwnership).toHaveBeenCalled();
     });
   });
 
@@ -269,6 +374,8 @@ describe('Routine Generations API', () => {
         error: null,
       };
       const routineGenerationsRepository: RoutineGenerationsRepository = {
+        findProposedRoutineId: vi.fn(),
+        createOrGetRequest: vi.fn(),
         registerOwnership: vi.fn(),
         findById: vi.fn().mockResolvedValue(snapshot),
       };
@@ -302,6 +409,8 @@ describe('Routine Generations API', () => {
 
     it('returns 404 when the request does not exist', async () => {
       const routineGenerationsRepository: RoutineGenerationsRepository = {
+        findProposedRoutineId: vi.fn(),
+        createOrGetRequest: vi.fn(),
         registerOwnership: vi.fn(),
         findById: vi.fn().mockResolvedValue(null),
       };

@@ -23,7 +23,7 @@ export interface GeneratedSet {
   position: number;
   minRepetitions: number;
   maxRepetitions: number;
-  suggestedLoad: number;
+  suggestedLoad: number | null;
   restSeconds: number;
   warmup: boolean;
 }
@@ -88,6 +88,31 @@ const RULES: Record<TrainingPurpose, Rule> = {
     exercises: [5, 8],
   },
 };
+
+const REQUIRED_PATTERN_GROUPS: readonly (readonly MovementPattern[])[] = [
+  ['EMPUJE_HORIZONTAL'],
+  ['TRACCION_HORIZONTAL', 'TRACCION_VERTICAL'],
+  ['DOMINANTE_RODILLA'],
+  ['DOMINANTE_CADERA'],
+];
+
+export function generationPrescriptionConstraints() {
+  return {
+    purposes: Object.fromEntries(
+      Object.entries(RULES).map(([purpose, rule]) => [
+        purpose,
+        {
+          weekly_frequency: [...rule.frequency],
+          work_sets_per_exercise: [...rule.workSets],
+          repetitions: [...rule.repetitions],
+          rest_seconds: [...rule.rest],
+          exercises_per_day: [...rule.exercises],
+        },
+      ]),
+    ),
+    required_pattern_groups: REQUIRED_PATTERN_GROUPS.map((group) => [...group]),
+  };
+}
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -249,7 +274,10 @@ export function validateGeneratedRoutine(
         if (min === null || max === null || min < 1 || max > 100 || min > max) {
           violations.push(`${setPath} tiene repeticiones inválidas.`);
         }
-        if (load === null || load < 0 || load > 1000) {
+        const validLoad =
+          set.carga_sugerida === null ||
+          (load !== null && load >= 0 && load <= 1000);
+        if (!validLoad) {
           violations.push(
             `${setPath}.carga_sugerida debe estar entre 0 y 1000.`,
           );
@@ -265,7 +293,7 @@ export function validateGeneratedRoutine(
           setPosition === null ||
           min === null ||
           max === null ||
-          load === null ||
+          !validLoad ||
           rest === null ||
           typeof warmup !== 'boolean'
         )
@@ -318,13 +346,7 @@ export function validateGeneratedRoutine(
     }
   });
 
-  const coverage: readonly (readonly MovementPattern[])[] = [
-    ['EMPUJE_HORIZONTAL'],
-    ['TRACCION_HORIZONTAL', 'TRACCION_VERTICAL'],
-    ['DOMINANTE_RODILLA'],
-    ['DOMINANTE_CADERA'],
-  ];
-  for (const alternatives of coverage) {
+  for (const alternatives of REQUIRED_PATTERN_GROUPS) {
     if (!alternatives.some((item) => covered.has(item))) {
       violations.push(`Falta cobertura: ${alternatives.join(' o ')}.`);
     }

@@ -668,7 +668,7 @@ model TemplateSet {
   position           Int
   minRepetitions     Int              @map("min_repetitions")
   maxRepetitions     Int              @map("max_repetitions")
-  suggestedLoad      Decimal          @map("suggested_load") @db.Decimal(10, 2)
+  suggestedLoad      Decimal?         @map("suggested_load") @db.Decimal(10, 2)
   restSeconds        Int              @map("rest_seconds")
   warmup             Boolean          @default(false)
   templateExercise   TemplateExercise @relation(fields: [templateExerciseId], references: [id], onDelete: Cascade)
@@ -833,7 +833,7 @@ model PrescribedSet {
   position          Int
   minRepetitions    Int             @map("min_repetitions")
   maxRepetitions    Int             @map("max_repetitions")
-  suggestedLoad     Decimal         @map("suggested_load") @db.Decimal(10, 2)
+  suggestedLoad     Decimal?        @map("suggested_load") @db.Decimal(10, 2)
   restSeconds       Int             @map("rest_seconds")
   warmup            Boolean         @default(false)
   routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)

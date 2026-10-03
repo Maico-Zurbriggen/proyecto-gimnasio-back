@@ -17,8 +17,8 @@ const ultimaVersion = {
   take: 1,
 } satisfies Prisma.Routine$versionsArgs;
 
-function toNumber(value: Prisma.Decimal): number {
-  return Number(value);
+function toNumber(value: Prisma.Decimal | null): number | null {
+  return value === null ? null : Number(value);
 }
 
 export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
@@ -220,6 +220,11 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
     const routine = await this.prisma.routine.findFirst({
       where: { id: routineId, studentId },
       include: {
+        sourceGenerationResult: {
+          select: {
+            attempt: { select: { request: { select: { preferences: true } } } },
+          },
+        },
         versions: {
           orderBy: { versionNumber: 'desc' },
           take: 1,
@@ -248,6 +253,16 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
       return null;
     }
 
+    const preferences =
+      routine.sourceGenerationResult?.attempt.request.preferences;
+    const generationPrompt =
+      preferences &&
+      typeof preferences === 'object' &&
+      !Array.isArray(preferences) &&
+      typeof preferences.free_text === 'string'
+        ? preferences.free_text
+        : null;
+
     return {
       id: routine.id,
       studentId: routine.studentId,
@@ -258,6 +273,7 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
       requestedAt: routine.requestedAt,
       versionId: version.id,
       versionNumber: version.versionNumber,
+      generationPrompt,
       days: version.days.map((day) => ({
         position: day.position,
         name: day.name,

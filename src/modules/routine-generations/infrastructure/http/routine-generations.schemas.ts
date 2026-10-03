@@ -19,6 +19,7 @@ export const requestGenerationBodySchema = z
     textoLibre: z.string().min(1).nullish(),
     parametros: requestGenerationParametrosSchema.nullish(),
     idempotencyKey: z.string().min(1).optional(),
+    regenerar: z.boolean().optional(),
   })
   .strict();
 

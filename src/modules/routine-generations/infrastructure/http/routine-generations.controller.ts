@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { GenerationPreferencesUnsatisfiableError } from '../../domain/services/generation-request-requirements';
 
 import {
   EmptyPrefilteredCatalogError,
@@ -7,8 +8,10 @@ import {
   ProposedRoutineAlreadyExistsError,
   RoutineGenerationNotCompletedError,
   RoutineGenerationNotFoundError,
+  RoutineGenerationIdempotencyConflictError,
   RoutineGenerationOwnershipConflictError,
   RoutineGenerationUnavailableError,
+  RoutineRegenerationNotAllowedError,
   StudentNotFoundError,
 } from '../../domain/errors/routine-generation-errors';
 import type { GetRoutineGenerationUseCase } from '../../application/use-cases/get-routine-generation.use-case';
@@ -62,6 +65,7 @@ export class RoutineGenerationsController {
         freeText: parsedBody.data.textoLibre ?? undefined,
         parameters: parsedBody.data.parametros ?? undefined,
         idempotencyKey: parsedBody.data.idempotencyKey,
+        regenerate: parsedBody.data.regenerar,
       });
 
       res.status(result.alreadyExisted ? 200 : 202).json({
@@ -69,6 +73,17 @@ export class RoutineGenerationsController {
         status: result.status,
       });
     } catch (error) {
+      if (error instanceof GenerationPreferencesUnsatisfiableError) {
+        res.status(422).json({
+          error: 'generation_preferences_unsatisfiable',
+          violations: error.violations,
+        });
+        return;
+      }
+      if (error instanceof RoutineRegenerationNotAllowedError) {
+        res.status(403).json({ error: 'routine_regeneration_not_allowed' });
+        return;
+      }
       if (error instanceof MissingGenerationInputError) {
         res.status(422).json({ error: 'missing_generation_input' });
         return;
@@ -93,6 +108,13 @@ export class RoutineGenerationsController {
         res
           .status(409)
           .json({ error: 'routine_generation_ownership_conflict' });
+        return;
+      }
+
+      if (error instanceof RoutineGenerationIdempotencyConflictError) {
+        res
+          .status(409)
+          .json({ error: 'routine_generation_idempotency_conflict' });
         return;
       }
 
