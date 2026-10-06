@@ -18,3 +18,29 @@ export const completeAccountBodySchema = z.object({
 });
 
 export type CompleteAccountBody = z.infer<typeof completeAccountBodySchema>;
+
+export const invitationIdParamSchema = z.object({
+  invitationId: z
+    .string()
+    .uuid({ message: 'invitationId must be a valid UUID' }),
+});
+
+/**
+ * Cuerpo de emisión de una invitación (HU08 - T1).
+ *
+ * El gimnasio **no** es un parámetro: sale del emisor (criterio 5). Los roles se
+ * validan además en el dominio, que es quien decide cuáles puede otorgar cada
+ * emisor (criterio 2).
+ */
+export const issueInvitationBodySchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, 'El correo es requerido')
+    .email('El correo no tiene un formato válido'),
+  roles: z
+    .array(z.enum(['ALUMNO', 'ENTRENADOR', 'ADMINISTRADOR']))
+    .min(1, 'Hay que indicar al menos un rol'),
+});
+
+export type IssueInvitationBody = z.infer<typeof issueInvitationBodySchema>;

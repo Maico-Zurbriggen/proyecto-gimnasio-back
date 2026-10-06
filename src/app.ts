@@ -24,7 +24,19 @@ import { createProposalsRouter } from './modules/evolution/infrastructure/http/p
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
 import type { InvitationsRepository } from './modules/invitations/application/ports/invitations.repository';
 import { CompleteAccountUseCase } from './modules/invitations/application/use-cases/complete-account.use-case';
+import type { PhysicalConditionsRepository } from './modules/physical-conditions/application/ports/physical-conditions.repository';
+import { CloseConditionUseCase } from './modules/physical-conditions/application/use-cases/close-condition.use-case';
+import { DeclareConditionUseCase } from './modules/physical-conditions/application/use-cases/declare-condition.use-case';
+import { ListConditionsUseCase } from './modules/physical-conditions/application/use-cases/list-conditions.use-case';
+import { PhysicalConditionsController } from './modules/physical-conditions/infrastructure/http/physical-conditions.controller';
+import { createPhysicalConditionsRouter } from './modules/physical-conditions/infrastructure/http/physical-conditions.routes';
+import { PrismaPhysicalConditionsRepository } from './modules/physical-conditions/infrastructure/persistence/prisma-physical-conditions.repository';
+import type { EmailSender } from './modules/invitations/application/ports/email-sender.port';
+import { IssueInvitationUseCase } from './modules/invitations/application/use-cases/issue-invitation.use-case';
+import { ListInvitationsUseCase } from './modules/invitations/application/use-cases/list-invitations.use-case';
+import { RevokeInvitationUseCase } from './modules/invitations/application/use-cases/revoke-invitation.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
+import { createSmtpEmailSenderFromEnv } from './modules/invitations/infrastructure/email/smtp-email-sender';
 import { InvitationsController } from './modules/invitations/infrastructure/http/invitations.controller';
 import { createInvitationsRouter } from './modules/invitations/infrastructure/http/invitations.routes';
 import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
@@ -110,6 +122,8 @@ interface AppDependencies {
   measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
   invitationsRepository?: InvitationsRepository;
+  emailSender?: EmailSender | null;
+  physicalConditionsRepository?: PhysicalConditionsRepository;
   prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
@@ -156,6 +170,8 @@ export function createApp({
   measurementsRepository,
   proposalsRepository,
   invitationsRepository,
+  emailSender,
+  physicalConditionsRepository,
   prescriptionsRepository,
   trainerAssignments,
   clock,
@@ -222,9 +238,32 @@ export function createApp({
           resolvedAuthRepo,
           resolvedClock,
         ),
+        new IssueInvitationUseCase(
+          resolvedInvitationsRepo,
+          resolvedClock,
+          emailSender !== undefined
+            ? emailSender
+            : createSmtpEmailSenderFromEnv(),
+        ),
+        new RevokeInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
+        new ListInvitationsUseCase(resolvedInvitationsRepo, resolvedClock),
       ),
     ),
   );
+  // HU11: declaración, historial y cierre de condiciones físicas.
+  const resolvedConditionsRepo =
+    physicalConditionsRepository ??
+    new PrismaPhysicalConditionsRepository(prisma);
+  app.use(
+    createPhysicalConditionsRouter(
+      new PhysicalConditionsController(
+        new DeclareConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new ListConditionsUseCase(resolvedConditionsRepo, resolvedClock),
+        new CloseConditionUseCase(resolvedConditionsRepo, resolvedClock),
+      ),
+    ),
+  );
+
   const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
     resolvedUsersRepository,
     resolvedClock,
