@@ -14,6 +14,10 @@ export const assignRoutineBodySchema = z.object({
 });
 
 export const reviewRoutineBodySchema = z.object({
+  reviewToken: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   result: z.enum(['APROBADA', 'APROBADA_CON_CAMBIOS', 'RECHAZADA']),
   observation: z.string().max(500).optional(),
 });

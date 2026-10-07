@@ -27,6 +27,19 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 15
+      catalog-postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: gym_catalog_test
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 55434:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gym_catalog_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
 
     env:
       DATABASE_URL: postgresql://gym_ci@localhost:5432/gym_ci?schema=public
@@ -54,3 +67,13 @@ jobs:
 
       - name: Check repository
         run: npm run check
+
+      - name: Apply migrations to the isolated catalogue database
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:55434/gym_catalog_test
+        run: npm run db:deploy
+
+      - name: Check catalogue persistence and publisher
+        env:
+          CATALOG_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:55434/gym_catalog_test
+        run: npm test -- --no-file-parallelism test/database

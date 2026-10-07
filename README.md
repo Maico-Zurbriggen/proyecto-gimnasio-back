@@ -175,3 +175,9 @@ npm run check
 ```
 
 El backend publica OpenAPI como contrato para el frontend. El corpus funcional, la arquitectura y las reglas de dominio se mantienen exclusivamente en [proyecto-gimnasio-documentacion](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion). Para trabajo asistido por IA, comenzar por su `AGENTS.md` y `manifest.json`.
+
+## Catálogo de ejercicios
+
+Implementación y operación de RepDB, habilitaciones y generación `2.0`: [documentación canónica](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion/blob/main/architecture/exercise-catalog.md).
+
+El importador `npm run catalog:import` prepara/publica datos privados; no incorpora el dataset a Git. La API versionada está en `openapi/catalog.openapi.json`; regenerar con `npm run catalog:openapi`.
