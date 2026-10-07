@@ -36,7 +36,7 @@ Get-Content -Raw prisma/seeds/seed-test.sql | docker compose -f compose.local.ya
 El servicio IA usa `postgresql://gym_ai_local@127.0.0.1:55432/gym_local`, sin el
 parámetro `schema` de Prisma y con permisos limitados a sus tablas de integración.
 El seed usa hashes ficticios: cargarlo no permite iniciar sesión. Las cuentas,
-sus roles y el procedimiento para configurar el login local de Martín están en
+sus roles y el procedimiento para configurar el login local por correo están en
 [cuentas de prueba y acceso](https://github.com/Maico-Zurbriggen/proyecto-gimnasio-documentacion/blob/main/operations/local-database.md#cuentas-de-prueba-y-acceso).
 
 - `GET /health` verifica que el proceso HTTP esté disponible.
