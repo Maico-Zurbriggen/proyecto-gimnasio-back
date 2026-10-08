@@ -10,6 +10,7 @@ export interface RoutineGenerationSnapshot {
   violaciones: string[] | null;
   error: string | null;
   routineId: string | null;
+  reason?: string | null;
 }
 
 export interface RoutineGenerationOwner {
@@ -19,6 +20,7 @@ export interface RoutineGenerationOwner {
 }
 
 export interface CreateRoutineGenerationRequest {
+  ownership?: { studentId: string; requestedByUserId: string };
   idempotencyKey: string;
   minimizedContext: MinimizedContext;
   preferences: RoutineGenerationPreferences;

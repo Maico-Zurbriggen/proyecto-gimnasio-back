@@ -24,54 +24,52 @@ export class PrismaRoutineGenerationsRepository implements RoutineGenerationsRep
   }
 
   async createOrGetRequest(input: CreateRoutineGenerationRequest) {
+    const context = input.minimizedContext;
     const minimizedContext = {
-      experience_level: input.minimizedContext.nivelExperiencia,
-      available_days_per_week: input.minimizedContext.diasSemanalesDisponibles,
-      active_goals: [...input.minimizedContext.objetivosActivos].sort(),
-      conditions: [...input.minimizedContext.condiciones].sort(),
+      schema_version: '2.0',
+      captured_at: context.captured_at ?? null,
+      profile_hash: context.profile_hash ?? null,
+      experience_level: context.nivelExperiencia,
+      available_days_per_week: context.diasSemanalesDisponibles,
+      active_goals: [...context.objetivosActivos].sort(),
+      conditions: context.physical_conditions ?? [],
+      profile: context.profile ?? null,
+      available_equipment: context.available_equipment ?? ['PESO_CORPORAL'],
+      fitness_clearance: context.fitness_clearance ?? 'AUSENTE',
+      inventory_revision: context.inventory_revision ?? 0,
+      history: context.history ?? null,
     } satisfies Prisma.InputJsonObject;
     const preferences = {
-      ...(input.preferences.muscle_counts_per_day
-        ? {
-            muscle_counts_per_day: input.preferences.muscle_counts_per_day.map(
-              (requirement) => ({ ...requirement }),
-            ),
-          }
-        : {}),
+      schema_version: '2.0',
       ...(input.preferences.local_test_regeneration
         ? { local_test_regeneration: input.preferences.local_test_regeneration }
-        : {}),
-      ...(input.preferences.prescription_constraints
-        ? {
-            prescription_constraints:
-              input.preferences.prescription_constraints,
-          }
         : {}),
       free_text: input.preferences.free_text,
       parameters: input.preferences.parameters
         ? { ...input.preferences.parameters }
         : null,
       allowed_catalog: input.preferences.allowed_catalog.map((exercise) => ({
-        id: exercise.id,
-        name: exercise.name,
-        movement_pattern: exercise.movement_pattern,
-        ...(exercise.primary_muscles
-          ? { primary_muscles: exercise.primary_muscles }
-          : {}),
+        ...exercise,
       })),
     } satisfies Prisma.InputJsonObject;
     // The replacement target is captured by the server, not part of caller input.
-    const contextHash = hashInput(minimizedContext, {
-      ...preferences,
-      ...(input.preferences.local_test_regeneration
-        ? { local_test_regeneration: true }
-        : {}),
-    });
+    const contextHash = hashInput(
+      { ...minimizedContext, captured_at: null },
+      {
+        ...preferences,
+        ...(input.preferences.local_test_regeneration
+          ? { local_test_regeneration: true }
+          : {}),
+      },
+    );
 
     try {
       const created = await this.prisma.aiGenerationRequest.create({
         data: {
           idempotencyKey: input.idempotencyKey,
+          ...(input.ownership
+            ? { ownership: { create: input.ownership } }
+            : {}),
           minimizedContext,
           preferences,
           contextHash,
@@ -160,10 +158,17 @@ export class PrismaRoutineGenerationsRepository implements RoutineGenerationsRep
       latestValidation && !latestValidation.valid
         ? this.asViolations(latestValidation.violations)
         : null;
+    const output = result?.structuredOutput;
+    const unable =
+      output &&
+      typeof output === 'object' &&
+      !Array.isArray(output) &&
+      output.schema_version === '2.0' &&
+      output.outcome === 'UNABLE';
 
     return {
       requestId: record.id,
-      status: violations ? 'NO_DISPONIBLE' : record.state,
+      status: violations || unable ? 'NO_DISPONIBLE' : record.state,
       estructuraCandidata: result?.structuredOutput ?? null,
       violaciones: violations,
       error:
@@ -171,7 +176,12 @@ export class PrismaRoutineGenerationsRepository implements RoutineGenerationsRep
           ? (latestAttempt?.errorCode ?? 'unknown_error')
           : violations
             ? 'invalid_generated_routine'
-            : null,
+            : unable
+              ? 'generation_unable'
+              : null,
+      ...(unable
+        ? { reason: typeof output.reason === 'string' ? output.reason : null }
+        : {}),
       routineId: result?.routine?.id ?? null,
     };
   }

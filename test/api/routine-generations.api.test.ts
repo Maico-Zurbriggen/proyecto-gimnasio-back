@@ -42,14 +42,14 @@ describe('Routine Generations API', () => {
   ];
 
   describe('POST /students/:studentId/routine-generations', () => {
-    it('explains a prompt that cannot be fulfilled instead of dispatching a generic routine', async () => {
+    it('lets the AI judge feasibility using the full gym catalogue', async () => {
       const gateway = { dispatchGeneration: vi.fn() };
       const app = createApp({
         generationContextRepository: {
           getStudentContext: vi
             .fn()
             .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-          getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+          getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
         },
         routineGenerationGateway: gateway,
         routineGenerationsRepository: createGenerationRepository(),
@@ -59,12 +59,9 @@ describe('Routine Generations API', () => {
         .set('x-user-id', studentId)
         .set('x-user-roles', 'ALUMNO')
         .send({ textoLibre: '3 ejercicios de tríceps por día' })
-        .expect(422);
-      expect(response.body).toMatchObject({
-        error: 'generation_preferences_unsatisfiable',
-        violations: [expect.stringContaining('hay 0 compatibles')],
-      });
-      expect(gateway.dispatchGeneration).not.toHaveBeenCalled();
+        .expect(202);
+      expect(response.body.status).toBe('PENDIENTE');
+      expect(gateway.dispatchGeneration).toHaveBeenCalledWith('req-1');
     });
     it('accepts test regeneration only when the local capability is enabled', async () => {
       const routineGenerationsRepository = createGenerationRepository();
@@ -75,7 +72,7 @@ describe('Routine Generations API', () => {
           getStudentContext: vi
             .fn()
             .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-          getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+          getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
         },
         routineGenerationsRepository,
         routineGenerationGateway: { dispatchGeneration: vi.fn() },
@@ -118,7 +115,7 @@ describe('Routine Generations API', () => {
         getStudentContext: vi
           .fn()
           .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-        getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+        getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
       };
       const routineGenerationGateway: RoutineGenerationGateway = {
         dispatchGeneration: vi.fn().mockResolvedValue(undefined),
@@ -154,11 +151,11 @@ describe('Routine Generations API', () => {
           preferences: expect.objectContaining({
             free_text: 'quiero ganar fuerza',
             allowed_catalog: [
-              {
+              expect.objectContaining({
                 id: 'ex-1',
                 name: 'Sentadilla',
                 movement_pattern: 'DOMINANTE_RODILLA',
-              },
+              }),
             ],
           }),
         }),
@@ -180,7 +177,7 @@ describe('Routine Generations API', () => {
         getStudentContext: vi
           .fn()
           .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-        getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+        getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
       };
       const routineGenerationGateway: RoutineGenerationGateway = {
         dispatchGeneration: vi.fn().mockResolvedValue(undefined),
@@ -261,7 +258,7 @@ describe('Routine Generations API', () => {
         getStudentContext: vi
           .fn()
           .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-        getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+        getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
       };
 
       const app = createApp({
@@ -280,12 +277,12 @@ describe('Routine Generations API', () => {
       expect(response.body).toEqual({ error: 'missing_generation_input' });
     });
 
-    it('returns 422 when the prefiltered catalog is empty after filtering by gym inventory', async () => {
+    it('returns 422 before dispatch when the gym has no enabled exercises', async () => {
       const generationContextRepository: GenerationContextRepository = {
         getStudentContext: vi
           .fn()
           .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-        getPrefilteredCatalog: vi.fn().mockResolvedValue([]),
+        getEnabledCatalog: vi.fn().mockResolvedValue([]),
       };
 
       const app = createApp({
@@ -301,13 +298,13 @@ describe('Routine Generations API', () => {
         .send({ textoLibre: 'quiero ganar fuerza' })
         .expect(422);
 
-      expect(response.body).toEqual({ error: 'empty_prefiltered_catalog' });
+      expect(response.body).toEqual({ error: 'empty_gym_catalog' });
     });
 
     it('returns 404 when the student does not exist', async () => {
       const generationContextRepository: GenerationContextRepository = {
         getStudentContext: vi.fn().mockResolvedValue(null),
-        getPrefilteredCatalog: vi.fn(),
+        getEnabledCatalog: vi.fn(),
       };
 
       const app = createApp({
@@ -331,7 +328,7 @@ describe('Routine Generations API', () => {
         getStudentContext: vi
           .fn()
           .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-        getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+        getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
       };
       const { RoutineGenerationUnavailableError } =
         await import('../../src/modules/routine-generations/domain/errors/routine-generation-errors');

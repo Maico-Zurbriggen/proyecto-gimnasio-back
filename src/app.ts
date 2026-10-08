@@ -1,3 +1,10 @@
+import { resolve } from 'node:path';
+import type { ExerciseCatalogRepository } from './modules/exercise-catalog/application/catalog.repository';
+import { ExerciseCatalogService } from './modules/exercise-catalog/application/catalog.service';
+import { ExerciseCatalogController } from './modules/exercise-catalog/infrastructure/http/catalog.controller';
+import { createExerciseCatalogRouter } from './modules/exercise-catalog/infrastructure/http/catalog.routes';
+import { createCatalogMediaRouter } from './modules/exercise-catalog/infrastructure/http/catalog-media.routes';
+import { PrismaExerciseCatalogRepository } from './modules/exercise-catalog/infrastructure/persistence/prisma-catalog.repository';
 import cors, { type CorsOptions } from 'cors';
 import express, { type ErrorRequestHandler } from 'express';
 
@@ -98,6 +105,8 @@ import { requireStudentMeasurementAccess } from './shared/middleware/student-mea
 class CorsOriginError extends Error {}
 
 interface AppDependencies {
+  exerciseCatalogRepository?: ExerciseCatalogRepository;
+  catalogAssetsDirectory?: string;
   localGenerationTesting?: boolean;
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
@@ -144,6 +153,9 @@ function createCorsOptions(allowedOrigins: readonly string[]): CorsOptions {
 }
 
 export function createApp({
+  exerciseCatalogRepository,
+  catalogAssetsDirectory = process.env.CATALOG_ASSETS_DIR ??
+    resolve(process.cwd(), '.catalog-private/assets'),
   localGenerationTesting = isLocalGenerationTestingEnabled(),
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
@@ -244,6 +256,19 @@ export function createApp({
   const requireMeasurementAccess = requireStudentMeasurementAccess(
     resolvedStudentMeasurementAccess,
   );
+
+  app.use(
+    createExerciseCatalogRouter(
+      new ExerciseCatalogController(
+        new ExerciseCatalogService(
+          exerciseCatalogRepository ??
+            new PrismaExerciseCatalogRepository(prisma),
+        ),
+      ),
+      requireMeasurementAccess,
+    ),
+  );
+  app.use(createCatalogMediaRouter(prisma, catalogAssetsDirectory));
 
   const resolvedRoutinesRepo =
     routinesRepository ?? new PrismaRoutinesRepository(prisma);

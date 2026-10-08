@@ -1,11 +1,4 @@
 import type { Clock } from '../../../routines/application/ports/clock';
-import { generationPrescriptionConstraints } from '../../domain/services/generated-routine-validator';
-import { selectGenerationCatalog } from '../../domain/services/generation-catalog-selection';
-import {
-  extractMuscleCountRequirements,
-  mentionedMuscles,
-  GenerationPreferencesUnsatisfiableError,
-} from '../../domain/services/generation-request-requirements';
 import {
   EmptyPrefilteredCatalogError,
   MissingGenerationInputError,
@@ -59,42 +52,13 @@ export class RequestRoutineGenerationUseCase {
       throw new StudentNotFoundError(`Student ${command.studentId} not found`);
     }
 
-    const prefilteredCatalog =
-      await this.contextRepository.getPrefilteredCatalog(
-        command.studentId,
-        studentContext.gymId,
-        asOf,
-      );
-
-    if (prefilteredCatalog.length === 0) {
+    const generationCatalog = await this.contextRepository.getEnabledCatalog(
+      studentContext.gymId,
+    );
+    if (generationCatalog.length === 0)
       throw new EmptyPrefilteredCatalogError(
-        `No compatible exercises available for gym ${studentContext.gymId}`,
+        'El administrador debe habilitar ejercicios del gimnasio.',
       );
-    }
-
-    const muscleCounts = extractMuscleCountRequirements(
-      command.freeText ?? null,
-    );
-    const missing = muscleCounts.flatMap(({ muscle, count }) => {
-      const available = new Set(
-        prefilteredCatalog
-          .filter((exercise) => exercise.musculosPrimarios?.includes(muscle))
-          .map((exercise) => exercise.id),
-      ).size;
-      return available >= count
-        ? []
-        : [
-            `Pediste ${count} ejercicios distintos de ${muscle} por día y hay ${available} compatibles en el catálogo.`,
-          ];
-    });
-    if (missing.length)
-      throw new GenerationPreferencesUnsatisfiableError(missing);
-
-    const generationCatalog = selectGenerationCatalog(
-      prefilteredCatalog,
-      muscleCounts,
-      mentionedMuscles(command.freeText ?? null),
-    );
 
     const replacement = command.regenerate
       ? {
@@ -110,9 +74,8 @@ export class RequestRoutineGenerationUseCase {
       idempotencyKey: command.idempotencyKey ?? this.idGenerator.generate(),
       minimizedContext: studentContext.minimizedContext,
       preferences: {
-        ...(muscleCounts.length ? { muscle_counts_per_day: muscleCounts } : {}),
+        schema_version: '2.0',
         ...replacement,
-        prescription_constraints: generationPrescriptionConstraints(),
         free_text: command.freeText ?? null,
         parameters: command.parameters
           ? {
@@ -131,10 +94,29 @@ export class RequestRoutineGenerationUseCase {
             id: exercise.id,
             name: exercise.nombre,
             movement_pattern: exercise.patronMovimiento,
+            instructions: exercise.instrucciones ?? '',
+            description: exercise.descripcion ?? null,
+            tips: exercise.consejos ?? [],
+            difficulty_level: exercise.dificultad ?? '',
+            unilateral: exercise.unilateral ?? false,
+            revision: exercise.revision ?? 1,
+            ...(exercise.availabilityUpdatedAt
+              ? { availability_updated_at: exercise.availabilityUpdatedAt }
+              : {}),
+            ...(exercise.availabilityRevision
+              ? { availability_revision: exercise.availabilityRevision }
+              : {}),
+            secondary_muscles: exercise.musculosSecundarios ?? [],
+            equipment: exercise.equipamiento ?? [],
+            joints: exercise.articulaciones ?? [],
             ...(exercise.musculosPrimarios
               ? { primary_muscles: exercise.musculosPrimarios }
               : {}),
           })),
+      },
+      ownership: {
+        studentId: command.studentId,
+        requestedByUserId: command.requestedByUserId,
       },
       retentionUntil: new Date(asOf.getTime() + 30 * 24 * 60 * 60 * 1000),
     });

@@ -22,6 +22,8 @@ function setup(preferences: unknown, generated = true) {
     findFirst,
     repository: new PrismaPrescriptionsRepository({
       routine: { findFirst },
+      studentProfile: { findUnique: vi.fn().mockResolvedValue(null) },
+      exercise: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient),
   };
 }

@@ -28,14 +28,14 @@ describe('RequestRoutineGenerationUseCase', () => {
     { id: 'ex-1', nombre: 'Sentadilla', patronMovimiento: 'DOMINANTE_RODILLA' },
   ];
 
-  it('persists explicit muscle counts and primary muscles for the LLM', async () => {
+  it('preserves the raw preference and multi-primary metadata for the AI', async () => {
     const generationsRepository = repositories();
     const useCase = new RequestRoutineGenerationUseCase(
       {
         getStudentContext: vi
           .fn()
           .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-        getPrefilteredCatalog: vi.fn().mockResolvedValue(
+        getEnabledCatalog: vi.fn().mockResolvedValue(
           [1, 2, 3].map((id) => ({
             id: `triceps-${id}`,
             nombre: `Tríceps ${id}`,
@@ -57,7 +57,8 @@ describe('RequestRoutineGenerationUseCase', () => {
     expect(generationsRepository.createOrGetRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         preferences: expect.objectContaining({
-          muscle_counts_per_day: [{ muscle: 'TRICEPS', count: 3 }],
+          schema_version: '2.0',
+          free_text: 'Genera rutina con 3 ejercicios de triceps por dia',
           allowed_catalog: expect.arrayContaining([
             expect.objectContaining({ primary_muscles: ['TRICEPS'] }),
           ]),
@@ -66,7 +67,7 @@ describe('RequestRoutineGenerationUseCase', () => {
     );
   });
 
-  it('does not dispatch a request when the compatible catalog cannot fulfill the count', async () => {
+  it('dispatches raw preferences even when deterministic counts would reject them', async () => {
     const generationsRepository = repositories();
     const gateway = { dispatchGeneration: vi.fn() };
     const useCase = new RequestRoutineGenerationUseCase(
@@ -74,24 +75,20 @@ describe('RequestRoutineGenerationUseCase', () => {
         getStudentContext: vi
           .fn()
           .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-        getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+        getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
       },
       gateway,
       idGenerator,
       clock,
       generationsRepository,
     );
-    await expect(
-      useCase.execute({
-        studentId,
-        requestedByUserId,
-        freeText: '3 ejercicios de tríceps por día',
-      }),
-    ).rejects.toMatchObject({
-      violations: [expect.stringContaining('hay 0 compatibles')],
+    await useCase.execute({
+      studentId,
+      requestedByUserId,
+      freeText: '3 ejercicios de tríceps por día',
     });
-    expect(gateway.dispatchGeneration).not.toHaveBeenCalled();
-    expect(generationsRepository.createOrGetRequest).not.toHaveBeenCalled();
+    expect(gateway.dispatchGeneration).toHaveBeenCalled();
+    expect(generationsRepository.createOrGetRequest).toHaveBeenCalled();
   });
 
   function repositories(
@@ -113,7 +110,7 @@ describe('RequestRoutineGenerationUseCase', () => {
   it('rejects requests without text or structured parameters before loading context', async () => {
     const contextRepository: GenerationContextRepository = {
       getStudentContext: vi.fn(),
-      getPrefilteredCatalog: vi.fn(),
+      getEnabledCatalog: vi.fn(),
     };
     const generationsRepository = repositories();
     const gateway: RoutineGenerationGateway = {
@@ -137,7 +134,7 @@ describe('RequestRoutineGenerationUseCase', () => {
   it('throws StudentNotFoundError when the student does not exist', async () => {
     const contextRepository: GenerationContextRepository = {
       getStudentContext: vi.fn().mockResolvedValue(null),
-      getPrefilteredCatalog: vi.fn(),
+      getEnabledCatalog: vi.fn(),
     };
     const useCase = new RequestRoutineGenerationUseCase(
       contextRepository,
@@ -161,7 +158,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       getStudentContext: vi
         .fn()
         .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-      getPrefilteredCatalog: vi.fn().mockResolvedValue([]),
+      getEnabledCatalog: vi.fn().mockResolvedValue([]),
     };
     const generationsRepository = repositories();
     const gateway: RoutineGenerationGateway = {
@@ -191,7 +188,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       getStudentContext: vi
         .fn()
         .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-      getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+      getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
     };
     const generationsRepository = repositories();
     const gateway: RoutineGenerationGateway = {
@@ -216,50 +213,33 @@ describe('RequestRoutineGenerationUseCase', () => {
       status: 'PENDIENTE',
       alreadyExisted: false,
     });
-    expect(generationsRepository.createOrGetRequest).toHaveBeenCalledWith({
-      idempotencyKey: 'generated-key',
-      minimizedContext,
-      preferences: {
-        prescription_constraints: expect.objectContaining({
-          purposes: expect.objectContaining({
-            HIPERTROFIA: {
-              weekly_frequency: [3, 6],
-              work_sets_per_exercise: [3, 4],
-              repetitions: [6, 12],
-              rest_seconds: [60, 120],
-              exercises_per_day: [5, 8],
-            },
-          }),
-          required_pattern_groups: [
-            ['EMPUJE_HORIZONTAL'],
-            ['TRACCION_HORIZONTAL', 'TRACCION_VERTICAL'],
-            ['DOMINANTE_RODILLA'],
-            ['DOMINANTE_CADERA'],
+    expect(generationsRepository.createOrGetRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: 'generated-key',
+        minimizedContext,
+        ownership: { studentId, requestedByUserId },
+        preferences: expect.objectContaining({
+          schema_version: '2.0',
+          free_text: 'quiero ganar fuerza',
+          parameters: null,
+          allowed_catalog: [
+            expect.objectContaining({
+              id: 'ex-1',
+              name: 'Sentadilla',
+              movement_pattern: 'DOMINANTE_RODILLA',
+            }),
           ],
         }),
-        free_text: 'quiero ganar fuerza',
-        parameters: null,
-        allowed_catalog: [
-          {
-            id: 'ex-1',
-            name: 'Sentadilla',
-            movement_pattern: 'DOMINANTE_RODILLA',
-          },
-        ],
-      },
-      retentionUntil: new Date('2026-10-14T00:00:00.000Z'),
-    });
+        retentionUntil: new Date('2026-10-14T00:00:00.000Z'),
+      }),
+    );
     expect(generationsRepository.registerOwnership).toHaveBeenCalledWith({
       requestId: 'req-1',
       studentId,
       requestedByUserId,
     });
     expect(gateway.dispatchGeneration).toHaveBeenCalledWith('req-1');
-    expect(contextRepository.getPrefilteredCatalog).toHaveBeenCalledWith(
-      studentId,
-      'gym-1',
-      fixedNow,
-    );
+    expect(contextRepository.getEnabledCatalog).toHaveBeenCalledWith('gym-1');
   });
 
   it('reuses the caller idempotency key and does not dispatch terminal requests', async () => {
@@ -267,7 +247,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       getStudentContext: vi
         .fn()
         .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-      getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+      getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
     };
     const generationsRepository = repositories({
       requestId: 'req-1',
@@ -303,7 +283,7 @@ describe('RequestRoutineGenerationUseCase', () => {
       getStudentContext: vi
         .fn()
         .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
-      getPrefilteredCatalog: vi.fn().mockResolvedValue(catalog),
+      getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
     };
     const generationsRepository = repositories();
     const gateway = { dispatchGeneration: vi.fn() };
@@ -339,7 +319,7 @@ describe('RequestRoutineGenerationUseCase', () => {
   it('rejects a test regeneration before loading context when it is disabled', async () => {
     const contextRepository: GenerationContextRepository = {
       getStudentContext: vi.fn(),
-      getPrefilteredCatalog: vi.fn(),
+      getEnabledCatalog: vi.fn(),
     };
     const generationsRepository = repositories();
     const useCase = new RequestRoutineGenerationUseCase(

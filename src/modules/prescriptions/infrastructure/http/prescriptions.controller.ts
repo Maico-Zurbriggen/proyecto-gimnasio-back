@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { CatalogError } from '../../../exercise-catalog/domain/catalog';
 
 import type { AssignRoutineFromTemplateUseCase } from '../../application/use-cases/assign-routine-from-template.use-case';
 import type {
@@ -28,6 +29,10 @@ function sendPrescriptionError(
   res: Response,
   next: NextFunction,
 ): void {
+  if (error instanceof CatalogError) {
+    res.status(error.status).json({ error: error.code });
+    return;
+  }
   if (error instanceof StudentNotFoundError) {
     res.status(404).json({ error: 'student_not_found' });
     return;
@@ -192,6 +197,7 @@ export class PrescriptionsController {
       }
 
       const result = await this.reviewRoutine.execute({
+        reviewToken: body.data.reviewToken,
         trainerId: req.user?.id ?? '',
         studentId: params.data.studentId,
         routineId: params.data.routineId,

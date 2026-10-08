@@ -8,6 +8,7 @@ import type {
 } from '../ports/prescriptions.repository';
 
 export interface ReviewRoutineInput {
+  reviewToken?: string;
   trainerId: string;
   studentId: string;
   routineId: string;
@@ -53,6 +54,7 @@ export class ReviewRoutineUseCase {
       : null;
 
     await this.prescriptions.review({
+      ...(input.reviewToken ? { reviewToken: input.reviewToken } : {}),
       routineId: routine.id,
       versionId: routine.versionId,
       reviewerTrainerId: input.trainerId,

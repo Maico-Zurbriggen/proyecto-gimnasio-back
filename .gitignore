@@ -13,3 +13,4 @@ coverage/
 Thumbs.db
 seeds/
 docs-tests/
+.catalog-private/

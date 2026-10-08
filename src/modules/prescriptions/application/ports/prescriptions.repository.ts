@@ -89,6 +89,7 @@ export interface CreateRoutineCommand {
 }
 
 export interface ReviewRoutineCommand {
+  reviewToken?: string;
   routineId: string;
   versionId: string;
   reviewerTrainerId: string;
@@ -114,6 +115,9 @@ export interface RoutineSummary {
 
 /** Rutina con su contenido, para la pantalla del alumno y la revisión. */
 export interface RoutineContent extends RoutineSummary {
+  reviewToken?: string;
+  generationExplanation?: string | null;
+  generationWarnings?: string[];
   generationPrompt: string | null;
   days: {
     position: number;
@@ -123,6 +127,7 @@ export interface RoutineContent extends RoutineSummary {
       position: number;
       exerciseId: string;
       exerciseName: string;
+      available?: boolean;
       movementPattern: MovementPattern;
       note: string | null;
       sets: PrescribedSetContent[];

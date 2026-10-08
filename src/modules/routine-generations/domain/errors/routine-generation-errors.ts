@@ -5,6 +5,20 @@ export class StudentNotFoundError extends Error {
   }
 }
 
+export class GenerationContextChangedError extends Error {
+  constructor() {
+    super('Generation context changed; request a new generation');
+    this.name = 'GenerationContextChangedError';
+  }
+}
+
+export class GenerationUnableError extends Error {
+  constructor(public readonly reason: string) {
+    super(reason);
+    this.name = 'GenerationUnableError';
+  }
+}
+
 export class MissingGenerationInputError extends Error {
   constructor(message = 'Either freeText or parameters must be provided') {
     super(message);
