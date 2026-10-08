@@ -29,10 +29,23 @@ export function createCatalogMediaRouter(
           where: {
             url,
             exercise: {
-              state: 'APROBADO',
-              source: 'RepDB',
-              origin: 'CATALOGO_BASE',
-              gymId: null,
+              OR: [
+                { origin: 'CATALOGO_BASE', gymId: null, state: 'APROBADO' },
+                {
+                  origin: 'GIMNASIO',
+                  gymId: req.user!.gymId,
+                  ...(!req.user!.roles.includes('ADMINISTRADOR')
+                    ? {
+                        OR: [
+                          { state: 'APROBADO' as const },
+                          ...(req.user!.roles.includes('ENTRENADOR')
+                            ? [{ authorUserId: req.user!.id }]
+                            : []),
+                        ],
+                      }
+                    : {}),
+                },
+              ],
             },
           },
           select: { id: true },
@@ -50,7 +63,23 @@ export function createCatalogMediaRouter(
         await stat(path);
         res.setHeader('Cache-Control', 'private, max-age=3600');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.type('image/webp').sendFile(path);
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        // The private store deliberately lives in .catalog-private. Express
+        // otherwise hides this directory even after the explicit DB/path checks.
+        res
+          .type('image/webp')
+          .sendFile(path, { dotfiles: 'allow' }, (error) => {
+            if (!error) return;
+            if (
+              'statusCode' in error &&
+              error.statusCode === 404 &&
+              !res.headersSent
+            ) {
+              res.sendStatus(404);
+              return;
+            }
+            next(error);
+          });
       } catch (error) {
         if (
           error instanceof Error &&

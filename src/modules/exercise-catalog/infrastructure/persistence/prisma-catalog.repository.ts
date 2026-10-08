@@ -47,7 +47,9 @@ function toDto(row: Row, gymId: string): CatalogExercise {
     joints: row.joints.map((item) => item.jointCode),
     media: row.media.length
       ? row.media.map((item) => ({ pose: item.pose, url: item.url }))
-      : [{ pose: 'PRINCIPAL', url: row.visualResourceUrl }],
+      : row.visualResourceUrl
+        ? [{ pose: 'PRINCIPAL', url: row.visualResourceUrl }]
+        : [],
     enabled: row.state === 'APROBADO' && (availability?.enabled ?? false),
     availabilityUpdatedAt: availability?.updatedAt.toISOString() ?? null,
     availabilityRevision: availability?.revision ?? null,
@@ -127,6 +129,8 @@ export async function assertGymExercisesAvailable(
 async function validateReferences(
   tx: Prisma.TransactionClient,
   input: ExerciseInput,
+  actor: CatalogActor,
+  currentId?: string,
 ): Promise<void> {
   const [equipment, muscles, joints] = await Promise.all([
     tx.equipment.count({ where: { code: { in: input.equipment } } }),
@@ -143,6 +147,39 @@ async function validateReferences(
     joints !== input.joints.length
   )
     throw new CatalogError('invalid_catalog_taxonomy', 422);
+  const privateUrls = [
+    ...new Set(
+      input.media
+        .map((media) => media.url)
+        .filter((url) => url.startsWith('/catalog/media/')),
+    ),
+  ];
+  if (privateUrls.length) {
+    const references = await tx.exerciseMedia.findMany({
+      where: {
+        url: { in: privateUrls },
+        exercise: {
+          OR: [
+            { origin: 'CATALOGO_BASE', gymId: null, state: 'APROBADO' },
+            { origin: 'GIMNASIO', gymId: actor.gymId, state: 'APROBADO' },
+            ...(currentId
+              ? [
+                  {
+                    id: currentId,
+                    origin: 'GIMNASIO' as const,
+                    gymId: actor.gymId,
+                  },
+                ]
+              : []),
+          ],
+        },
+      },
+      select: { url: true },
+    });
+    const accessible = new Set(references.map((media) => media.url));
+    if (privateUrls.some((url) => !accessible.has(url)))
+      throw new CatalogError('invalid_catalog_media', 422);
+  }
 }
 
 function exerciseData(input: ExerciseInput) {
@@ -261,7 +298,7 @@ export class PrismaExerciseCatalogRepository implements ExerciseCatalogRepositor
     try {
       return await this.prisma.$transaction(async (tx) => {
         await lockGymCatalog(tx, actor.gymId);
-        await validateReferences(tx, input);
+        await validateReferences(tx, input, actor);
         const item = await tx.exercise.create({
           data: {
             ...exerciseData(input),
@@ -311,7 +348,7 @@ export class PrismaExerciseCatalogRepository implements ExerciseCatalogRepositor
           throw new CatalogError('catalog_revision_conflict', 409);
         if (current.state === 'APROBADO')
           throw new CatalogError('approved_exercise_requires_retirement', 409);
-        await validateReferences(tx, input);
+        await validateReferences(tx, input, actor, id);
         const item = await tx.exercise.update({
           where: { id },
           data: {

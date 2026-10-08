@@ -15,13 +15,18 @@ const mediaUrl = z
   .trim()
   .max(2048)
   .refine((value) => {
+    if (/^\/catalog\/media\/[a-f0-9]{64}\/[a-z0-9-]+\.webp$/.test(value))
+      return true;
     try {
       const url = new URL(value);
       return url.protocol === 'https:' && !url.username && !url.password;
     } catch {
       return false;
     }
-  }, 'Usar una URL HTTPS');
+  }, 'Usar una URL HTTPS o conservar una ilustración del catálogo')
+  .describe(
+    'HTTPS image URL or an existing, authorized /catalog/media/{revision}/{filename}.webp reference.',
+  );
 export const exerciseInputSchema = z
   .strictObject({
     name: z.string().trim().min(2).max(160),

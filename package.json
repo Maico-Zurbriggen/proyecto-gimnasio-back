@@ -15,6 +15,7 @@
     "db:generate": "prisma generate",
     "db:seed:local-login": "node scripts/set-local-test-password.cjs",
     "db:seed:local-generation-catalog": "node scripts/seed-local-generation-catalog.cjs",
+    "db:seed:local-catalog-media": "node scripts/set-local-catalog-media.cjs",
     "db:migrate": "prisma migrate dev",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",

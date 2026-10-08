@@ -122,7 +122,8 @@
                 },
                 "url": {
                   "type": "string",
-                  "maxLength": 2048
+                  "maxLength": 2048,
+                  "description": "HTTPS image URL or an existing, authorized /catalog/media/{revision}/{filename}.webp reference."
                 }
               },
               "required": ["pose", "url"],
@@ -486,7 +487,8 @@
                     },
                     "url": {
                       "type": "string",
-                      "maxLength": 2048
+                      "maxLength": 2048,
+                      "description": "HTTPS image URL or an existing, authorized /catalog/media/{revision}/{filename}.webp reference."
                     }
                   },
                   "required": ["pose", "url"],

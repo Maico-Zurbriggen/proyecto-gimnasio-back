@@ -1,4 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, mkdir, writeFile, unlink, rmdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import express from 'express';
+import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaExerciseCatalogRepository } from '../../src/modules/exercise-catalog/infrastructure/persistence/prisma-catalog.repository';
@@ -7,6 +12,8 @@ import { PrismaGenerationContextRepository } from '../../src/modules/routine-gen
 import { PrismaRoutineGenerationsRepository } from '../../src/modules/routine-generations/infrastructure/persistence/prisma-routine-generations.repository';
 import { PrismaGeneratedRoutinesRepository } from '../../src/modules/routine-generations/infrastructure/persistence/prisma-generated-routines.repository';
 import { PrismaPrescriptionsRepository } from '../../src/modules/prescriptions/infrastructure/persistence/prisma-prescriptions.repository';
+import { authenticate } from '../../src/shared/middleware/auth.middleware';
+import { createCatalogMediaRouter } from '../../src/modules/exercise-catalog/infrastructure/http/catalog-media.routes';
 import type {
   CatalogActor,
   ExerciseInput,
@@ -186,6 +193,151 @@ describe.skipIf(!url)('Catalogue and generation on isolated PostgreSQL', () => {
   it('keeps bodyweight and all base exercises disabled until explicitly assigned', async () => {
     expect(await context.getEnabledCatalog(gymId)).toEqual([]);
     expect((await catalog.find(student, baseId))?.enabled).toBe(false);
+  });
+
+  it('does not expose an empty fixture resource as a broken image', async () => {
+    const row = await database.exercise.create({
+      data: {
+        name: `No media ${prefix}`,
+        instructions: input.instructions,
+        movementPattern: 'CORE',
+        difficultyLevel: 'PRINCIPIANTE',
+        visualResourceUrl: '',
+        origin: 'GIMNASIO',
+        gymId,
+        authorUserId: trainer.id,
+      },
+    });
+    expect((await catalog.find(student, row.id))?.media).toEqual([]);
+  });
+
+  it('serves published images for the owning gym and base catalogue without exposing staged or retired media', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gym-catalog-media-'));
+    const revision = 'c'.repeat(64);
+    const privateDirectory = join(root, '.catalog-private');
+    const directory = join(privateDirectory, revision);
+    const image = Buffer.from('RIFF0000WEBPsynthetic');
+    await mkdir(privateDirectory);
+    await mkdir(directory);
+    await writeFile(join(directory, 'own.webp'), image);
+    await writeFile(join(directory, 'base.webp'), image);
+    try {
+      const mediaUrl = `/catalog/media/${revision}/own.webp`;
+      const own = await database.exercise.create({
+        data: {
+          name: `Own media ${prefix}`,
+          instructions: input.instructions,
+          movementPattern: 'CORE',
+          difficultyLevel: 'PRINCIPIANTE',
+          visualResourceUrl: mediaUrl,
+          origin: 'GIMNASIO',
+          gymId,
+          authorUserId: trainer.id,
+          media: { create: { position: 1, pose: 'PRINCIPAL', url: mediaUrl } },
+        },
+      });
+      await database.exerciseMedia.create({
+        data: {
+          exerciseId: baseId,
+          position: 1,
+          pose: 'PRINCIPAL',
+          url: `/catalog/media/${revision}/base.webp`,
+        },
+      });
+      const app = express();
+      app.use(authenticate);
+      app.use(createCatalogMediaRouter(database, privateDirectory));
+      await request(app).get(mediaUrl).expect(401);
+      await request(app)
+        .get(mediaUrl)
+        .set('x-user-id', student.id)
+        .set('x-gym-id', otherGymId)
+        .expect(404);
+      const response = await request(app)
+        .get(mediaUrl)
+        .set('x-user-id', student.id)
+        .set('x-gym-id', gymId)
+        .expect(200);
+      expect(response.headers['content-type']).toMatch(/image\/webp/);
+      expect(response.headers['cache-control']).toMatch(/private/);
+      expect(response.headers['cross-origin-resource-policy']).toBe(
+        'cross-origin',
+      );
+      expect(response.body).toEqual(image);
+      const privateInput: ExerciseInput = {
+        ...input,
+        name: `Reused media ${prefix}`,
+        media: [{ pose: 'PRINCIPAL', url: mediaUrl }],
+      };
+      const reuse = await service.create(trainer, privateInput);
+      expect(reuse.media).toEqual(privateInput.media);
+      await expect(
+        service.create(otherTrainer, {
+          ...privateInput,
+          name: `Foreign media ${prefix}`,
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_catalog_media' });
+      await expect(
+        service.create(trainer, {
+          ...privateInput,
+          name: `Staged media ${prefix}`,
+          media: [
+            {
+              pose: 'PRINCIPAL',
+              url: `/catalog/media/${revision}/staged.webp`,
+            },
+          ],
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_catalog_media' });
+      await request(app)
+        .get(`/catalog/media/${revision}/base.webp`)
+        .set('x-user-id', otherTrainer.id)
+        .set('x-gym-id', otherGymId)
+        .expect(200);
+      await request(app)
+        .get(`/catalog/media/${revision}/staged.webp`)
+        .set('x-user-id', student.id)
+        .set('x-gym-id', gymId)
+        .expect(404);
+      await request(app)
+        .get('/catalog/media/invalid/own.webp')
+        .set('x-user-id', student.id)
+        .set('x-gym-id', gymId)
+        .expect(404);
+      await database.exercise.update({
+        where: { id: own.id },
+        data: { state: 'DESACTIVADO' },
+      });
+      await request(app)
+        .get(mediaUrl)
+        .set('x-user-id', student.id)
+        .set('x-gym-id', gymId)
+        .expect(404);
+      await request(app)
+        .get(mediaUrl)
+        .set('x-user-id', trainer.id)
+        .set('x-user-roles', 'ENTRENADOR')
+        .set('x-gym-id', gymId)
+        .expect(200);
+      await request(app)
+        .get(mediaUrl)
+        .set('x-user-id', admin.id)
+        .set('x-user-roles', 'ADMINISTRADOR')
+        .set('x-gym-id', gymId)
+        .expect(200);
+      const edited = await service.update(trainer, own.id, own.revision, {
+        ...privateInput,
+        name: own.name,
+      });
+      expect(edited.state).toBe('PROPUESTO');
+      expect(edited.media).toEqual(privateInput.media);
+    } finally {
+      await unlink(join(directory, 'own.webp'));
+      await unlink(join(directory, 'base.webp'));
+      await rmdir(directory);
+      await rmdir(privateDirectory);
+      await rmdir(root);
+    }
   });
 
   it('scopes availability to the gym, is idempotent, and preserves multi-primary membership', async () => {
