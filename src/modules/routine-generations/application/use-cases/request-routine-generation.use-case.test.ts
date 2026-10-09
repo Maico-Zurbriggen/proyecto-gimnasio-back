@@ -11,6 +11,7 @@ import type { IdGenerator } from '../ports/id-generator';
 import type { RoutineGenerationGateway } from '../ports/routine-generation.gateway';
 import type { RoutineGenerationsRepository } from '../ports/routine-generations.repository';
 import { RequestRoutineGenerationUseCase } from './request-routine-generation.use-case';
+import { ContextInsufficientError } from '../../domain/errors/context-insufficient.error';
 
 describe('RequestRoutineGenerationUseCase', () => {
   const fixedNow = new Date('2026-09-14T00:00:00Z');
@@ -27,6 +28,33 @@ describe('RequestRoutineGenerationUseCase', () => {
   const catalog = [
     { id: 'ex-1', nombre: 'Sentadilla', patronMovimiento: 'DOMINANTE_RODILLA' },
   ];
+
+  it('rejects automatic generation without a declared objective before calling the catalog or gateway', async () => {
+    const contextRepository: GenerationContextRepository = {
+      getStudentContext: vi.fn().mockResolvedValue({
+        gymId: 'gym-1',
+        minimizedContext: { ...minimizedContext, objetivosActivos: [] },
+      }),
+      getPrefilteredCatalog: vi.fn(),
+    };
+    const gateway = { dispatchGeneration: vi.fn() };
+    const useCase = new RequestRoutineGenerationUseCase(
+      contextRepository,
+      gateway,
+      idGenerator,
+      clock,
+      repositories(),
+    );
+    await expect(
+      useCase.execute({
+        studentId,
+        requestedByUserId,
+        freeText: 'generar rutina',
+      }),
+    ).rejects.toBeInstanceOf(ContextInsufficientError);
+    expect(contextRepository.getPrefilteredCatalog).not.toHaveBeenCalled();
+    expect(gateway.dispatchGeneration).not.toHaveBeenCalled();
+  });
 
   it('persists explicit muscle counts and primary muscles for the LLM', async () => {
     const generationsRepository = repositories();

@@ -1,6 +1,8 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { isUuid } from '../../../../shared/types/uuid';
+import { requiresGoalConfirmation } from '../../../goals/domain/goal-policy';
+import { GoalMismatchConfirmationError } from '../../domain/errors/prescription-errors';
 import type {
   CreateRoutineCommand,
   PrescriptionsRepository,
@@ -301,6 +303,21 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
     const aprueba = command.result !== 'RECHAZADA';
 
     await this.prisma.$transaction(async (tx) => {
+      const routine = await tx.routine.findUniqueOrThrow({
+        where: { id: command.routineId },
+      });
+      // Comparte el bloqueo con el cambio de objetivo: se confirma respecto del
+      // objetivo realmente vigente al persistir la revisión.
+      await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${routine.studentId}::uuid FOR UPDATE`;
+      const goal = await tx.goal.findFirst({
+        where: { studentId: routine.studentId, endsOn: null },
+      });
+      if (
+        aprueba &&
+        requiresGoalConfirmation(routine.routineType, goal?.type ?? null) &&
+        !command.confirmGoalMismatch
+      )
+        throw new GoalMismatchConfirmationError();
       await tx.routineReview.create({
         data: {
           routineId: command.routineId,

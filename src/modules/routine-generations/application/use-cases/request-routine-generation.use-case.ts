@@ -1,4 +1,6 @@
 import type { Clock } from '../../../routines/application/ports/clock';
+import { goalContext } from '../../../goals/domain/context-policy';
+import { ContextInsufficientError } from '../../domain/errors/context-insufficient.error';
 import { generationPrescriptionConstraints } from '../../domain/services/generated-routine-validator';
 import { selectGenerationCatalog } from '../../domain/services/generation-catalog-selection';
 import {
@@ -58,6 +60,15 @@ export class RequestRoutineGenerationUseCase {
     if (!studentContext) {
       throw new StudentNotFoundError(`Student ${command.studentId} not found`);
     }
+
+    const context = goalContext({
+      objective: studentContext.minimizedContext.objetivosActivos[0] ?? null,
+      experienceLevel: studentContext.minimizedContext.nivelExperiencia,
+      availableDaysPerWeek:
+        studentContext.minimizedContext.diasSemanalesDisponibles,
+    });
+    if (!context.sufficient)
+      throw new ContextInsufficientError(context.missing);
 
     const prefilteredCatalog =
       await this.contextRepository.getPrefilteredCatalog(

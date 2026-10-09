@@ -73,6 +73,8 @@ export class AuthController {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
-    res.status(200).json({ user: req.user });
+    res.status(200).json({
+      user: { id: req.user.id, gymId: req.user.gymId, roles: req.user.roles },
+    });
   };
 }

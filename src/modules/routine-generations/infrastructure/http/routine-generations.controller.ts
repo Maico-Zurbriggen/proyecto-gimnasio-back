@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { GenerationPreferencesUnsatisfiableError } from '../../domain/services/generation-request-requirements';
+import { ContextInsufficientError } from '../../domain/errors/context-insufficient.error';
 
 import {
   EmptyPrefilteredCatalogError,
@@ -73,6 +74,13 @@ export class RoutineGenerationsController {
         status: result.status,
       });
     } catch (error) {
+      if (error instanceof ContextInsufficientError) {
+        res.status(409).json({
+          error: 'student_context_insufficient',
+          missing: error.missing,
+        });
+        return;
+      }
       if (error instanceof GenerationPreferencesUnsatisfiableError) {
         res.status(422).json({
           error: 'generation_preferences_unsatisfiable',

@@ -50,3 +50,4 @@ export class PendingProposalError extends Error {
     this.name = 'PendingProposalError';
   }
 }
+export class GoalMismatchConfirmationError extends Error {}

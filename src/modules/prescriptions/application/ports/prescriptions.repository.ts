@@ -89,6 +89,7 @@ export interface CreateRoutineCommand {
 }
 
 export interface ReviewRoutineCommand {
+  confirmGoalMismatch?: boolean;
   routineId: string;
   versionId: string;
   reviewerTrainerId: string;

@@ -1,0 +1,784 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Proyecto Gimnasio - HU09 y HU10",
+    "version": "1.0.0",
+    "description": "Contrato backend de recuperaci?n de credenciales, objetivos y operaciones existentes afectadas."
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "gym_session"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["error"]
+      },
+      "GoalType": {
+        "type": "string",
+        "enum": [
+          "FUERZA",
+          "HIPERTROFIA",
+          "RESISTENCIA_MUSCULAR",
+          "ACONDICIONAMIENTO_GENERAL"
+        ]
+      },
+      "Goal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/GoalType"
+          },
+          "startsOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsOn": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "type", "startsOn", "endsOn"]
+      },
+      "GoalContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sufficient": {
+            "type": "boolean"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["sufficient", "missing"]
+      },
+      "GoalSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Goal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Goal"
+            }
+          },
+          "atDate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Goal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context": {
+            "$ref": "#/components/schemas/GoalContext"
+          }
+        },
+        "required": ["timezone", "current", "history", "atDate", "context"]
+      },
+      "GoalDeclaration": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          },
+          "changed": {
+            "type": "boolean"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": ["goal", "changed", "timezone"]
+      },
+      "ContextError": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string",
+            "const": "student_context_insufficient"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["error", "missing"]
+      }
+    }
+  },
+  "paths": {
+    "/auth/password-recovery": {
+      "post": {
+        "operationId": "requestPasswordRecovery",
+        "summary": "Solicitar enlace de recuperaci?n",
+        "description": "M?ximo dos solicitudes por IP y d?a UTC, persistido en PostgreSQL. Correo inexistente, cuenta suspendida o gimnasio inactivo reciben el mismo 202 y payload. La respuesta usa una ventana uniforme de 3500 ms con operaciones internas acotadas. Token SHA-256 en base, enlace v?lido por dos horas. Un enlace nuevo invalida el anterior. No devuelve tokens.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  }
+                },
+                "required": ["email"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Solicitud procesada sin revelar existencia de cuenta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "const": "Si la cuenta est? habilitada, recibir?s un enlace de recuperaci?n."
+                    }
+                  },
+                  "required": ["message"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Solicitud inv?lida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Tercera solicitud del origen durante el mismo d?a UTC.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password-reset": {
+      "post": {
+        "operationId": "resetPassword",
+        "summary": "Restablecer contrase?a con token",
+        "description": "Consume el token una sola vez, verifica vencimiento en el servidor y revoca todas las sesiones y enlaces previos dentro de la transacci?n. No cambia roles ni gimnasio.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "writeOnly": true
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 72,
+                    "writeOnly": true,
+                    "description": "Misma pol?tica HU06: may?scula, min?scula y n?mero. M?ximo 72 bytes UTF-8 por bcrypt."
+                  }
+                },
+                "required": ["token", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Contrase?a actualizada; todas las sesiones previas revocadas."
+          },
+          "400": {
+            "description": "weak_password o invalid_recovery_token gen?rico para token vencido, usado, reemplazado o inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password-change": {
+      "post": {
+        "operationId": "changeOwnPassword",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Cambiar contrase?a propia",
+        "description": "La identidad y la sesi?n actual provienen de la cookie; no admite ID de usuario. Revoca las otras sesiones y todos los enlaces de recuperaci?n, preserva la sesi?n actual.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 72,
+                    "writeOnly": true,
+                    "description": "Misma pol?tica HU06: may?scula, min?scula y n?mero. M?ximo 72 bytes UTF-8 por bcrypt."
+                  }
+                },
+                "required": ["password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Contrase?a actualizada."
+          },
+          "400": {
+            "description": "Solicitud o contrase?a inv?lida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi?n ausente, inv?lida, vencida o revocada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/goals": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getStudentGoals",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Objetivo vigente e historial del alumno",
+        "description": "Historial cronol?gico ascendente e intervalos [inicio, fin). current es null antes de declarar un objetivo. Alumno: s?lo sus propios datos. Entrenador: s?lo con asignaci?n vigente y mismo gimnasio, comprobados en cada lectura. Administrador sin otro rol autorizado: 403. atDate es null si no hay at o no hab?a objetivo vigente. Un at YYYY-MM-DD representa medianoche en la zona del gimnasio; un datetime exige offset.",
+        "parameters": [
+          {
+            "name": "at",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Objetivos, zona horaria y suficiencia del contexto modelado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fecha o par?metros inv?lidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi?n ausente, vencida o revocada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "declareOwnGoal",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Declarar o modificar objetivo propio",
+        "description": "S?lo alumno sobre s? mismo. Cambio transaccional, cierre e inicio en el mismo instante. Igual objetivo vigente es idempotente. ?ndice ?nico parcial garantiza un objetivo abierto. Reevaluaci?n y propuesta de cambio de tipo y esquemas para la rutina vigente, sin aplicar cambios sin revisi?n.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "$ref": "#/components/schemas/GoalType"
+                  }
+                },
+                "required": ["type"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Nuevo per?odo registrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalDeclaration"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "El mismo objetivo ya estaba vigente; no se duplic?.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalDeclaration"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Enum o par?metros inv?lidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi?n ausente, vencida o revocada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/routines/{routineId}/review": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "routineId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reviewRoutine",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Revisar rutina propuesta",
+        "description": "Contrato existente extendido con confirmGoalMismatch. RN-40 exige confirmaci?n si tipo y objetivo difieren, salvo rutina ACONDICIONAMIENTO_GENERAL. Comprobaci?n transaccional con el objetivo vigente al persistir. S?lo entrenador asignado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "result": {
+                    "type": "string",
+                    "enum": ["APROBADA", "APROBADA_CON_CAMBIOS", "RECHAZADA"]
+                  },
+                  "observation": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "confirmGoalMismatch": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": ["result"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revisi?n registrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "routineId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": ["VIGENTE", "RECHAZADA"]
+                    },
+                    "archivedRoutineId": {
+                      "type": ["string", "null"],
+                      "format": "uuid"
+                    }
+                  },
+                  "required": ["routineId", "state", "archivedRoutineId"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Par?metros inv?lidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rutina no encontrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Rutina no revisable o goal_mismatch_confirmation_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi?n ausente, vencida o revocada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/routine-generations": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "requestRoutineGeneration",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Solicitar generaci?n de rutina",
+        "description": "Contrato existente. HU10 impide despachar la generaci?n sin objetivo vigente y devuelve los campos de contexto que faltan.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "textoLibre": {
+                    "type": ["string", "null"],
+                    "minLength": 1
+                  },
+                  "parametros": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "objetivo": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "frecuenciaSemanal": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 7
+                          },
+                          "duracionMinutos": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "restricciones": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "default": []
+                          },
+                          "confianza": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1,
+                            "default": 1
+                          }
+                        },
+                        "required": [
+                          "objetivo",
+                          "frecuenciaSemanal",
+                          "duracionMinutos"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "regenerar": {
+                    "type": "boolean"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Solicitud idempotente existente."
+          },
+          "202": {
+            "description": "Solicitud enviada."
+          },
+          "400": {
+            "description": "Solicitud inv?lida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alumno no encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contexto insuficiente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Preferencias no realizables."
+          },
+          "503": {
+            "description": "Servicio no disponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi?n ausente, vencida o revocada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

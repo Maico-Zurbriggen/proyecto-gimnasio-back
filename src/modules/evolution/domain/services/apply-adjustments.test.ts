@@ -36,6 +36,22 @@ function days(): RoutineDayPlan[] {
 }
 
 describe('applyAdjustments (RN-88)', () => {
+  it('does not apply goal-dependent schemes without changing and reviewing the complete routine type', () => {
+    expect(() =>
+      applyAdjustments(days(), [
+        {
+          id: 'goal-scheme',
+          type: 'ESQUEMA',
+          routineExerciseId: 're-1',
+          proposedValue: {
+            requires_type_change: true,
+            min_repetitions: 6,
+            max_repetitions: 12,
+          },
+        },
+      ]),
+    ).toThrow(AdjustmentNotApplicableError);
+  });
   it('applies load and scheme to working sets only, keeping the source intact', () => {
     const source = days();
     const result = applyAdjustments(source, [

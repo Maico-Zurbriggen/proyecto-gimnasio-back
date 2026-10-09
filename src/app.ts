@@ -15,6 +15,24 @@ import { ResolveSessionUseCase } from './modules/auth/application/use-cases/reso
 import { AuthController } from './modules/auth/infrastructure/http/auth.controller';
 import { createAuthRouter } from './modules/auth/infrastructure/http/auth.routes';
 import { PrismaAuthRepository } from './modules/auth/infrastructure/persistence/prisma-auth.repository';
+import type {
+  PasswordRecoveryRepository,
+  RecoveryMailer,
+} from './modules/auth/application/ports/password-recovery.repository';
+import {
+  ChangePasswordUseCase,
+  RequestPasswordRecoveryUseCase,
+  ResetPasswordUseCase,
+} from './modules/auth/application/use-cases/password-recovery.use-cases';
+import { PasswordRecoveryController } from './modules/auth/infrastructure/http/password-recovery.controller';
+import { createPasswordRecoveryRouter } from './modules/auth/infrastructure/http/password-recovery.routes';
+import { PrismaPasswordRecoveryRepository } from './modules/auth/infrastructure/persistence/prisma-password-recovery.repository';
+import { HttpRecoveryMailer } from './modules/auth/infrastructure/email/http-recovery.mailer';
+import type { GoalsRepository } from './modules/goals/application/ports/goals.repository';
+import { GoalsUseCases } from './modules/goals/application/use-cases/goals.use-cases';
+import { GoalsController } from './modules/goals/infrastructure/http/goals.controller';
+import { createGoalsRouter } from './modules/goals/infrastructure/http/goals.routes';
+import { PrismaGoalsRepository } from './modules/goals/infrastructure/persistence/prisma-goals.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
 import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
 import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
@@ -98,6 +116,9 @@ import { requireStudentMeasurementAccess } from './shared/middleware/student-mea
 class CorsOriginError extends Error {}
 
 interface AppDependencies {
+  passwordRecoveryRepository?: PasswordRecoveryRepository;
+  recoveryMailer?: RecoveryMailer;
+  goalsRepository?: GoalsRepository;
   localGenerationTesting?: boolean;
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
@@ -144,6 +165,9 @@ function createCorsOptions(allowedOrigins: readonly string[]): CorsOptions {
 }
 
 export function createApp({
+  passwordRecoveryRepository,
+  recoveryMailer,
+  goalsRepository,
   localGenerationTesting = isLocalGenerationTestingEnabled(),
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
@@ -168,6 +192,10 @@ export function createApp({
   const app = express();
 
   app.disable('x-powered-by');
+  // Configurar sólo según la topología del proxy que realmente protege la API.
+  const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+  if (Number.isInteger(proxyHops) && proxyHops > 0 && proxyHops <= 5)
+    app.set('trust proxy', proxyHops);
   app.use(cors(createCorsOptions(allowedOrigins)));
   app.use(express.json({ limit: '1mb' }));
 
@@ -197,6 +225,28 @@ export function createApp({
   );
 
   app.use(authenticateWithSession);
+  const recoveryRepo =
+    passwordRecoveryRepository ?? new PrismaPasswordRecoveryRepository(prisma);
+  app.use(
+    createPasswordRecoveryRouter(
+      new PasswordRecoveryController(
+        new RequestPasswordRecoveryUseCase(
+          recoveryRepo,
+          recoveryMailer ?? new HttpRecoveryMailer(),
+          resolvedClock,
+        ),
+        new ResetPasswordUseCase(recoveryRepo, resolvedClock),
+        new ChangePasswordUseCase(recoveryRepo, resolvedClock),
+      ),
+    ),
+  );
+  app.use(
+    createGoalsRouter(
+      new GoalsController(
+        new GoalsUseCases(goalsRepository ?? new PrismaGoalsRepository(prisma)),
+      ),
+    ),
+  );
 
   app.use(
     createAuthRouter(
@@ -376,7 +426,8 @@ export function createApp({
       return;
     }
 
-    console.error('Unhandled request error', error);
+    // Un error de infraestructura puede incluir argumentos Prisma con secretos.
+    console.error('Unhandled request error');
     response.status(500).json({ error: 'internal_server_error' });
   };
 

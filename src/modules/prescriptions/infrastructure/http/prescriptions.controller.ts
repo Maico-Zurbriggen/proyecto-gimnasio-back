@@ -9,6 +9,7 @@ import type {
 import type { ReviewRoutineUseCase } from '../../application/use-cases/review-routine.use-case';
 import {
   EmptyTemplateError,
+  GoalMismatchConfirmationError,
   PendingProposalError,
   RoutineNotFoundError,
   RoutineNotReviewableError,
@@ -28,6 +29,10 @@ function sendPrescriptionError(
   res: Response,
   next: NextFunction,
 ): void {
+  if (error instanceof GoalMismatchConfirmationError) {
+    res.status(409).json({ error: 'goal_mismatch_confirmation_required' });
+    return;
+  }
   if (error instanceof StudentNotFoundError) {
     res.status(404).json({ error: 'student_not_found' });
     return;
@@ -196,6 +201,7 @@ export class PrescriptionsController {
         studentId: params.data.studentId,
         routineId: params.data.routineId,
         result: body.data.result,
+        confirmGoalMismatch: body.data.confirmGoalMismatch,
         observation: body.data.observation,
       });
       res.status(200).json(result);

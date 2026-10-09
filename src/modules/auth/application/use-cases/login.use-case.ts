@@ -64,6 +64,7 @@ export class LoginUseCase {
 
     await this.auth.createSession({
       userId: credentials.id,
+      expectedPasswordHash: credentials.passwordHash,
       tokenHash: hashearToken(token),
       expiresAt,
     });

@@ -13,6 +13,7 @@ export interface ReviewRoutineInput {
   routineId: string;
   result: RoutineReviewResult;
   observation?: string;
+  confirmGoalMismatch?: boolean;
 }
 
 export interface ReviewRoutineOutput {
@@ -59,6 +60,7 @@ export class ReviewRoutineUseCase {
       result: input.result,
       observation: input.observation?.trim() ? input.observation.trim() : null,
       previousActiveRoutineId: vigenteAnterior,
+      confirmGoalMismatch: input.confirmGoalMismatch,
     });
 
     return {

@@ -170,6 +170,72 @@ Antes de cambiar el esquema, consultar [operations/local-database.md](https://gi
 
 ## Verificación
 
+### Recuperación de credenciales y objetivos (HU09 y HU10)
+
+El contrato de estas historias y de las operaciones afectadas está en
+[`openapi.json`](openapi.json). La recuperación usa el
+[API HTTP de Resend](https://resend.com/docs/api-reference/emails/send-email)
+sin nuevas dependencias. Configurar `RECOVERY_EMAIL_API_KEY`,
+`RECOVERY_EMAIL_FROM` (remitente verificado) y `RECOVERY_PAGE_URL` (URL de la
+pantalla que recibe el token; HTTPS en despliegues). No se incluyen credenciales
+en el repositorio. Configurar `TRUST_PROXY_HOPS` sólo con la cantidad exacta de
+proxies confiables del despliegue; localmente vale `0`. Esto permite limitar por
+IP real sin aceptar encabezados de origen arbitrarios.
+
+- `POST /auth/password-recovery`, `{ "email": "alumno@gimnasio.test" }`: `202`
+  genérico para cualquier cuenta; máximo dos solicitudes por IP y día UTC,
+  persistido en PostgreSQL. La tercera devuelve `429`. La respuesta espera una
+  ventana de 3500 ms con presupuesto de transacción de 1250 ms, espera de conexión
+  de 250 ms y timeout de correo de 1500 ms para ocultar diferencias de trabajo.
+  Una caída de infraestructura puede exceder esa ventana: verificar latencia del
+  despliegue como parte de la calibración operativa. Fallos de entrega reciben la
+  misma respuesta pública y un diagnóstico sin datos de la cuenta. Se selecciona
+  la misma cuenta por correo que en el login, ordenada por ID si hay varias.
+- `POST /auth/password-reset`, `{ "token": "...", "password": "..." }`:
+  `204` al restablecer; el enlace vence estrictamente a las dos horas en el
+  servidor, se usa una sola vez y revoca todas las sesiones previas. Nuevo enlace
+  y cambio autenticado invalidan los enlaces anteriores.
+- `POST /auth/password-change`, `{ "password": "..." }`: requiere cookie de
+  sesión válida, cambia sólo la contraseña propia y preserva únicamente esa
+  sesión. Los tres flujos reutilizan la política de HU06 y bcrypt con sal única;
+  rechazan contraseñas de más de 72 bytes UTF-8 para evitar truncamiento.
+- `POST /students/:studentId/goals`, `{ "type": "FUERZA" }`: sólo alumno sobre
+  sí mismo; `201` al declarar/cambiar y `200` si ya tiene ese objetivo. Los otros
+  valores son `HIPERTROFIA`, `RESISTENCIA_MUSCULAR` y `ACONDICIONAMIENTO_GENERAL`.
+- `GET /students/:studentId/goals`: devuelve `current` nulo antes de la primera
+  declaración, `history` cronológico, `timezone` y el contexto modelado.
+  `?at=2026-10-09` consulta medianoche del gimnasio; un datetime debe incluir
+  offset. Los períodos son `[inicio, fin)`. El entrenador sólo puede leer con
+  asignación vigente y del mismo gimnasio; el administrador no tiene acceso por
+  ese rol. La generación se rechaza con `409 student_context_insufficient` y
+  `missing` si falta objetivo, nivel o días disponibles.
+
+Un cambio efectivo de objetivo registra la reevaluación de la rutina vigente y,
+si corresponde, crea la propuesta de cambio de tipo con los esquemas de RN-39a,
+notificando al alumno y al entrenador. Sin asignación, queda `BLOQUEADA`. La rutina
+actual conserva su prescripción. El ajuste de estructura requiere revisión manual
+del entrenador; los esquemas asociados no se pueden aplicar de forma aislada.
+Las propuestas anteriores por cambio de objetivo se invalidan conservando su
+historial. Al revisar una rutina propuesta de tipo distinto del objetivo, salvo
+`ACONDICIONAMIENTO_GENERAL`, se exige `confirmGoalMismatch: true`; de lo contrario
+la API devuelve `409 goal_mismatch_confirmation_required`.
+
+La migración `20261009000000_password_recovery_goal_timestamps` agrega el contador
+de recuperación y convierte las fechas históricas de objetivos a timestamps
+representando medianoche en la zona del gimnasio. Conserva el índice único
+parcial existente. Cambia la precisión temporal del contrato de objetivos: los
+consumidores deben manejar fechas ISO con hora y la zona provista. No ejecutar
+esta migración sobre bases compartidas desde la aplicación; CI mantiene la vía
+de promoción existente.
+
+Las pruebas PostgreSQL de estas historias se activan con
+`HU09_HU10_TEST_DATABASE_URL`, exclusivamente contra una base efímera local llamada
+`gym_ci`, `gym_migrations` o `gym_hu09_hu10`, con el historial de migraciones aplicado.
+Sin esa variable se omiten; las pruebas unitarias y API no requieren base. CI la
+configura para su PostgreSQL 17 efímero. No usar Neon ni la base de trabajo local
+para estas pruebas. Cualquier actualización documental transversal debe hacerse
+en el repositorio canónico en un PR separado; esta tarea modifica sólo backend.
+
 ```bash
 npm run check
 ```

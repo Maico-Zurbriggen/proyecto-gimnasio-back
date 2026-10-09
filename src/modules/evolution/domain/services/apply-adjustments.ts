@@ -74,6 +74,11 @@ function applyToExercise(
       return;
     }
     case 'ESQUEMA': {
+      if (field(value, 'requires_type_change') === true) {
+        fail(
+          'goal change requires the trainer to review the new routine type and its complete structure',
+        );
+      }
       const min = field(value, 'min_repetitions');
       const max = field(value, 'max_repetitions');
       if (!isInteger(min, 1) || !isInteger(max, min as number)) {
