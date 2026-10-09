@@ -385,6 +385,16 @@ model PasswordResetToken {
   @@schema("app")
 }
 
+model PasswordRecoveryLimit {
+  originHash String   @map("origin_hash")
+  day        DateTime @db.Date
+  attempts   Int
+
+  @@id([originHash, day])
+  @@map("password_recovery_limits")
+  @@schema("app")
+}
+
 model Equipment {
   code         String              @id
   name         String              @unique
@@ -464,8 +474,8 @@ model Goal {
   id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   studentId String          @map("student_id") @db.Uuid
   type      TrainingPurpose
-  startsOn  DateTime        @map("starts_on") @db.Date
-  endsOn    DateTime?       @map("ends_on") @db.Date
+  startsOn  DateTime        @map("starts_on") @db.Timestamptz(6)
+  endsOn    DateTime?       @map("ends_on") @db.Timestamptz(6)
   student   StudentProfile  @relation(fields: [studentId], references: [userId], onDelete: Restrict)
 
   @@index([studentId, startsOn])

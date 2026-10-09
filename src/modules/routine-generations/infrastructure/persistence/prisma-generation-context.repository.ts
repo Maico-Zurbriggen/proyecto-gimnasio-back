@@ -33,7 +33,10 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       endsOn === null || endsOn >= asOf;
 
     const objetivosActivos = student.goals
-      .filter((goal) => isActive(goal.endsOn))
+      .filter(
+        (goal) =>
+          goal.startsOn <= asOf && (goal.endsOn === null || goal.endsOn > asOf),
+      )
       .map((goal) => goal.type.toLowerCase());
 
     const condiciones = student.physicalConditions

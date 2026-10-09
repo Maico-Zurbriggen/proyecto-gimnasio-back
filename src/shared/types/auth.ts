@@ -4,6 +4,7 @@ export interface AuthUser {
   id: string;
   gymId: string;
   roles: UserRole[];
+  sessionId?: string;
 }
 
 declare global {
