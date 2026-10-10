@@ -41,6 +41,56 @@ export class PrismaRoutineGenerationsRepository implements RoutineGenerationsRep
     } satisfies Prisma.InputJsonObject;
     const preferences = {
       schema_version: '2.0',
+      ...(input.preferences.generation_task
+        ? {
+            generation_task: JSON.parse(
+              JSON.stringify(input.preferences.generation_task),
+            ) as Prisma.InputJsonObject,
+          }
+        : {}),
+      ...(input.preferences.routine_renewal ? { routine_renewal: true } : {}),
+      ...(input.preferences.routine_renewal_full_catalog
+        ? { routine_renewal_full_catalog: true }
+        : {}),
+      ...(input.preferences.gym_generation_settings
+        ? {
+            gym_generation_settings: {
+              revision: input.preferences.gym_generation_settings.revision,
+              settings: input.preferences.gym_generation_settings.settings
+                ? { ...input.preferences.gym_generation_settings.settings }
+                : null,
+            },
+          }
+        : {}),
+      ...(input.preferences.routine_renewal_structure
+        ? {
+            routine_renewal_structure: {
+              routine_type:
+                input.preferences.routine_renewal_structure.routine_type,
+              target_weekly_frequency:
+                input.preferences.routine_renewal_structure
+                  .target_weekly_frequency,
+              days: input.preferences.routine_renewal_structure.days.map(
+                (day) => ({
+                  name: day.name,
+                  dominant_pattern: day.dominant_pattern,
+                  exercises: day.exercises.map((exercise) => ({
+                    catalog_index: exercise.catalog_index,
+                    exercise_name: exercise.exercise_name,
+                    note: exercise.note,
+                    sets: exercise.sets.map((set) => ({
+                      min_repetitions: set.min_repetitions,
+                      max_repetitions: set.max_repetitions,
+                      suggested_load: set.suggested_load,
+                      rest_seconds: set.rest_seconds,
+                      warmup: set.warmup,
+                    })),
+                  })),
+                }),
+              ),
+            },
+          }
+        : {}),
       ...(input.preferences.local_test_regeneration
         ? { local_test_regeneration: input.preferences.local_test_regeneration }
         : {}),

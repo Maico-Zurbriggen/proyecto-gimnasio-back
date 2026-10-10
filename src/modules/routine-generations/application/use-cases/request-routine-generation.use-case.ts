@@ -5,7 +5,11 @@ import {
   RoutineRegenerationNotAllowedError,
   StudentNotFoundError,
 } from '../../domain/errors/routine-generation-errors';
-import type { RoutineGenerationParameters } from '../dto/routine-generation-context.dto';
+import type {
+  RoutineGenerationParameters,
+  RoutineGenerationTask,
+  RoutineRenewalStructureInput,
+} from '../dto/routine-generation-context.dto';
 import type { GenerationContextRepository } from '../ports/generation-context.repository';
 import type { IdGenerator } from '../ports/id-generator';
 import type { RoutineGenerationGateway } from '../ports/routine-generation.gateway';
@@ -18,6 +22,13 @@ export interface RequestRoutineGenerationCommand {
   parameters?: RoutineGenerationParameters;
   idempotencyKey?: string;
   regenerate?: boolean;
+  /** Internal renewal jobs use the current prescription as their source of truth. */
+  routineRenewal?: boolean;
+  routineRenewalStructure?: RoutineRenewalStructureInput;
+  /** Internal task context; public HTTP input cannot select the prompt. */
+  generationTask?: RoutineGenerationTask<RoutineRenewalStructureInput>;
+  /** Internal jobs persist their durable link before dispatching. Not exposed by HTTP schemas. */
+  deferDispatch?: boolean;
 }
 
 export class RequestRoutineGenerationUseCase {
@@ -38,7 +49,11 @@ export class RequestRoutineGenerationUseCase {
     if (command.regenerate && !this.allowLocalRegeneration) {
       throw new RoutineRegenerationNotAllowedError();
     }
-    if (!command.freeText && !command.parameters) {
+    if (
+      !command.freeText &&
+      !command.parameters &&
+      (!command.generationTask || command.generationTask.kind === 'INITIAL')
+    ) {
       throw new MissingGenerationInputError();
     }
 
@@ -60,6 +75,62 @@ export class RequestRoutineGenerationUseCase {
         'El administrador debe habilitar ejercicios del gimnasio.',
       );
 
+    const sortedGenerationCatalog = [...generationCatalog].sort(
+      (left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+    );
+    const renewalExerciseIds = new Set(
+      command.routineRenewalStructure?.days.flatMap((day) =>
+        day.exercises.map((exercise) => exercise.exerciseId),
+      ) ?? [],
+    );
+    const orderedGenerationCatalog = command.routineRenewal
+      ? [
+          ...sortedGenerationCatalog.filter((exercise) =>
+            renewalExerciseIds.has(exercise.id),
+          ),
+          ...sortedGenerationCatalog.filter(
+            (exercise) => !renewalExerciseIds.has(exercise.id),
+          ),
+        ]
+      : sortedGenerationCatalog;
+    const catalogById = new Map(
+      orderedGenerationCatalog.map((exercise, index) => [
+        exercise.id,
+        { exercise, index },
+      ]),
+    );
+    const mapStructure = (structure: RoutineRenewalStructureInput) => ({
+      routine_type: structure.routineType,
+      target_weekly_frequency: structure.targetWeeklyFrequency,
+      days: structure.days.map((day) => ({
+        name: day.name,
+        dominant_pattern: day.dominantPattern,
+        exercises: day.exercises.map((exercise) => {
+          const mapped = catalogById.get(exercise.exerciseId);
+          return {
+            catalog_index: mapped?.index ?? null,
+            exercise_name: mapped?.exercise.nombre ?? null,
+            note: exercise.note,
+            sets: exercise.sets.map((set) => ({
+              min_repetitions: set.minRepetitions,
+              max_repetitions: set.maxRepetitions,
+              suggested_load: set.suggestedLoad,
+              rest_seconds: set.restSeconds,
+              warmup: set.warmup,
+            })),
+          };
+        }),
+      })),
+    });
+    const routineRenewalStructure = command.routineRenewalStructure
+      ? mapStructure(command.routineRenewalStructure)
+      : undefined;
+    const task = command.generationTask;
+    const generationTask: RoutineGenerationTask | undefined =
+      task?.kind === 'TRAINER_REGENERATION'
+        ? { ...task, previous_candidate: mapStructure(task.previous_candidate) }
+        : (task ?? (command.routineRenewal ? undefined : { kind: 'INITIAL' }));
+
     const replacement = command.regenerate
       ? {
           local_test_regeneration: {
@@ -75,6 +146,17 @@ export class RequestRoutineGenerationUseCase {
       minimizedContext: studentContext.minimizedContext,
       preferences: {
         schema_version: '2.0',
+        ...(generationTask ? { generation_task: generationTask } : {}),
+        ...(command.routineRenewal ? { routine_renewal: true } : {}),
+        ...(command.routineRenewal
+          ? { routine_renewal_full_catalog: true }
+          : {}),
+        ...(studentContext.generationSettings
+          ? { gym_generation_settings: studentContext.generationSettings }
+          : {}),
+        ...(routineRenewalStructure
+          ? { routine_renewal_structure: routineRenewalStructure }
+          : {}),
         ...replacement,
         free_text: command.freeText ?? null,
         parameters: command.parameters
@@ -86,33 +168,29 @@ export class RequestRoutineGenerationUseCase {
               confidence: command.parameters.confianza,
             }
           : null,
-        allowed_catalog: generationCatalog
-          .sort((left, right) =>
-            left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
-          )
-          .map((exercise) => ({
-            id: exercise.id,
-            name: exercise.nombre,
-            movement_pattern: exercise.patronMovimiento,
-            instructions: exercise.instrucciones ?? '',
-            description: exercise.descripcion ?? null,
-            tips: exercise.consejos ?? [],
-            difficulty_level: exercise.dificultad ?? '',
-            unilateral: exercise.unilateral ?? false,
-            revision: exercise.revision ?? 1,
-            ...(exercise.availabilityUpdatedAt
-              ? { availability_updated_at: exercise.availabilityUpdatedAt }
-              : {}),
-            ...(exercise.availabilityRevision
-              ? { availability_revision: exercise.availabilityRevision }
-              : {}),
-            secondary_muscles: exercise.musculosSecundarios ?? [],
-            equipment: exercise.equipamiento ?? [],
-            joints: exercise.articulaciones ?? [],
-            ...(exercise.musculosPrimarios
-              ? { primary_muscles: exercise.musculosPrimarios }
-              : {}),
-          })),
+        allowed_catalog: orderedGenerationCatalog.map((exercise) => ({
+          id: exercise.id,
+          name: exercise.nombre,
+          movement_pattern: exercise.patronMovimiento,
+          instructions: exercise.instrucciones ?? '',
+          description: exercise.descripcion ?? null,
+          tips: exercise.consejos ?? [],
+          difficulty_level: exercise.dificultad ?? '',
+          unilateral: exercise.unilateral ?? false,
+          revision: exercise.revision ?? 1,
+          ...(exercise.availabilityUpdatedAt
+            ? { availability_updated_at: exercise.availabilityUpdatedAt }
+            : {}),
+          ...(exercise.availabilityRevision
+            ? { availability_revision: exercise.availabilityRevision }
+            : {}),
+          secondary_muscles: exercise.musculosSecundarios ?? [],
+          equipment: exercise.equipamiento ?? [],
+          joints: exercise.articulaciones ?? [],
+          ...(exercise.musculosPrimarios
+            ? { primary_muscles: exercise.musculosPrimarios }
+            : {}),
+        })),
       },
       ownership: {
         studentId: command.studentId,
@@ -127,7 +205,10 @@ export class RequestRoutineGenerationUseCase {
       requestedByUserId: command.requestedByUserId,
     });
 
-    if (request.status === 'PENDIENTE' || request.status === 'PROCESANDO') {
+    if (
+      !command.deferDispatch &&
+      (request.status === 'PENDIENTE' || request.status === 'PROCESANDO')
+    ) {
       await this.gateway.dispatchGeneration(request.requestId);
     }
 

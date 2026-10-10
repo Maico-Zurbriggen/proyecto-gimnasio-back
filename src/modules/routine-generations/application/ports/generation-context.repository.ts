@@ -5,6 +5,7 @@ import type {
 
 export interface StudentGenerationContext {
   gymId: string;
+  generationSettings?: import('../../../gyms/domain/generation-settings').GenerationSettingsSnapshot;
   minimizedContext: MinimizedContext;
 }
 

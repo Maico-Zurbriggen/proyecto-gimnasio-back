@@ -5,6 +5,7 @@ export const proposalParamsSchema = z.object({
 });
 
 export const resolutionBodySchema = z.object({
+  candidateRequestId: z.string().uuid().optional(),
   decision: z.enum(['ACEPTADA_TOTAL', 'ACEPTADA_PARCIAL', 'RECHAZADA']),
   acceptedAdjustmentIds: z.array(z.string().uuid()).optional(),
   reason: z.string().max(1000).optional(),

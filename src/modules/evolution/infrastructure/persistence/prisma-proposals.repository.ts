@@ -3,7 +3,11 @@ import type {
   MovementPattern,
   Prisma,
   PrismaClient,
+  TrainingPurpose,
 } from '@prisma/client';
+import type { ValidGeneratedRoutine } from '../../../routine-generations/domain/services/generated-routine-validator';
+import type { RenewalEvaluation } from '../../application/ports/routine-renewals.repository';
+import { assertGenerationContextCurrent } from '../../../routine-generations/infrastructure/persistence/generation-context-validity';
 
 import { isUuid } from '../../../../shared/types/uuid';
 import type {
@@ -15,6 +19,7 @@ import type {
 } from '../../application/ports/proposals.repository';
 
 const proposalInclude = {
+  renewalCycle: true,
   student: {
     include: {
       user: { select: { displayName: true } },
@@ -95,6 +100,19 @@ function toRecord(row: ProposalRow): ProposalRecord {
       supportingData: adjustment.supportingData,
       state: adjustment.state,
     })),
+    ...(row.renewalCycle?.requestId
+      ? {
+          renewal: {
+            evaluation: row.renewalCycle
+              .evaluation as unknown as RenewalEvaluation,
+            candidate: row.adjustments.find(
+              (adjustment) => adjustment.type === 'ESTRUCTURA',
+            )!.proposedValue as unknown as ValidGeneratedRoutine,
+            sourceVersionId: row.renewalCycle.routineVersionId,
+            requestId: row.renewalCycle.requestId,
+          },
+        }
+      : {}),
     measurementDates: row.student.bodyMeasurements.map(
       (measurement) => measurement.measuredOn,
     ),
@@ -223,15 +241,36 @@ export class PrismaProposalsRepository implements ProposalsRepository {
               day.exercises.map((exercise) => exercise.id),
             ) ?? [],
           );
+          const renewal = command.structure
+            ? await tx.routineRenewalCycle.findUnique({
+                where: { proposalId: command.proposalId },
+                include: { request: true },
+              })
+            : null;
+          if (command.structure) {
+            if (!renewal?.request || renewal.routineVersionId !== current?.id)
+              throw new CatalogError('routine_review_conflict', 409);
+            await assertGenerationContextCurrent(
+              tx,
+              renewal.request,
+              routine.studentId,
+              command.newVersionDays.flatMap((day) =>
+                day.exercises.map((exercise) => exercise.exerciseId),
+              ),
+              command.resolvedAt,
+              true,
+            );
+          }
           if (
             activeRoutine.state !== 'VIGENTE' ||
             !assignment ||
             !current ||
-            command.newVersionDays.some((day) =>
-              day.exercises.some(
-                (exercise) => !sourceIds.has(exercise.sourceId),
-              ),
-            )
+            (!renewal &&
+              command.newVersionDays.some((day) =>
+                day.exercises.some(
+                  (exercise) => !sourceIds.has(exercise.sourceId),
+                ),
+              ))
           )
             throw new CatalogError('routine_review_conflict', 409);
           await assertGymExercisesAvailable(
@@ -251,11 +290,32 @@ export class PrismaProposalsRepository implements ProposalsRepository {
         if (locked[0]?.state !== 'PENDIENTE') {
           return { resolved: false, resultingVersionNumber: null };
         }
+        const regenerating = await tx.routineProposalRegeneration.findFirst({
+          where: { proposalId: command.proposalId, state: 'PENDIENTE' },
+        });
+        if (regenerating)
+          throw new CatalogError('proposal_regeneration_pending', 409);
+        if (command.candidateRequestId) {
+          const cycle = await tx.routineRenewalCycle.findUnique({
+            where: { proposalId: command.proposalId },
+          });
+          if (cycle?.requestId !== command.candidateRequestId)
+            throw new CatalogError('proposal_candidate_changed', 409);
+        }
 
         let resultingVersionId: string | null = null;
         let resultingVersionNumber: number | null = null;
 
         if (plan.reviewResult && command.routineId && command.newVersionDays) {
+          if (command.structure) {
+            await tx.routine.update({
+              where: { id: command.routineId },
+              data: {
+                routineType: command.structure.routineType as TrainingPurpose,
+                targetWeeklyFrequency: command.structure.targetWeeklyFrequency,
+              },
+            });
+          }
           const last = await tx.routineVersion.aggregate({
             where: { routineId: command.routineId },
             _max: { versionNumber: true },

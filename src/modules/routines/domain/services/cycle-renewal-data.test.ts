@@ -5,6 +5,7 @@ import {
   contarFaltasConsecutivas,
   evaluarDatosDeRenovacion,
   FALTAS_PARA_BLOQUEO,
+  hayDatosActualizadosEnElCiclo,
   hayMedicionEnElCiclo,
   type PropuestaDeRenovacion,
 } from './cycle-renewal-data';
@@ -50,6 +51,101 @@ describe('cycle-renewal-data domain service', () => {
     it('ignores the time of day and compares whole calendar days', () => {
       const mediciones = [{ measuredOn: new Date('2026-07-10T23:59:00Z') }];
       expect(hayMedicionEnElCiclo(mediciones, inicioDelCiclo)).toBe(false);
+    });
+  });
+
+  describe('hayDatosActualizadosEnElCiclo (T2 estricto RN-130)', () => {
+    const finDelCiclo = new Date('2026-09-08T00:00:00Z');
+
+    it('requires weight and height confirmation inside the window', () => {
+      expect(
+        hayDatosActualizadosEnElCiclo(
+          [
+            {
+              type: 'PESO_CORPORAL',
+              measuredOn: new Date('2026-08-01T00:00:00Z'),
+            },
+          ],
+          new Date('2026-08-02T00:00:00Z'),
+          inicioDelCiclo,
+          finDelCiclo,
+        ),
+      ).toBe(true);
+    });
+
+    it('a perimeter alone does not count as updated data', () => {
+      expect(
+        hayDatosActualizadosEnElCiclo(
+          [
+            {
+              type: 'PERIMETRO_CINTURA',
+              measuredOn: new Date('2026-08-01T00:00:00Z'),
+            },
+          ],
+          new Date('2026-08-02T00:00:00Z'),
+          inicioDelCiclo,
+          finDelCiclo,
+        ),
+      ).toBe(false);
+    });
+
+    it('weight without height confirmation does not count', () => {
+      expect(
+        hayDatosActualizadosEnElCiclo(
+          [
+            {
+              type: 'PESO_CORPORAL',
+              measuredOn: new Date('2026-08-01T00:00:00Z'),
+            },
+          ],
+          null,
+          inicioDelCiclo,
+          finDelCiclo,
+        ),
+      ).toBe(false);
+    });
+
+    it('height without weight does not count', () => {
+      expect(
+        hayDatosActualizadosEnElCiclo(
+          [],
+          new Date('2026-08-02T00:00:00Z'),
+          inicioDelCiclo,
+          finDelCiclo,
+        ),
+      ).toBe(false);
+    });
+
+    it('ignores weight on the cycle start day', () => {
+      expect(
+        hayDatosActualizadosEnElCiclo(
+          [
+            {
+              type: 'PESO_CORPORAL',
+              measuredOn: new Date('2026-07-10T00:00:00Z'),
+            },
+          ],
+          new Date('2026-08-02T00:00:00Z'),
+          inicioDelCiclo,
+          finDelCiclo,
+        ),
+      ).toBe(false);
+    });
+
+    it('ignores data after the cycle close', () => {
+      expect(
+        hayDatosActualizadosEnElCiclo(
+          [
+            {
+              type: 'PESO_CORPORAL',
+              measuredOn: new Date('2026-09-09T00:00:00Z'),
+            },
+          ],
+          new Date('2026-09-09T00:00:00Z'),
+          inicioDelCiclo,
+          finDelCiclo,
+        ),
+      ).toBe(false);
     });
   });
 

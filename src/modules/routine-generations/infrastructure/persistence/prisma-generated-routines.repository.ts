@@ -41,6 +41,7 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
       where: { id: owner.requestId },
       include: {
         ownership: true,
+        renewalCycle: { select: { id: true } },
         attempts: {
           orderBy: { attemptNumber: 'desc' },
           take: 1,
@@ -52,6 +53,7 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     });
     if (
       !request ||
+      request.renewalCycle ||
       request.ownership?.studentId !== owner.studentId ||
       request.ownership.requestedByUserId !== owner.requestedByUserId
     ) {

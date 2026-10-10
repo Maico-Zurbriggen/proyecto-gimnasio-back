@@ -1,4 +1,14 @@
 import { resolve } from 'node:path';
+import {
+  GenerationSettingsService,
+  type GenerationSettingsRepository,
+} from './modules/gyms/application/generation-settings.service';
+import { PrismaGenerationSettingsRepository } from './modules/gyms/infrastructure/persistence/prisma-generation-settings.repository';
+import { createGenerationSettingsRouter } from './modules/gyms/infrastructure/http/generation-settings.routes';
+import type { ProposalRegenerationsRepository } from './modules/evolution/application/ports/proposal-regenerations.repository';
+import { PrismaProposalRegenerationsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposal-regenerations.repository';
+import { RegenerateProposalUseCase } from './modules/evolution/application/use-cases/regenerate-proposal.use-case';
+import { createProposalRegenerationsRouter } from './modules/evolution/infrastructure/http/proposal-regenerations.routes';
 import type { ExerciseCatalogRepository } from './modules/exercise-catalog/application/catalog.repository';
 import { ExerciseCatalogService } from './modules/exercise-catalog/application/catalog.service';
 import { ExerciseCatalogController } from './modules/exercise-catalog/infrastructure/http/catalog.controller';
@@ -22,6 +32,10 @@ import { ResolveSessionUseCase } from './modules/auth/application/use-cases/reso
 import { AuthController } from './modules/auth/infrastructure/http/auth.controller';
 import { createAuthRouter } from './modules/auth/infrastructure/http/auth.routes';
 import { PrismaAuthRepository } from './modules/auth/infrastructure/persistence/prisma-auth.repository';
+import type { RoutineRenewalsRepository } from './modules/evolution/application/ports/routine-renewals.repository';
+import { RenewRoutineCyclesUseCase } from './modules/evolution/application/use-cases/renew-routine-cycles.use-case';
+import { createRoutineRenewalsRouter } from './modules/evolution/infrastructure/http/routine-renewals.routes';
+import { PrismaRoutineRenewalsRepository } from './modules/evolution/infrastructure/persistence/prisma-routine-renewals.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
 import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
 import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
@@ -112,6 +126,8 @@ import { requireStudentMeasurementAccess } from './shared/middleware/student-mea
 class CorsOriginError extends Error {}
 
 interface AppDependencies {
+  generationSettingsRepository?: GenerationSettingsRepository;
+  proposalRegenerationsRepository?: ProposalRegenerationsRepository;
   exerciseCatalogRepository?: ExerciseCatalogRepository;
   catalogAssetsDirectory?: string;
   localGenerationTesting?: boolean;
@@ -125,6 +141,7 @@ interface AppDependencies {
   studentMeasurementAccess?: StudentMeasurementAccess;
   measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
+  routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
   prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
@@ -160,6 +177,8 @@ function createCorsOptions(allowedOrigins: readonly string[]): CorsOptions {
 }
 
 export function createApp({
+  generationSettingsRepository,
+  proposalRegenerationsRepository,
   exerciseCatalogRepository,
   catalogAssetsDirectory = process.env.CATALOG_ASSETS_DIR ??
     resolve(process.cwd(), '.catalog-private/assets'),
@@ -174,6 +193,7 @@ export function createApp({
   studentMeasurementAccess,
   measurementsRepository,
   proposalsRepository,
+  routineRenewalsRepository,
   invitationsRepository,
   prescriptionsRepository,
   trainerAssignments,
@@ -378,6 +398,22 @@ export function createApp({
     ),
   );
 
+  app.use(
+    createRoutineRenewalsRouter(
+      new RenewRoutineCyclesUseCase(
+        routineRenewalsRepository ??
+          new PrismaRoutineRenewalsRepository(prisma),
+        new EvaluateMeasurementCheckpointsUseCase(
+          resolvedMeasurementCheckpointsRepo,
+          resolvedClock,
+        ),
+        requestRoutineGenerationUseCase,
+        resolvedRoutineGenerationGateway,
+        resolvedClock,
+      ),
+    ),
+  );
+
   // HU02 - T1: carga de medidas del alumno desde el aviso de renovación.
   const resolvedMeasurementsRepo =
     measurementsRepository ?? new PrismaMeasurementsRepository(prisma);
@@ -400,6 +436,27 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+  app.use(
+    createGenerationSettingsRouter(
+      new GenerationSettingsService(
+        generationSettingsRepository ??
+          new PrismaGenerationSettingsRepository(prisma),
+      ),
+    ),
+  );
+  app.use(
+    createProposalRegenerationsRouter(
+      new RegenerateProposalUseCase(
+        proposalRegenerationsRepository ??
+          new PrismaProposalRegenerationsRepository(prisma),
+        resolvedProposalsRepo,
+        resolvedAssignments,
+        requestRoutineGenerationUseCase,
+        resolvedRoutineGenerationGateway,
+        resolvedClock,
+      ),
+    ),
+  );
 
   const errorHandler: ErrorRequestHandler = (
     error,

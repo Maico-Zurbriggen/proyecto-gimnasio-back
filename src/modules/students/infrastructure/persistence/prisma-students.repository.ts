@@ -99,7 +99,10 @@ export class PrismaStudentsRepository implements StudentsRepository {
           take: 1,
           include: {
             reviews: {
-              where: { result: { in: ['APROBADA', 'APROBADA_CON_CAMBIOS'] } },
+              where: {
+                reviewedVersion: { current: true },
+                result: { in: ['APROBADA', 'APROBADA_CON_CAMBIOS'] },
+              },
               orderBy: { reviewedAt: 'desc' },
               take: 1,
             },
