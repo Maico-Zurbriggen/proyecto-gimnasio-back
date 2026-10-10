@@ -37,12 +37,19 @@ import { createInvitationsRouter } from './modules/invitations/infrastructure/ht
 import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
+import { CreateManualRoutineUseCase } from './modules/prescriptions/application/use-cases/create-manual-routine.use-case';
+import { CreateRoutineTemplateUseCase } from './modules/prescriptions/application/use-cases/create-routine-template.use-case';
 import {
   GetRoutineContentUseCase,
+  GetRoutineTemplateUseCase,
   ListRoutineTemplatesUseCase,
   ListStudentRoutinesUseCase,
 } from './modules/prescriptions/application/use-cases/read-prescriptions.use-cases';
 import { ReviewRoutineUseCase } from './modules/prescriptions/application/use-cases/review-routine.use-case';
+import {
+  SetRoutineTemplateActiveUseCase,
+  UpdateRoutineTemplateUseCase,
+} from './modules/prescriptions/application/use-cases/update-routine-template.use-case';
 import { PrescriptionsController } from './modules/prescriptions/infrastructure/http/prescriptions.controller';
 import { createPrescriptionsRouter } from './modules/prescriptions/infrastructure/http/prescriptions.routes';
 import { PrismaPrescriptionsRepository } from './modules/prescriptions/infrastructure/persistence/prisma-prescriptions.repository';
@@ -298,6 +305,11 @@ export function createApp({
         new ListStudentRoutinesUseCase(resolvedPrescriptionsRepo),
         new GetRoutineContentUseCase(resolvedPrescriptionsRepo),
         new ReviewRoutineUseCase(resolvedPrescriptionsRepo),
+        new GetRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new CreateRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new UpdateRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new SetRoutineTemplateActiveUseCase(resolvedPrescriptionsRepo),
+        new CreateManualRoutineUseCase(resolvedPrescriptionsRepo),
       ),
       requireTrainerAssignment(resolvedAssignments),
       requireMeasurementAccess,
@@ -336,6 +348,7 @@ export function createApp({
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,
     requireMeasurementAccess,
+    requireTrainerAssignment(resolvedAssignments),
   );
 
   app.use(routineGenerationsRouter);

@@ -7,14 +7,27 @@ import { CatalogError } from '../../../exercise-catalog/domain/catalog';
 import { routineReviewToken } from './routine-review-token';
 
 import { isUuid } from '../../../../shared/types/uuid';
+import { resolveDominantPattern } from '../../domain/services/dominant-pattern';
+import {
+  StudentNotFoundError,
+  TemplateExerciseNotApprovedError,
+  TemplateExerciseNotFoundError,
+  TemplateFromAnotherGymError,
+  TemplateInactiveError,
+  TemplateNotFoundError,
+} from '../../domain/errors/prescription-errors';
 import type {
   CreateRoutineCommand,
   PrescriptionsRepository,
   ReviewRoutineCommand,
   RoutineContent,
   RoutineSummary,
+  RoutineTemplateDetail,
   RoutineTemplateSummary,
   TemplateContent,
+  TemplateDayInput,
+  TrainingPurpose,
+  WriteTemplateCommand,
 } from '../../application/ports/prescriptions.repository';
 
 /** Versiones ordenadas de la más nueva a la más vieja: la primera es la vigente. */
@@ -63,6 +76,265 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
         0,
       ),
     }));
+  }
+
+  async findTemplateDetail(
+    trainerId: string,
+    templateId: string,
+  ): Promise<RoutineTemplateDetail | null> {
+    if (!isUuid(trainerId) || !isUuid(templateId)) {
+      return null;
+    }
+    const trainer = await this.prisma.user.findUnique({
+      where: { id: trainerId },
+      select: { gymId: true },
+    });
+    if (!trainer) {
+      return null;
+    }
+    const template = await this.prisma.routineTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        days: {
+          orderBy: { position: 'asc' },
+          include: {
+            exercises: {
+              orderBy: { position: 'asc' },
+              include: {
+                exercise: { select: { name: true, movementPattern: true } },
+                sets: { orderBy: { position: 'asc' } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!template) {
+      return null;
+    }
+    if (template.gymId !== trainer.gymId) {
+      throw new TemplateFromAnotherGymError();
+    }
+    return {
+      id: template.id,
+      gymId: template.gymId,
+      authorTrainerId: template.authorTrainerId,
+      name: template.name,
+      routineType: template.routineType,
+      active: template.active,
+      days: template.days.map((day) => ({
+        position: day.position,
+        name: day.name,
+        exercises: day.exercises.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          position: exercise.position,
+          note: exercise.note,
+          exerciseName: exercise.exercise.name,
+          movementPattern: exercise.exercise.movementPattern,
+          sets: exercise.sets.map((set) => ({
+            position: set.position,
+            minRepetitions: set.minRepetitions,
+            maxRepetitions: set.maxRepetitions,
+            suggestedLoad: toNumber(set.suggestedLoad),
+            restSeconds: set.restSeconds,
+            warmup: set.warmup,
+          })),
+        })),
+      })),
+    };
+  }
+
+  /**
+   * Los ejercicios de una plantilla deben estar aprobados en el gimnasio
+   * (base o propios). No se exige habilitación: la disponibilidad puede
+   * cambiar después y se comprueba al asignar (assertGymExercisesAvailable).
+   */
+  private async assertTemplateExercises(
+    tx: Prisma.TransactionClient,
+    gymId: string,
+    exerciseIds: string[],
+  ): Promise<void> {
+    const ids = [...new Set(exerciseIds)];
+    const rows = await tx.exercise.findMany({
+      where: {
+        id: { in: ids },
+        OR: [
+          { gymId: null, origin: 'CATALOGO_BASE' },
+          { gymId, origin: 'GIMNASIO' },
+        ],
+      },
+      select: { id: true, state: true },
+    });
+    if (rows.length !== ids.length) {
+      throw new TemplateExerciseNotFoundError();
+    }
+    if (rows.some((row) => row.state !== 'APROBADO')) {
+      throw new TemplateExerciseNotApprovedError();
+    }
+  }
+
+  private templateDaysData(command: WriteTemplateCommand) {
+    return command.days.map((day, dayIndex) => ({
+      position: dayIndex + 1,
+      name: day.name,
+      exercises: {
+        create: day.exercises.map((exercise, exerciseIndex) => ({
+          exerciseId: exercise.exerciseId,
+          position: exerciseIndex + 1,
+          note: exercise.note,
+          sets: {
+            create: exercise.sets.map((set, setIndex) => ({
+              position: setIndex + 1,
+              minRepetitions: set.minRepetitions,
+              maxRepetitions: set.maxRepetitions,
+              suggestedLoad: set.suggestedLoad,
+              restSeconds: set.restSeconds,
+              warmup: set.warmup,
+            })),
+          },
+        })),
+      },
+    }));
+  }
+
+  private async requireTrainerGym(
+    tx: Prisma.TransactionClient,
+    trainerId: string,
+  ): Promise<string> {
+    const trainer = await tx.user.findUnique({
+      where: { id: trainerId },
+      select: { gymId: true },
+    });
+    if (!trainer) {
+      throw new TemplateNotFoundError('El entrenador no existe');
+    }
+    return trainer.gymId;
+  }
+
+  async createTemplate(
+    trainerId: string,
+    command: WriteTemplateCommand,
+  ): Promise<{ templateId: string }> {
+    return this.prisma.$transaction(async (tx) => {
+      const gymId = await this.requireTrainerGym(tx, trainerId);
+      await lockGymCatalog(tx, gymId);
+      await this.assertTemplateExercises(
+        tx,
+        gymId,
+        command.days.flatMap((day) =>
+          day.exercises.map((exercise) => exercise.exerciseId),
+        ),
+      );
+      const template = await tx.routineTemplate.create({
+        data: {
+          gymId,
+          authorTrainerId: trainerId,
+          name: command.name,
+          routineType: command.routineType,
+          days: { create: this.templateDaysData(command) },
+        },
+        select: { id: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: trainerId,
+          operation: 'ROUTINE_TEMPLATE_CREATED',
+          entityType: 'ROUTINE_TEMPLATE',
+          entityId: template.id,
+          newValue: { name: command.name, routineType: command.routineType },
+        },
+      });
+      return { templateId: template.id };
+    });
+  }
+
+  async updateTemplate(
+    trainerId: string,
+    templateId: string,
+    command: WriteTemplateCommand,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const gymId = await this.requireTrainerGym(tx, trainerId);
+      await lockGymCatalog(tx, gymId);
+      const current = await tx.routineTemplate.findUnique({
+        where: { id: templateId },
+        select: { id: true, gymId: true, active: true },
+      });
+      if (!current) {
+        throw new TemplateNotFoundError();
+      }
+      if (current.gymId !== gymId) {
+        throw new TemplateFromAnotherGymError();
+      }
+      if (!current.active) {
+        throw new TemplateInactiveError();
+      }
+      await this.assertTemplateExercises(
+        tx,
+        gymId,
+        command.days.flatMap((day) =>
+          day.exercises.map((exercise) => exercise.exerciseId),
+        ),
+      );
+      await tx.templateDay.deleteMany({ where: { templateId } });
+      await tx.routineTemplate.update({
+        where: { id: templateId },
+        data: {
+          name: command.name,
+          routineType: command.routineType,
+          days: { create: this.templateDaysData(command) },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: trainerId,
+          operation: 'ROUTINE_TEMPLATE_UPDATED',
+          entityType: 'ROUTINE_TEMPLATE',
+          entityId: templateId,
+          newValue: { name: command.name, routineType: command.routineType },
+        },
+      });
+    });
+  }
+
+  async setTemplateActive(
+    trainerId: string,
+    templateId: string,
+    active: boolean,
+  ): Promise<{ active: boolean }> {
+    return this.prisma.$transaction(async (tx) => {
+      const gymId = await this.requireTrainerGym(tx, trainerId);
+      await lockGymCatalog(tx, gymId);
+      const current = await tx.routineTemplate.findUnique({
+        where: { id: templateId },
+        select: { id: true, gymId: true, active: true },
+      });
+      if (!current) {
+        throw new TemplateNotFoundError();
+      }
+      if (current.gymId !== gymId) {
+        throw new TemplateFromAnotherGymError();
+      }
+      if (current.active === active) {
+        return { active };
+      }
+      await tx.routineTemplate.update({
+        where: { id: templateId },
+        data: { active },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: trainerId,
+          operation: active
+            ? 'ROUTINE_TEMPLATE_ACTIVATED'
+            : 'ROUTINE_TEMPLATE_DEACTIVATED',
+          entityType: 'ROUTINE_TEMPLATE',
+          entityId: templateId,
+          newValue: { active },
+        },
+      });
+      return { active };
+    });
   }
 
   async findTemplateContent(
@@ -214,6 +486,116 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
         });
       }
 
+      return { routineId: routine.id, versionId: version.id };
+    });
+  }
+
+  async createManualRoutine(command: {
+    trainerId: string;
+    studentId: string;
+    routineType: TrainingPurpose;
+    days: TemplateDayInput[];
+  }): Promise<{ routineId: string; versionId: string }> {
+    return this.prisma.$transaction(async (tx) => {
+      const trainer = await tx.user.findUnique({
+        where: { id: command.trainerId },
+        select: { gymId: true },
+      });
+      if (!trainer) {
+        throw new TemplateNotFoundError('El entrenador no existe');
+      }
+      const student = await tx.user.findUnique({
+        where: { id: command.studentId },
+        select: { gymId: true },
+      });
+      if (!student) {
+        throw new StudentNotFoundError();
+      }
+      if (student.gymId !== trainer.gymId) {
+        throw new TemplateFromAnotherGymError();
+      }
+      await lockGymCatalog(tx, student.gymId);
+      await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${command.studentId}::uuid FOR UPDATE`;
+      const exerciseIds = command.days.flatMap((day) =>
+        day.exercises.map((exercise) => exercise.exerciseId),
+      );
+      await assertGymExercisesAvailable(tx, student.gymId, exerciseIds);
+      const patterns = await tx.exercise.findMany({
+        where: { id: { in: [...new Set(exerciseIds)] } },
+        select: { id: true, movementPattern: true },
+      });
+      const patternById = new Map(
+        patterns.map((row) => [row.id, row.movementPattern]),
+      );
+      const days = command.days.map((day, dayIndex) => {
+        const exercises = day.exercises.map((exercise, exerciseIndex) => ({
+          exerciseId: exercise.exerciseId,
+          position: exerciseIndex + 1,
+          note: exercise.note,
+          movementPattern: patternById.get(exercise.exerciseId) ?? 'CORE',
+          sets: exercise.sets.map((set, setIndex) => ({
+            position: setIndex + 1,
+            minRepetitions: set.minRepetitions,
+            maxRepetitions: set.maxRepetitions,
+            suggestedLoad: set.suggestedLoad,
+            restSeconds: set.restSeconds,
+            warmup: set.warmup,
+          })),
+        }));
+        return {
+          position: dayIndex + 1,
+          name: day.name,
+          dominantPattern: resolveDominantPattern({
+            position: dayIndex + 1,
+            name: day.name,
+            exercises,
+          }),
+          exercises: exercises.map((exercise) => ({
+            exerciseId: exercise.exerciseId,
+            position: exercise.position,
+            note: exercise.note,
+            sets: exercise.sets,
+          })),
+        };
+      });
+      const routine = await tx.routine.create({
+        data: {
+          studentId: command.studentId,
+          routineType: command.routineType,
+          targetWeeklyFrequency: days.length,
+          state: 'PROPUESTA',
+          origin: 'PLANTILLA_ENTRENADOR',
+          requestedByUserId: command.trainerId,
+        },
+        select: { id: true },
+      });
+      const version = await tx.routineVersion.create({
+        data: {
+          routineId: routine.id,
+          versionNumber: 1,
+          current: false,
+          createdByUserId: command.trainerId,
+        },
+        select: { id: true },
+      });
+      for (const day of days) {
+        await tx.routineDay.create({
+          data: {
+            routineVersionId: version.id,
+            position: day.position,
+            name: day.name,
+            dominantPattern: day.dominantPattern,
+            exercises: {
+              create: day.exercises.map((exercise) => ({
+                exerciseId: exercise.exerciseId,
+                position: exercise.position,
+                note: exercise.note,
+                sets: { create: exercise.sets },
+              })),
+            },
+          },
+        });
+      }
       return { routineId: routine.id, versionId: version.id };
     });
   }

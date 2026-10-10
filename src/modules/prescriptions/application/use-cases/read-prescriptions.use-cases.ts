@@ -1,8 +1,12 @@
-import { RoutineNotFoundError } from '../../domain/errors/prescription-errors';
+import {
+  RoutineNotFoundError,
+  TemplateNotFoundError,
+} from '../../domain/errors/prescription-errors';
 import type {
   PrescriptionsRepository,
   RoutineContent,
   RoutineSummary,
+  RoutineTemplateDetail,
   RoutineTemplateSummary,
 } from '../ports/prescriptions.repository';
 
@@ -12,6 +16,28 @@ export class ListRoutineTemplatesUseCase {
 
   execute(trainerId: string): Promise<RoutineTemplateSummary[]> {
     return this.prescriptions.listTemplatesForTrainer(trainerId);
+  }
+}
+
+/**
+ * Detalle editable de una plantilla del gimnasio del entrenador, con sus
+ * días, ejercicios y series ordenados.
+ */
+export class GetRoutineTemplateUseCase {
+  constructor(private readonly prescriptions: PrescriptionsRepository) {}
+
+  async execute(input: {
+    trainerId: string;
+    templateId: string;
+  }): Promise<RoutineTemplateDetail> {
+    const detail = await this.prescriptions.findTemplateDetail(
+      input.trainerId,
+      input.templateId,
+    );
+    if (!detail) {
+      throw new TemplateNotFoundError();
+    }
+    return detail;
   }
 }
 

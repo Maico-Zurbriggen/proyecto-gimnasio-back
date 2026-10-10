@@ -17,7 +17,14 @@ import type {
   TemplateContent,
 } from '../ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './assign-routine-from-template.use-case';
+import { CreateManualRoutineUseCase } from './create-manual-routine.use-case';
+import { CreateRoutineTemplateUseCase } from './create-routine-template.use-case';
+import { GetRoutineTemplateUseCase } from './read-prescriptions.use-cases';
 import { ReviewRoutineUseCase } from './review-routine.use-case';
+import {
+  SetRoutineTemplateActiveUseCase,
+  UpdateRoutineTemplateUseCase,
+} from './update-routine-template.use-case';
 
 const TRAINER = '21000000-0000-4000-8000-000000000002';
 const STUDENT = '21000000-0000-4000-8000-000000000004';
@@ -99,6 +106,12 @@ function createRepo(overrides: Partial<PrescriptionsRepository> = {}) {
   const repo: PrescriptionsRepository = {
     listTemplatesForTrainer: vi.fn(() => Promise.resolve([])),
     findTemplateContent: vi.fn(() => Promise.resolve(plantilla())),
+    findTemplateDetail: vi.fn(() => Promise.resolve(null)),
+    createTemplate: vi.fn(() => Promise.resolve({ templateId: TEMPLATE })),
+    updateTemplate: vi.fn(() => Promise.resolve()),
+    setTemplateActive: vi.fn((_: string, __: string, active: boolean) =>
+      Promise.resolve({ active }),
+    ),
     findStudentGymId: vi.fn(() => Promise.resolve(GYM)),
     createProposedRoutine: vi.fn((command: CreateRoutineCommand) => {
       creadas.push(command);
@@ -107,6 +120,12 @@ function createRepo(overrides: Partial<PrescriptionsRepository> = {}) {
         versionId: 'version-nueva',
       });
     }),
+    createManualRoutine: vi.fn(() =>
+      Promise.resolve({
+        routineId: 'rutina-manual',
+        versionId: 'version-manual',
+      }),
+    ),
     listByStudent: vi.fn(() => Promise.resolve([])),
     findContent: vi.fn(() => Promise.resolve(null)),
     review: vi.fn((command: ReviewRoutineCommand) => {
@@ -365,5 +384,234 @@ describe('ReviewRoutineUseCase (RF-110)', () => {
         result: 'APROBADA',
       }),
     ).rejects.toBeInstanceOf(RoutineNotFoundError);
+  });
+});
+
+function comandoPlantilla() {
+  return {
+    trainerId: TRAINER,
+    name: '  Hipertrofia 3 días  ',
+    routineType: 'HIPERTROFIA' as const,
+    days: [
+      {
+        name: 'Día A',
+        exercises: [
+          {
+            exerciseId: 'ej-1',
+            note: null,
+            sets: [
+              {
+                position: 1,
+                minRepetitions: 8,
+                maxRepetitions: 10,
+                suggestedLoad: 40,
+                restSeconds: 90,
+                warmup: false,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+describe('CreateRoutineTemplateUseCase (RF-019, RF-020)', () => {
+  it('crea la plantilla con el nombre recortado', async () => {
+    const repo = createRepo();
+    const useCase = new CreateRoutineTemplateUseCase(repo.repo);
+
+    const result = await useCase.execute(comandoPlantilla());
+
+    expect(result).toEqual({ templateId: TEMPLATE });
+    expect(repo.repo.createTemplate).toHaveBeenCalledWith(
+      TRAINER,
+      expect.objectContaining({
+        name: 'Hipertrofia 3 días',
+        routineType: 'HIPERTROFIA',
+      }),
+    );
+  });
+
+  it('rechaza una plantilla sin días antes de tocar el repositorio', async () => {
+    const repo = createRepo();
+    const useCase = new CreateRoutineTemplateUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({ ...comandoPlantilla(), days: [] }),
+    ).rejects.toBeInstanceOf(EmptyTemplateError);
+    expect(repo.repo.createTemplate).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un día sin ejercicios y un ejercicio sin series', async () => {
+    const repo = createRepo();
+    const useCase = new CreateRoutineTemplateUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({
+        ...comandoPlantilla(),
+        days: [{ name: 'Vacío', exercises: [] }],
+      }),
+    ).rejects.toBeInstanceOf(EmptyTemplateError);
+    await expect(
+      useCase.execute({
+        ...comandoPlantilla(),
+        days: [
+          {
+            name: 'Día A',
+            exercises: [{ exerciseId: 'ej-1', note: null, sets: [] }],
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(EmptyTemplateError);
+    expect(repo.repo.createTemplate).not.toHaveBeenCalled();
+  });
+});
+
+describe('UpdateRoutineTemplateUseCase y SetRoutineTemplateActiveUseCase', () => {
+  it('reemplaza el contenido de la plantilla', async () => {
+    const repo = createRepo();
+    const useCase = new UpdateRoutineTemplateUseCase(repo.repo);
+
+    await useCase.execute({ ...comandoPlantilla(), templateId: TEMPLATE });
+
+    expect(repo.repo.updateTemplate).toHaveBeenCalledWith(
+      TRAINER,
+      TEMPLATE,
+      expect.objectContaining({ name: 'Hipertrofia 3 días' }),
+    );
+  });
+
+  it('valida la estructura antes de actualizar', async () => {
+    const repo = createRepo();
+    const useCase = new UpdateRoutineTemplateUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({
+        ...comandoPlantilla(),
+        templateId: TEMPLATE,
+        days: [],
+      }),
+    ).rejects.toBeInstanceOf(EmptyTemplateError);
+    expect(repo.repo.updateTemplate).not.toHaveBeenCalled();
+  });
+
+  it('desactiva y reactiva de forma idempotente', async () => {
+    const repo = createRepo();
+    const useCase = new SetRoutineTemplateActiveUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({
+        trainerId: TRAINER,
+        templateId: TEMPLATE,
+        active: false,
+      }),
+    ).resolves.toEqual({ active: false });
+    await expect(
+      useCase.execute({
+        trainerId: TRAINER,
+        templateId: TEMPLATE,
+        active: true,
+      }),
+    ).resolves.toEqual({ active: true });
+  });
+});
+
+describe('CreateManualRoutineUseCase (HU16)', () => {
+  function comandoManual() {
+    return {
+      trainerId: TRAINER,
+      studentId: STUDENT,
+      routineType: 'HIPERTROFIA' as const,
+      days: [
+        {
+          name: 'Día A',
+          exercises: [
+            {
+              exerciseId: 'ej-1',
+              note: null,
+              sets: [
+                {
+                  minRepetitions: 8,
+                  maxRepetitions: 12,
+                  suggestedLoad: null,
+                  restSeconds: 60,
+                  warmup: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('crea la rutina manual en PROPUESTA', async () => {
+    const repo = createRepo();
+    const useCase = new CreateManualRoutineUseCase(repo.repo);
+
+    const result = await useCase.execute(comandoManual());
+
+    expect(result).toEqual({
+      routineId: 'rutina-manual',
+      versionId: 'version-manual',
+      state: 'PROPUESTA',
+    });
+    expect(repo.repo.createManualRoutine).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: STUDENT, trainerId: TRAINER }),
+    );
+  });
+
+  it('no permite dos propuestas sin resolver a la vez', async () => {
+    const repo = createRepo({
+      listByStudent: vi.fn(() => Promise.resolve([rutina()])),
+    });
+    const useCase = new CreateManualRoutineUseCase(repo.repo);
+
+    await expect(useCase.execute(comandoManual())).rejects.toBeInstanceOf(
+      PendingProposalError,
+    );
+    expect(repo.repo.createManualRoutine).not.toHaveBeenCalled();
+  });
+
+  it('valida la estructura antes de tocar el repositorio', async () => {
+    const repo = createRepo();
+    const useCase = new CreateManualRoutineUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({ ...comandoManual(), days: [] }),
+    ).rejects.toBeInstanceOf(EmptyTemplateError);
+    expect(repo.repo.createManualRoutine).not.toHaveBeenCalled();
+  });
+});
+
+describe('GetRoutineTemplateUseCase', () => {
+  it('devuelve el detalle de una plantilla del gimnasio', async () => {
+    const detalle = {
+      id: TEMPLATE,
+      gymId: GYM,
+      authorTrainerId: TRAINER,
+      name: 'Fuerza',
+      routineType: 'FUERZA' as const,
+      active: true,
+      days: [],
+    };
+    const repo = createRepo({
+      findTemplateDetail: vi.fn(() => Promise.resolve(detalle)),
+    });
+    const useCase = new GetRoutineTemplateUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({ trainerId: TRAINER, templateId: TEMPLATE }),
+    ).resolves.toEqual(detalle);
+  });
+
+  it('rechaza una plantilla inexistente', async () => {
+    const repo = createRepo();
+    const useCase = new GetRoutineTemplateUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({ trainerId: TRAINER, templateId: TEMPLATE }),
+    ).rejects.toBeInstanceOf(TemplateNotFoundError);
   });
 });

@@ -42,11 +42,63 @@ export function createPrescriptionsRouter(
     controller.templates,
   );
 
+  // Creación manual de una plantilla privada del gimnasio (RF-019).
+  router.post(
+    '/routine-templates',
+    authenticate,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    controller.createTemplateAction,
+  );
+
+  // Detalle editable de una plantilla del gimnasio.
+  router.get(
+    '/routine-templates/:templateId',
+    authenticate,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    controller.templateDetail,
+  );
+
+  // Reemplazo total del contenido de una plantilla activa.
+  router.put(
+    '/routine-templates/:templateId',
+    authenticate,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    controller.updateTemplateAction,
+  );
+
+  // Baja lógica de una plantilla, sin borrarla.
+  router.delete(
+    '/routine-templates/:templateId',
+    authenticate,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    controller.deactivateTemplate,
+  );
+
+  // Reactivación de una plantilla desactivada.
+  router.post(
+    '/routine-templates/:templateId/activate',
+    authenticate,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    controller.activateTemplate,
+  );
+
   // Asignación: copia la plantilla y deja la rutina en PROPUESTA.
   router.post(
     '/students/:studentId/routines',
     ...entrenadorAsignado,
     controller.assign,
+  );
+
+  // Rutina manual del entrenador para su alumno (HU16): nace en PROPUESTA.
+  router.post(
+    '/students/:studentId/routines/manual',
+    ...entrenadorAsignado,
+    controller.createManual,
   );
 
   // Revisión: aprobar o rechazar la propuesta (RF-110).
