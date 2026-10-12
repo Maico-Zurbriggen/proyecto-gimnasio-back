@@ -46,8 +46,11 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       );
 
     const minimizedContext: MinimizedContext = {
-      nivelExperiencia: student.experienceLevel.toLowerCase(),
-      diasSemanalesDisponibles: student.availableDaysPerWeek,
+      // Un perfil recién creado por el alta (HU06) todavía no declaró su
+      // contexto (FL-01): vacío y cero hacen que `goalContext` lo informe como
+      // faltante en lugar de inventar un valor.
+      nivelExperiencia: student.experienceLevel?.toLowerCase() ?? '',
+      diasSemanalesDisponibles: student.availableDaysPerWeek ?? 0,
       objetivosActivos,
       condiciones,
     };
@@ -82,9 +85,10 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       presentEquipment.map((equipment) => equipment.equipmentCode),
     );
 
-    if (!student) {
+    if (!student?.experienceLevel) {
       return [];
     }
+    const studentLevel = student.experienceLevel;
     const levelRank = { PRINCIPIANTE: 0, INTERMEDIO: 1, AVANZADO: 2 } as const;
     const activeConditions = student.physicalConditions.filter(
       (condition) =>
@@ -95,8 +99,7 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
     return exercises
       .filter(
         (exercise) =>
-          levelRank[exercise.difficultyLevel] <=
-            levelRank[student.experienceLevel] &&
+          levelRank[exercise.difficultyLevel] <= levelRank[studentLevel] &&
           (exercise.equipment.length === 0 ||
             exercise.equipment.every((requirement) =>
               availableEquipmentCodes.has(requirement.equipmentCode),

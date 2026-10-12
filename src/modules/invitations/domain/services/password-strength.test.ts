@@ -42,4 +42,11 @@ describe('validatePasswordStrength (HU06 - T4)', () => {
   it('rechaza la cadena vacía', () => {
     expect(validatePasswordStrength('').valid).toBe(false);
   });
+
+  it('rechaza una contraseña más larga de lo que bcrypt considera', () => {
+    const result = validatePasswordStrength(`Aa1${'x'.repeat(70)}`);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(['No puede tener más de 64 caracteres.']);
+  });
 });

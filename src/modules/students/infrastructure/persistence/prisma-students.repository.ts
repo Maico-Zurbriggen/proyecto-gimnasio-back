@@ -40,7 +40,7 @@ function toRecord(row: StudentRow): StudentRecord {
     id: row.userId,
     displayName: row.user.displayName,
     registeredAt: row.user.createdAt,
-    heightCm: Number(row.heightCm),
+    heightCm: row.heightCm === null ? null : Number(row.heightCm),
     lastMeasurementOn: row.bodyMeasurements[0]?.measuredOn ?? null,
     activeMeasurementBlock: activeBlock
       ? {

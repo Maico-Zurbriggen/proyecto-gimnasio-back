@@ -1,18 +1,29 @@
+/**
+ * Errores del alta desde la invitación (HU06).
+ *
+ * Cada motivo de rechazo lleva un `code` estable (criterio 2: VENCIDA, REVOCADA,
+ * USADA) que la pantalla usa para elegir qué decir. El de invitación inexistente
+ * es deliberadamente genérico: no revela si el token existió (criterio 3).
+ */
+
 export class InvitationNotFoundError extends Error {
-  constructor(message = 'Invitación no encontrada') {
+  readonly code = 'INVALIDA';
+  constructor(message = 'El enlace de invitación no es válido') {
     super(message);
     this.name = 'InvitationNotFoundError';
   }
 }
 
 export class InvitationExpiredError extends Error {
-  constructor(message = 'La invitación ha caducado') {
+  readonly code = 'VENCIDA';
+  constructor(message = 'La invitación venció') {
     super(message);
     this.name = 'InvitationExpiredError';
   }
 }
 
 export class InvitationAlreadyUsedError extends Error {
+  readonly code = 'USADA';
   constructor(message = 'Esta invitación ya fue utilizada') {
     super(message);
     this.name = 'InvitationAlreadyUsedError';
@@ -20,7 +31,8 @@ export class InvitationAlreadyUsedError extends Error {
 }
 
 export class InvitationRevokedError extends Error {
-  constructor(message = 'La invitación ha sido revocada') {
+  readonly code = 'REVOCADA';
+  constructor(message = 'La invitación fue revocada') {
     super(message);
     this.name = 'InvitationRevokedError';
   }
@@ -44,8 +56,9 @@ export class InvalidDisplayNameError extends Error {
 }
 
 export class UserAlreadyExistsError extends Error {
+  readonly code = 'CUENTA_EXISTENTE';
   constructor(
-    message = 'Ya existe un usuario con este correo electrónico en este gimnasio',
+    message = 'Ese correo ya tiene una cuenta en este gimnasio. Iniciá sesión con ella.',
   ) {
     super(message);
     this.name = 'UserAlreadyExistsError';

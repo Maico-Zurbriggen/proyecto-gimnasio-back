@@ -16,5 +16,8 @@ export const assignRoutineBodySchema = z.object({
 export const reviewRoutineBodySchema = z.object({
   confirmGoalMismatch: z.boolean().optional(),
   result: z.enum(['APROBADA', 'APROBADA_CON_CAMBIOS', 'RECHAZADA']),
-  observation: z.string().max(500).optional(),
+  observation: z
+    .string()
+    .max(500, 'El motivo no puede tener más de 500 caracteres')
+    .optional(),
 });

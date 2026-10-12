@@ -13,11 +13,12 @@ import type {
   InvitationRecord,
   InvitationsRepository,
 } from '../../src/modules/invitations/application/ports/invitations.repository';
+import { InMemoryAttemptLimiter } from '../../src/modules/invitations/infrastructure/persistence/in-memory-attempt-limiter';
 
-const TOKEN_VIGENTE = 'e48ca620-13d8-4f24-9b59-7b70743b1790';
-const TOKEN_USADO = 'e48ca620-13d8-4f24-9b59-7b70743b1791';
-const TOKEN_REVOCADO = 'e48ca620-13d8-4f24-9b59-7b70743b1792';
-const TOKEN_VENCIDO = 'e48ca620-13d8-4f24-9b59-7b70743b1793';
+const TOKEN_VIGENTE = 'vigente_Yq3n8Kd2Lm5Pz7Rt0Vw4Xs6Bc9Fg1Hj';
+const TOKEN_USADO = 'usado_Yq3n8Kd2Lm5Pz7Rt0Vw4Xs6Bc9Fg1Hj';
+const TOKEN_REVOCADO = 'revocado_Yq3n8Kd2Lm5Pz7Rt0Vw4Xs6Bc9Fg1H';
+const TOKEN_VENCIDO = 'vencido_Yq3n8Kd2Lm5Pz7Rt0Vw4Xs6Bc9Fg1Hj';
 const GYM_ID = '11111111-1111-4111-8111-111111111111';
 const USER_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
 
@@ -35,17 +36,19 @@ function invitacion(
     gymName: 'Gimnasio Central',
     emailNormalized: 'nuevo.alumno@gym.test',
     status,
+    issuedAt: new Date('2026-09-15T10:00:00Z'),
     expiresAt,
     roles: ['ALUMNO'],
   };
 }
 
+/** Como la tabla: indexada por el hash del token, nunca por el token. */
 const REGISTROS: Record<string, InvitationRecord> = {
-  [TOKEN_VIGENTE]: invitacion(TOKEN_VIGENTE),
-  [TOKEN_USADO]: invitacion(TOKEN_USADO, 'USADA'),
-  [TOKEN_REVOCADO]: invitacion(TOKEN_REVOCADO, 'REVOCADA'),
-  [TOKEN_VENCIDO]: invitacion(
-    TOKEN_VENCIDO,
+  [hashearToken(TOKEN_VIGENTE)]: invitacion('inv-vigente'),
+  [hashearToken(TOKEN_USADO)]: invitacion('inv-usada', 'USADA'),
+  [hashearToken(TOKEN_REVOCADO)]: invitacion('inv-revocada', 'REVOCADA'),
+  [hashearToken(TOKEN_VENCIDO)]: invitacion(
+    'inv-vencida',
     'VIGENTE',
     new Date('2026-09-20T10:00:00Z'),
   ),
@@ -55,11 +58,13 @@ function buildApp() {
   const sessions: CreateSessionCommand[] = [];
 
   const invitationsRepository: InvitationsRepository = {
-    findByToken: vi.fn((token: string) =>
-      Promise.resolve(REGISTROS[token] ?? null),
+    findByTokenHash: vi.fn((tokenHash: string) =>
+      Promise.resolve(REGISTROS[tokenHash] ?? null),
     ),
     completeAccount: vi.fn((command: CompleteAccountCommand) => {
-      const record = REGISTROS[command.invitationId];
+      const record = Object.values(REGISTROS).find(
+        (item) => item.id === command.invitationId,
+      );
       return Promise.resolve<CompletedAccountResult>({
         userId: USER_ID,
         gymId: record?.gymId ?? GYM_ID,
@@ -81,7 +86,12 @@ function buildApp() {
     revokeSession: () => Promise.resolve(),
   };
 
-  const app = createApp({ invitationsRepository, authRepository, clock });
+  const app = createApp({
+    invitationsRepository,
+    authRepository,
+    clock,
+    invitationAttemptLimiter: new InMemoryAttemptLimiter(),
+  });
   return { app, invitationsRepository, sessions };
 }
 
@@ -93,9 +103,11 @@ function cookieDeSesion(response: request.Response): string | undefined {
   return cookie?.split(';')[0]?.split('=')[1];
 }
 
+const DATOS_VALIDOS = { displayName: 'Ana Pérez', password: 'ClaveSegura2026' };
+
 describe('Invitations API - HU06', () => {
   describe('GET /invitations/:token (T1 y T6)', () => {
-    it('devuelve los datos públicos de una invitación vigente', async () => {
+    it('criterio 1: responde OK e informa el correo invitado', async () => {
       const { app } = buildApp();
 
       const response = await request(app)
@@ -103,8 +115,6 @@ describe('Invitations API - HU06', () => {
         .expect(200);
 
       expect(response.body).toEqual({
-        id: TOKEN_VIGENTE,
-        gymId: GYM_ID,
         gymName: 'Gimnasio Central',
         email: 'nuevo.alumno@gym.test',
         roles: ['ALUMNO'],
@@ -112,48 +122,51 @@ describe('Invitations API - HU06', () => {
       });
     });
 
-    it('devuelve 404 cuando el token no existe', async () => {
+    it('criterio 4: busca por el hash del token, nunca por el valor en claro', async () => {
+      const { app, invitationsRepository } = buildApp();
+
+      await request(app).get(`/invitations/${TOKEN_VIGENTE}`).expect(200);
+
+      expect(invitationsRepository.findByTokenHash).toHaveBeenCalledWith(
+        hashearToken(TOKEN_VIGENTE),
+      );
+    });
+
+    it('criterio 3: un token inexistente y uno alterado responden igual', async () => {
       const { app } = buildApp();
 
-      const response = await request(app)
-        .get('/invitations/00000000-0000-4000-8000-000000000000')
+      const inexistente = await request(app)
+        .get('/invitations/no-existe-este-token')
+        .expect(404);
+      const alterado = await request(app)
+        .get(`/invitations/${TOKEN_VIGENTE.slice(0, -1)}X`)
         .expect(404);
 
-      expect(response.body.error).toBe('invitation_not_found');
+      expect(inexistente.body).toEqual(alterado.body);
+      expect(inexistente.body).toEqual({
+        error: 'invitation_not_found',
+        code: 'INVALIDA',
+        message: 'El enlace de invitación no es válido',
+      });
     });
 
-    it('T6: 409 con mensaje propio si la invitación ya fue usada', async () => {
-      const { app } = buildApp();
+    it.each([
+      [TOKEN_USADO, 409, 'invitation_already_used', 'USADA'],
+      [TOKEN_REVOCADO, 410, 'invitation_revoked', 'REVOCADA'],
+      [TOKEN_VENCIDO, 410, 'invitation_expired', 'VENCIDA'],
+    ])(
+      'criterio 2: %s se rechaza con código distinguible',
+      async (token, status, error, code) => {
+        const { app } = buildApp();
 
-      const response = await request(app)
-        .get(`/invitations/${TOKEN_USADO}`)
-        .expect(409);
+        const response = await request(app)
+          .get(`/invitations/${token}`)
+          .expect(status);
 
-      expect(response.body.error).toBe('invitation_already_used');
-      expect(response.body.message).toBe('Esta invitación ya fue utilizada');
-    });
-
-    it('T6: 410 con mensaje propio si la invitación fue revocada', async () => {
-      const { app } = buildApp();
-
-      const response = await request(app)
-        .get(`/invitations/${TOKEN_REVOCADO}`)
-        .expect(410);
-
-      expect(response.body.error).toBe('invitation_revoked');
-      expect(response.body.message).toBe('La invitación ha sido revocada');
-    });
-
-    it('T6: 410 con mensaje propio si la invitación venció', async () => {
-      const { app } = buildApp();
-
-      const response = await request(app)
-        .get(`/invitations/${TOKEN_VENCIDO}`)
-        .expect(410);
-
-      expect(response.body.error).toBe('invitation_expired');
-      expect(response.body.message).toBe('La invitación ha caducado');
-    });
+        expect(response.body.error).toBe(error);
+        expect(response.body.code).toBe(code);
+      },
+    );
   });
 
   describe('POST /invitations/:token/complete (T2, T3 y T4)', () => {
@@ -162,7 +175,7 @@ describe('Invitations API - HU06', () => {
 
       const response = await request(app)
         .post(`/invitations/${TOKEN_VIGENTE}/complete`)
-        .send({ displayName: 'Ana Pérez', password: 'ClaveSegura2026' })
+        .send(DATOS_VALIDOS)
         .expect(201);
 
       expect(response.body).toEqual({
@@ -171,7 +184,7 @@ describe('Invitations API - HU06', () => {
       });
       expect(invitationsRepository.completeAccount).toHaveBeenCalledTimes(1);
 
-      // El token viaja sólo en la cookie httpOnly (RNF-16) y en base queda su hash.
+      // Criterio 18: el token viaja sólo en la cookie httpOnly (RNF-16).
       expect(response.body).not.toHaveProperty('token');
       const token = cookieDeSesion(response);
       expect(token).toBeTruthy();
@@ -182,32 +195,59 @@ describe('Invitations API - HU06', () => {
       expect(cookieHeader).toContain('HttpOnly');
     });
 
-    it('la contraseña se almacena hasheada con bcrypt, no en claro', async () => {
+    it('criterio 14: la contraseña se guarda con bcrypt y sal propia', async () => {
       const { app, invitationsRepository } = buildApp();
 
       await request(app)
         .post(`/invitations/${TOKEN_VIGENTE}/complete`)
-        .send({ displayName: 'Ana Pérez', password: 'ClaveSegura2026' })
+        .send(DATOS_VALIDOS)
+        .expect(201);
+      await request(app)
+        .post(`/invitations/${TOKEN_VIGENTE}/complete`)
+        .send(DATOS_VALIDOS)
         .expect(201);
 
-      const command = vi.mocked(invitationsRepository.completeAccount).mock
-        .calls[0]?.[0];
-      expect(command?.passwordHash).not.toBe('ClaveSegura2026');
-      expect(command?.passwordHash.startsWith('$2')).toBe(true);
+      const [primera, segunda] = vi
+        .mocked(invitationsRepository.completeAccount)
+        .mock.calls.map(([command]) => command.passwordHash);
+      expect(primera).not.toBe(DATOS_VALIDOS.password);
+      expect(primera?.startsWith('$2')).toBe(true);
+      // Misma contraseña, hashes distintos.
+      expect(primera).not.toBe(segunda);
     });
 
-    it('devuelve 400 con el cuerpo incompleto', async () => {
+    it('criterio 8: los roles del pedido se ignoran', async () => {
+      const { app, invitationsRepository } = buildApp();
+
+      const response = await request(app)
+        .post(`/invitations/${TOKEN_VIGENTE}/complete`)
+        .send({ ...DATOS_VALIDOS, roles: ['ADMINISTRADOR'] })
+        .expect(201);
+
+      expect(response.body.user.roles).toEqual(['ALUMNO']);
+      const command = vi.mocked(invitationsRepository.completeAccount).mock
+        .calls[0]?.[0];
+      expect(command).not.toHaveProperty('roles');
+    });
+
+    it('criterio 13: sin nombre ni contraseña responde un error por campo', async () => {
       const { app } = buildApp();
 
       const response = await request(app)
         .post(`/invitations/${TOKEN_VIGENTE}/complete`)
-        .send({})
+        .send({ displayName: '   ' })
         .expect(400);
 
       expect(response.body.error).toBe('invalid_request_body');
+      expect(response.body.fields.displayName).toEqual([
+        'El nombre es obligatorio',
+      ]);
+      expect(response.body.fields.password).toEqual([
+        'La contraseña es obligatoria',
+      ]);
     });
 
-    it('T4: devuelve 422 y los requisitos incumplidos de la contraseña', async () => {
+    it('criterio 16: rechaza la contraseña débil y dice qué regla incumple', async () => {
       const { app, sessions } = buildApp();
 
       const response = await request(app)
@@ -216,24 +256,33 @@ describe('Invitations API - HU06', () => {
         .expect(422);
 
       expect(response.body.error).toBe('weak_password');
-      expect(response.body.details).toContain(
+      expect(response.body.fields.password).toEqual([
         'Debe contener al menos una letra mayúscula.',
-      );
-      expect(response.body.details).toContain(
         'Debe contener al menos un número.',
-      );
+      ]);
       expect(sessions).toHaveLength(0);
     });
 
-    it('no completa una invitación vencida ni emite cookie', async () => {
+    it('criterio 17: la contraseña no aparece en la respuesta', async () => {
+      const { app } = buildApp();
+
+      const response = await request(app)
+        .post(`/invitations/${TOKEN_VIGENTE}/complete`)
+        .send({ displayName: 'Ana Pérez', password: 'debilisima' })
+        .expect(422);
+
+      expect(JSON.stringify(response.body)).not.toContain('debilisima');
+    });
+
+    it('criterio 5: una invitación vencida no se puede completar por la API', async () => {
       const { app, invitationsRepository, sessions } = buildApp();
 
       const response = await request(app)
         .post(`/invitations/${TOKEN_VENCIDO}/complete`)
-        .send({ displayName: 'Ana Pérez', password: 'ClaveSegura2026' })
+        .send(DATOS_VALIDOS)
         .expect(410);
 
-      expect(response.body.error).toBe('invitation_expired');
+      expect(response.body.code).toBe('VENCIDA');
       expect(invitationsRepository.completeAccount).not.toHaveBeenCalled();
       expect(sessions).toHaveLength(0);
       expect(response.headers['set-cookie']).toBeUndefined();
@@ -244,11 +293,30 @@ describe('Invitations API - HU06', () => {
 
       const response = await request(app)
         .post(`/invitations/${TOKEN_USADO}/complete`)
-        .send({ displayName: 'Ana Pérez', password: 'ClaveSegura2026' })
+        .send(DATOS_VALIDOS)
         .expect(409);
 
-      expect(response.body.error).toBe('invitation_already_used');
+      expect(response.body.code).toBe('USADA');
       expect(invitationsRepository.completeAccount).not.toHaveBeenCalled();
+    });
+
+    it('criterio 19: el sexto intento en un minuto desde el mismo origen se rechaza', async () => {
+      const { app } = buildApp();
+
+      for (let intento = 1; intento <= 5; intento += 1) {
+        await request(app)
+          .post(`/invitations/${TOKEN_USADO}/complete`)
+          .send(DATOS_VALIDOS)
+          .expect(409);
+      }
+
+      const sexto = await request(app)
+        .post(`/invitations/${TOKEN_USADO}/complete`)
+        .send(DATOS_VALIDOS)
+        .expect(429);
+
+      expect(sexto.body.error).toBe('too_many_attempts');
+      expect(sexto.headers['retry-after']).toBeDefined();
     });
   });
 });

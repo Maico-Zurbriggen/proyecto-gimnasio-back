@@ -17,33 +17,48 @@ import {
   invitationTokenParamSchema,
 } from './invitations.schemas';
 
+/**
+ * Traduce los errores del alta a HTTP. Los tres motivos de invitación no usable
+ * llevan su `code` (VENCIDA, REVOCADA, USADA); la inexistente responde lo mismo
+ * para un token alterado que para uno que nunca existió (criterio 3).
+ *
+ * Ninguna respuesta repite la contraseña ni el token (RNF-19).
+ */
 function sendInvitationError(
   error: unknown,
   res: Response,
   next: NextFunction,
 ): void {
   if (error instanceof InvitationNotFoundError) {
-    res
-      .status(404)
-      .json({ error: 'invitation_not_found', message: error.message });
+    res.status(404).json({
+      error: 'invitation_not_found',
+      code: error.code,
+      message: error.message,
+    });
     return;
   }
   if (error instanceof InvitationAlreadyUsedError) {
-    res
-      .status(409)
-      .json({ error: 'invitation_already_used', message: error.message });
+    res.status(409).json({
+      error: 'invitation_already_used',
+      code: error.code,
+      message: error.message,
+    });
     return;
   }
   if (error instanceof InvitationRevokedError) {
-    res
-      .status(410)
-      .json({ error: 'invitation_revoked', message: error.message });
+    res.status(410).json({
+      error: 'invitation_revoked',
+      code: error.code,
+      message: error.message,
+    });
     return;
   }
   if (error instanceof InvitationExpiredError) {
-    res
-      .status(410)
-      .json({ error: 'invitation_expired', message: error.message });
+    res.status(410).json({
+      error: 'invitation_expired',
+      code: error.code,
+      message: error.message,
+    });
     return;
   }
   if (error instanceof WeakPasswordError) {
@@ -51,19 +66,24 @@ function sendInvitationError(
       error: 'weak_password',
       message: error.message,
       details: error.validationErrors,
+      fields: { password: error.validationErrors },
     });
     return;
   }
   if (error instanceof InvalidDisplayNameError) {
-    res
-      .status(422)
-      .json({ error: 'invalid_display_name', message: error.message });
+    res.status(422).json({
+      error: 'invalid_display_name',
+      message: error.message,
+      fields: { displayName: [error.message] },
+    });
     return;
   }
   if (error instanceof UserAlreadyExistsError) {
-    res
-      .status(409)
-      .json({ error: 'user_already_exists', message: error.message });
+    res.status(409).json({
+      error: 'user_already_exists',
+      code: error.code,
+      message: error.message,
+    });
     return;
   }
   next(error);
@@ -84,11 +104,7 @@ export class InvitationsController {
     try {
       const params = invitationTokenParamSchema.safeParse(req.params);
       if (!params.success) {
-        res.status(400).json({
-          error: 'invalid_request_parameters',
-          details: params.error.flatten(),
-        });
-        return;
+        throw new InvitationNotFoundError();
       }
 
       const invitation = await this.validateInvitation.execute(
@@ -109,18 +125,15 @@ export class InvitationsController {
     try {
       const params = invitationTokenParamSchema.safeParse(req.params);
       if (!params.success) {
-        res.status(400).json({
-          error: 'invalid_request_parameters',
-          details: params.error.flatten(),
-        });
-        return;
+        throw new InvitationNotFoundError();
       }
 
       const body = completeAccountBodySchema.safeParse(req.body ?? {});
       if (!body.success) {
+        // Criterio 13: un error por campo, para mostrarlo junto a cada input.
         res.status(400).json({
           error: 'invalid_request_body',
-          details: body.error.flatten(),
+          fields: body.error.flatten().fieldErrors,
         });
         return;
       }

@@ -40,16 +40,35 @@ import { ResolveProposalUseCase } from './modules/evolution/application/use-case
 import { ProposalsController } from './modules/evolution/infrastructure/http/proposals.controller';
 import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
+import type { GymsRepository } from './modules/gyms/application/ports/gyms.repository';
+import type { InvitationMailer } from './modules/gyms/application/ports/invitation-mailer';
+import type { TimezoneCatalog } from './modules/gyms/application/ports/timezone-catalog';
+import {
+  ListGymsUseCase,
+  ListTimezonesUseCase,
+  ReissueBootstrapInvitationUseCase,
+} from './modules/gyms/application/use-cases/manage-gyms.use-cases';
+import { ProvisionGymUseCase } from './modules/gyms/application/use-cases/provision-gym.use-case';
+import { createInvitationMailerFromEnv } from './modules/gyms/infrastructure/email/invitation-mailers';
+import { GymsController } from './modules/gyms/infrastructure/http/gyms.controller';
+import { createGymsRouter } from './modules/gyms/infrastructure/http/gyms.routes';
+import { PrismaGymsRepository } from './modules/gyms/infrastructure/persistence/prisma-gyms.repository';
+import { PrismaTimezoneCatalog } from './modules/gyms/infrastructure/persistence/prisma-timezone-catalog';
+import type { AttemptLimiter } from './modules/invitations/application/ports/attempt-limiter';
 import type { InvitationsRepository } from './modules/invitations/application/ports/invitations.repository';
 import { CompleteAccountUseCase } from './modules/invitations/application/use-cases/complete-account.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
 import { InvitationsController } from './modules/invitations/infrastructure/http/invitations.controller';
+import { createAttemptLimit } from './modules/invitations/infrastructure/http/attempt-limit.middleware';
 import { createInvitationsRouter } from './modules/invitations/infrastructure/http/invitations.routes';
+import { InMemoryAttemptLimiter } from './modules/invitations/infrastructure/persistence/in-memory-attempt-limiter';
+import { PrismaAttemptLimiter } from './modules/invitations/infrastructure/persistence/prisma-attempt-limiter';
 import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
 import {
   GetRoutineContentUseCase,
+  ListPendingRoutineReviewsUseCase,
   ListRoutineTemplatesUseCase,
   ListStudentRoutinesUseCase,
 } from './modules/prescriptions/application/use-cases/read-prescriptions.use-cases';
@@ -87,6 +106,12 @@ import { RecordMeasurementUseCase } from './modules/measurements/application/use
 import { MeasurementsController } from './modules/measurements/infrastructure/http/measurements.controller';
 import { createMeasurementsRouter } from './modules/measurements/infrastructure/http/measurements.routes';
 import { PrismaMeasurementsRepository } from './modules/measurements/infrastructure/persistence/prisma-measurements.repository';
+import {
+  StudentContextUseCases,
+  type StudentContextRepository,
+} from './modules/student-context/application/student-context.use-cases';
+import { PrismaStudentContextRepository } from './modules/student-context/infrastructure/prisma-student-context.repository';
+import { createStudentContextRouter } from './modules/student-context/infrastructure/student-context.http';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
 import type { MeasurementCheckpointsRepository } from './modules/students/application/ports/measurement-checkpoints.repository';
 import type { StudentMeasurementAccess } from './modules/students/application/ports/student-measurement-access.port';
@@ -131,6 +156,11 @@ interface AppDependencies {
   measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
   invitationsRepository?: InvitationsRepository;
+  invitationAttemptLimiter?: AttemptLimiter;
+  gymsRepository?: GymsRepository;
+  timezoneCatalog?: TimezoneCatalog;
+  invitationMailer?: InvitationMailer;
+  studentContextRepository?: StudentContextRepository;
   prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
@@ -180,6 +210,11 @@ export function createApp({
   measurementsRepository,
   proposalsRepository,
   invitationsRepository,
+  invitationAttemptLimiter,
+  gymsRepository,
+  timezoneCatalog,
+  invitationMailer,
+  studentContextRepository,
   prescriptionsRepository,
   trainerAssignments,
   clock,
@@ -273,6 +308,49 @@ export function createApp({
           resolvedClock,
         ),
       ),
+      createAttemptLimit(
+        invitationAttemptLimiter ??
+          (process.env.NODE_ENV === 'test'
+            ? new InMemoryAttemptLimiter()
+            : new PrismaAttemptLimiter(prisma)),
+        resolvedClock,
+      ),
+    ),
+  );
+
+  // HU13: aprovisionamiento de gimnasios por el SuperAdmin.
+  const resolvedGymsRepo = gymsRepository ?? new PrismaGymsRepository(prisma);
+  const resolvedTimezones =
+    timezoneCatalog ?? new PrismaTimezoneCatalog(prisma);
+  const resolvedInvitationMailer =
+    invitationMailer ?? createInvitationMailerFromEnv();
+  app.use(
+    createGymsRouter(
+      new GymsController(
+        new ProvisionGymUseCase(
+          resolvedGymsRepo,
+          resolvedTimezones,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
+        new ListGymsUseCase(resolvedGymsRepo, resolvedClock),
+        new ReissueBootstrapInvitationUseCase(
+          resolvedGymsRepo,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
+        new ListTimezonesUseCase(resolvedTimezones),
+      ),
+    ),
+  );
+
+  // FL-01: puesta en contexto del alumno recién dado de alta.
+  app.use(
+    createStudentContextRouter(
+      new StudentContextUseCases(
+        studentContextRepository ?? new PrismaStudentContextRepository(prisma),
+        resolvedClock,
+      ),
     ),
   );
   const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
@@ -323,6 +401,7 @@ export function createApp({
         new ListStudentRoutinesUseCase(resolvedPrescriptionsRepo),
         new GetRoutineContentUseCase(resolvedPrescriptionsRepo),
         new ReviewRoutineUseCase(resolvedPrescriptionsRepo),
+        new ListPendingRoutineReviewsUseCase(resolvedPrescriptionsRepo),
       ),
       requireTrainerAssignment(resolvedAssignments),
       requireMeasurementAccess,

@@ -3,13 +3,14 @@ import type { UserRole } from '../../../../shared/types/auth';
 /** Estado de una invitación, tal como lo define el enum `InvitationStatus`. */
 export type InvitationStatus = 'VIGENTE' | 'USADA' | 'REVOCADA' | 'CADUCADA';
 
-/** Invitación recuperada por su token, con lo que el alta necesita saber. */
+/** Invitación recuperada por el hash de su token, con lo que el alta necesita. */
 export interface InvitationRecord {
   id: string;
   gymId: string;
   gymName: string;
   emailNormalized: string;
   status: InvitationStatus;
+  issuedAt: Date;
   expiresAt: Date;
   roles: UserRole[];
 }
@@ -18,6 +19,8 @@ export interface CompleteAccountCommand {
   invitationId: string;
   displayName: string;
   passwordHash: string;
+  /** Instante del servidor con el que se revalida la vigencia al consumirla. */
+  now: Date;
 }
 
 export interface CompletedAccountResult {
@@ -29,12 +32,21 @@ export interface CompletedAccountResult {
 }
 
 export interface InvitationsRepository {
-  /** Busca la invitación por su token. `null` si no existe. */
-  findByToken(token: string): Promise<InvitationRecord | null>;
+  /** Busca la invitación por el hash de su token. `null` si no existe. */
+  findByTokenHash(tokenHash: string): Promise<InvitationRecord | null>;
 
   /**
-   * Crea el usuario con sus roles y marca la invitación como usada, en una sola
-   * transacción: RF-116 exige que la invitación sea de un solo uso.
+   * Consume la invitación y crea el usuario en una sola transacción (T2,
+   * RF-116): no puede quedar un usuario creado con la invitación vigente, ni la
+   * invitación usada sin usuario.
+   *
+   * El consumo es condicional —sólo pasa de VIGENTE a USADA si sigue vigente en
+   * `now`—, así que de dos envíos simultáneos sólo uno crea la cuenta y el otro
+   * recibe el motivo actual (RI-19). Lanza los errores de dominio de la
+   * invitación o `UserAlreadyExistsError`.
+   *
+   * Los roles se toman de la invitación, nunca del pedido (RA-09). Si emitió un
+   * entrenador y el invitado es ALUMNO, la asignación queda creada (FL-19/4).
    */
   completeAccount(
     command: CompleteAccountCommand,

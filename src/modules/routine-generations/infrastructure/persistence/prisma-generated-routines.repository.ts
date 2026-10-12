@@ -113,7 +113,8 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     const compatibleExercises = exercises.filter((exercise) => {
       if (
         LEVEL_RANK[exercise.difficultyLevel] >
-        LEVEL_RANK[student.experienceLevel]
+        // Sin nivel declarado se valida con el más conservador.
+        LEVEL_RANK[student.experienceLevel ?? 'PRINCIPIANTE']
       ) {
         return false;
       }

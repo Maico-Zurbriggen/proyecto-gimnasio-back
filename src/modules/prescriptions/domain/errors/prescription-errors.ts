@@ -51,3 +51,11 @@ export class PendingProposalError extends Error {
   }
 }
 export class GoalMismatchConfirmationError extends Error {}
+
+/** Rechazar exige motivo: el alumno lo recibe en su aviso (FL-02/A2). */
+export class RejectionReasonRequiredError extends Error {
+  constructor(message = 'Para rechazar la rutina indicá el motivo') {
+    super(message);
+    this.name = 'RejectionReasonRequiredError';
+  }
+}

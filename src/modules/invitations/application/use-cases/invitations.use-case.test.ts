@@ -25,27 +25,39 @@ import { CompleteAccountUseCase } from './complete-account.use-case';
 import { ValidateInvitationUseCase } from './validate-invitation.use-case';
 
 const AHORA = new Date('2026-09-21T10:00:00Z');
-const TOKEN = 'e48ca620-13d8-4f24-9b59-7b70743b1790';
+const TOKEN = 'tok_9Qm2xV4c7HbZp1sKfW8yLr3nTe6uJd0a';
+const INVITATION_ID = 'e48ca620-13d8-4f24-9b59-7b70743b1790';
 const USER_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
 const CONTRASENA = 'ClaveSegura2026';
 
 const clock: Clock = { now: () => AHORA };
 
+/** Doble en memoria indexado por el hash del token, como la tabla real. */
 class InMemoryInvitations implements InvitationsRepository {
   readonly records = new Map<string, InvitationRecord>();
   readonly completed: CompleteAccountCommand[] = [];
 
-  findByToken(token: string): Promise<InvitationRecord | null> {
-    return Promise.resolve(this.records.get(token) ?? null);
+  /** El registro del token de pruebas. */
+  get current(): InvitationRecord {
+    return this.records.get(hashearToken(TOKEN))!;
+  }
+
+  findByTokenHash(tokenHash: string): Promise<InvitationRecord | null> {
+    return Promise.resolve(this.records.get(tokenHash) ?? null);
   }
 
   completeAccount(
     command: CompleteAccountCommand,
   ): Promise<CompletedAccountResult> {
     this.completed.push(command);
-    const record = this.records.get(command.invitationId);
+    const record = [...this.records.values()].find(
+      (item) => item.id === command.invitationId,
+    );
     if (!record) {
       return Promise.reject(new InvitationNotFoundError());
+    }
+    if (record.status !== 'VIGENTE') {
+      return Promise.reject(new InvitationAlreadyUsedError());
     }
     record.status = 'USADA';
     return Promise.resolve({
@@ -88,12 +100,13 @@ describe('Casos de uso de invitaciones (HU06)', () => {
     validate = new ValidateInvitationUseCase(invitations, clock);
     complete = new CompleteAccountUseCase(invitations, auth.repo, clock);
 
-    invitations.records.set(TOKEN, {
-      id: TOKEN,
+    invitations.records.set(hashearToken(TOKEN), {
+      id: INVITATION_ID,
       gymId: '11111111-1111-4111-8111-111111111111',
       gymName: 'Gimnasio Central',
       emailNormalized: 'nuevo.alumno@gym.test',
       status: 'VIGENTE',
+      issuedAt: new Date('2026-09-15T10:00:00Z'),
       expiresAt: new Date('2026-09-25T10:00:00Z'),
       roles: ['ALUMNO'],
     });
@@ -103,9 +116,8 @@ describe('Casos de uso de invitaciones (HU06)', () => {
     it('devuelve los datos públicos de una invitación vigente', async () => {
       const result = await validate.execute(TOKEN);
 
+      // Sin identificadores internos: el enlace es la única credencial.
       expect(result).toEqual({
-        id: TOKEN,
-        gymId: '11111111-1111-4111-8111-111111111111',
         gymName: 'Gimnasio Central',
         email: 'nuevo.alumno@gym.test',
         roles: ['ALUMNO'],
@@ -126,7 +138,7 @@ describe('Casos de uso de invitaciones (HU06)', () => {
     });
 
     it('T6: distingue una invitación ya usada', async () => {
-      invitations.records.get(TOKEN)!.status = 'USADA';
+      invitations.current.status = 'USADA';
 
       await expect(validate.execute(TOKEN)).rejects.toBeInstanceOf(
         InvitationAlreadyUsedError,
@@ -134,7 +146,7 @@ describe('Casos de uso de invitaciones (HU06)', () => {
     });
 
     it('T6: distingue una invitación revocada', async () => {
-      invitations.records.get(TOKEN)!.status = 'REVOCADA';
+      invitations.current.status = 'REVOCADA';
 
       await expect(validate.execute(TOKEN)).rejects.toBeInstanceOf(
         InvitationRevokedError,
@@ -142,17 +154,40 @@ describe('Casos de uso de invitaciones (HU06)', () => {
     });
 
     it('T6: distingue una invitación marcada como caducada', async () => {
-      invitations.records.get(TOKEN)!.status = 'CADUCADA';
+      invitations.current.status = 'CADUCADA';
 
       await expect(validate.execute(TOKEN)).rejects.toBeInstanceOf(
         InvitationExpiredError,
       );
     });
 
-    it('T6: caduca por fecha aunque el estado siga en VIGENTE', async () => {
-      invitations.records.get(TOKEN)!.expiresAt = new Date(
-        '2026-09-20T10:00:00Z',
+    it('el token se busca por su hash: el valor en claro no está en la base', async () => {
+      expect(invitations.records.has(TOKEN)).toBe(false);
+      await expect(validate.execute(TOKEN)).resolves.toBeDefined();
+    });
+
+    it('criterio 21: vence a los 14 días de emitida aunque expires_at diga otra cosa', async () => {
+      invitations.current.issuedAt = new Date('2026-09-07T09:00:00Z');
+      invitations.current.expiresAt = new Date('2026-12-31T00:00:00Z');
+
+      await expect(validate.execute(TOKEN)).rejects.toBeInstanceOf(
+        InvitationExpiredError,
       );
+    });
+
+    it('criterio 2: cada motivo tiene un código distinguible', async () => {
+      const codes: string[] = [];
+      for (const status of ['USADA', 'REVOCADA', 'CADUCADA'] as const) {
+        invitations.current.status = status;
+        await validate.execute(TOKEN).catch((error: { code: string }) => {
+          codes.push(error.code);
+        });
+      }
+      expect(codes).toEqual(['USADA', 'REVOCADA', 'VENCIDA']);
+    });
+
+    it('T6: caduca por fecha aunque el estado siga en VIGENTE', async () => {
+      invitations.current.expiresAt = new Date('2026-09-20T10:00:00Z');
 
       await expect(validate.execute(TOKEN)).rejects.toBeInstanceOf(
         InvitationExpiredError,
@@ -176,7 +211,7 @@ describe('Casos de uso de invitaciones (HU06)', () => {
       expect(invitations.completed).toHaveLength(1);
       // El nombre llega sin espacios sobrantes.
       expect(invitations.completed[0]?.displayName).toBe('Ana Pérez');
-      expect(invitations.records.get(TOKEN)?.status).toBe('USADA');
+      expect(invitations.current.status).toBe('USADA');
     });
 
     it('T3: persiste la contraseña hasheada, nunca en claro', async () => {
@@ -234,9 +269,7 @@ describe('Casos de uso de invitaciones (HU06)', () => {
     });
 
     it('revalida la invitación: una caducada no crea cuenta ni sesión', async () => {
-      invitations.records.get(TOKEN)!.expiresAt = new Date(
-        '2026-09-20T10:00:00Z',
-      );
+      invitations.current.expiresAt = new Date('2026-09-20T10:00:00Z');
 
       await expect(
         complete.execute({

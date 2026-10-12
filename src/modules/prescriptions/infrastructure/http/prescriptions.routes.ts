@@ -33,6 +33,16 @@ export function createPrescriptionsRouter(
     requireAssignment,
   ];
 
+  // HU17: bandeja de aceptación y rechazo. El alcance lo da la asignación
+  // vigente, que el repositorio aplica en la consulta.
+  router.get(
+    '/trainers/me/routine-reviews',
+    authenticate,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    controller.pendingReviews,
+  );
+
   // Plantillas del gimnasio del entrenador, para elegir cuál asignar.
   router.get(
     '/routine-templates',
