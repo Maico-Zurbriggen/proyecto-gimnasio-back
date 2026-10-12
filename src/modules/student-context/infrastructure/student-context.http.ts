@@ -11,6 +11,7 @@ import {
   requireRoles,
 } from '../../../shared/middleware/auth.middleware';
 import {
+  HealthDataConsentRequiredError,
   InvalidStudentContextError,
   StudentContextNotFoundError,
   type StudentContextUseCases,
@@ -31,6 +32,13 @@ const body = z.object({
 function sendError(error: unknown, res: Response, next: NextFunction) {
   if (error instanceof StudentContextNotFoundError) {
     res.status(404).json({ error: 'student_profile_not_found' });
+    return;
+  }
+  if (error instanceof HealthDataConsentRequiredError) {
+    res.status(409).json({
+      error: 'health_data_consent_required',
+      message: error.message,
+    });
     return;
   }
   if (error instanceof InvalidStudentContextError) {
@@ -73,6 +81,19 @@ export function createStudentContextRouter(useCases: StudentContextUseCases) {
       }
       try {
         res.json(await useCases.save(req.user!, parsed.data));
+      } catch (error) {
+        sendError(error, res, next);
+      }
+    },
+  );
+
+  // FL-19/A2: otorgar después del alta el consentimiento para datos de salud.
+  router.post(
+    '/students/me/health-consent',
+    ...alumno,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        res.status(201).json(await useCases.grantHealthConsent(req.user!));
       } catch (error) {
         sendError(error, res, next);
       }

@@ -5,6 +5,7 @@ import type {
   StudentContextRecord,
   StudentContextRepository,
 } from '../application/student-context.use-cases';
+import { TEXTO_CONSENTIMIENTO_DATOS_SALUD } from '../domain/health-consent';
 import type { Sexo, StudentContextInput } from '../domain/student-context';
 
 /** Perfil, último peso y asignación vigente, todo en una lectura. */
@@ -20,6 +21,16 @@ function contextSelect(now: Date) {
       orderBy: { measuredOn: 'desc' },
       take: 1,
       select: { value: true },
+    },
+    user: {
+      select: {
+        consents: {
+          where: { type: 'DATOS_SALUD' },
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+          select: { granted: true },
+        },
+      },
     },
     trainerAssignments: {
       where: {
@@ -54,6 +65,7 @@ function toRecord(row: ContextRow): StudentContextRecord {
     trainer: trainer
       ? { id: trainer.id, displayName: trainer.displayName }
       : null,
+    healthDataConsent: row.user.consents[0]?.granted ?? false,
   };
 }
 
@@ -125,5 +137,25 @@ export class PrismaStudentContextRepository implements StudentContextRepository 
       });
       return toRecord(row);
     });
+  }
+
+  async grantHealthConsent(actor: AuthUser): Promise<boolean> {
+    const profile = await this.prisma.studentProfile.findFirst({
+      where: {
+        userId: actor.id,
+        user: { gymId: actor.gymId, state: 'ACTIVO' },
+      },
+      select: { userId: true },
+    });
+    if (!profile) return false;
+    await this.prisma.consent.create({
+      data: {
+        userId: actor.id,
+        type: 'DATOS_SALUD',
+        granted: true,
+        acceptedText: TEXTO_CONSENTIMIENTO_DATOS_SALUD,
+      },
+    });
+    return true;
   }
 }

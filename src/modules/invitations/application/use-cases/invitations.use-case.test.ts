@@ -133,6 +133,7 @@ describe('Casos de uso de invitaciones (HU06)', () => {
         roles: ['ALUMNO'],
         expiresAt: '2026-09-25T10:00:00.000Z',
         trainerName: 'Lucía',
+        healthConsentText: expect.stringContaining('datos de salud'),
       });
     });
 

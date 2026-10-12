@@ -16,6 +16,8 @@ export function createGymsRouter(controller: GymsController): Router {
   router.get('/platform/timezones', ...superAdmin, controller.timezones);
   router.get('/platform/gyms', ...superAdmin, controller.list);
   router.post('/platform/gyms', ...superAdmin, controller.create);
+  router.patch('/platform/gyms/:gymId', ...superAdmin, controller.update);
+  router.post('/platform/gyms/:gymId/status', ...superAdmin, controller.status);
   router.post(
     '/platform/gyms/:gymId/bootstrap-invitation',
     ...superAdmin,

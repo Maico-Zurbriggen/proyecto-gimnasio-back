@@ -1,4 +1,5 @@
 import type { Clock } from '../../../routines/application/ports/clock';
+import { TEXTO_CONSENTIMIENTO_DATOS_SALUD } from '../../../student-context/domain/health-consent';
 import type { UserRole } from '../../../../shared/types/auth';
 import {
   InvitationAlreadyUsedError,
@@ -27,6 +28,8 @@ export interface ValidatedInvitationDto {
   expiresAt: string;
   /** Profesor que va a tener el alumno, si lo invitó un entrenador. */
   trainerName: string | null;
+  /** Texto del consentimiento de datos de salud, si se invita a un alumno. */
+  healthConsentText: string | null;
 }
 
 /** Largo máximo razonable de un token; uno más largo ni se consulta. */
@@ -61,6 +64,9 @@ export class ValidateInvitationUseCase {
         invitation.expiresAt,
       ).toISOString(),
       trainerName: invitation.trainerName,
+      healthConsentText: invitation.roles.includes('ALUMNO')
+        ? TEXTO_CONSENTIMIENTO_DATOS_SALUD
+        : null,
     };
   }
 }

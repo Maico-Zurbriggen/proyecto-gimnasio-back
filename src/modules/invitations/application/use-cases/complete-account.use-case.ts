@@ -22,6 +22,7 @@ export interface CompleteAccountInput {
   token: string;
   displayName: string;
   password: string;
+  healthDataConsent?: boolean;
 }
 
 export interface CompleteAccountResult {
@@ -83,6 +84,7 @@ export class CompleteAccountUseCase {
       displayName,
       passwordHash,
       now,
+      healthDataConsent: input.healthDataConsent ?? false,
     });
 
     const token = generarTokenDeSesion();

@@ -45,3 +45,13 @@ export class InvitationDeliveryError extends Error {
     this.name = 'InvitationDeliveryError';
   }
 }
+
+/** Criterio 23: la zona horaria de un gimnasio con sesiones no cambia sin confirmar. */
+export class TimezoneChangeRequiresConfirmationError extends Error {
+  constructor(readonly sessionCount: number) {
+    super(
+      `El gimnasio tiene ${String(sessionCount)} sesiones registradas: cambiar la zona horaria cambia el día y la semana de todos sus usuarios. Confirmalo para continuar.`,
+    );
+    this.name = 'TimezoneChangeRequiresConfirmationError';
+  }
+}

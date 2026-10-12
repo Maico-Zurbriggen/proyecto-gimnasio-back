@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { isUuid } from '../../../../shared/types/uuid';
 import type {
   BeforeCommit,
   GymSummaryRecord,
@@ -8,6 +9,8 @@ import type {
   ProvisionedGym,
   ReissueBootstrapCommand,
   ReissuedInvitation,
+  UpdateGymCommand,
+  UpdateGymResult,
 } from '../../application/ports/gyms.repository';
 
 /**
@@ -106,8 +109,15 @@ export class PrismaGymsRepository implements GymsRepository {
   }
 
   async list(): Promise<GymSummaryRecord[]> {
+    return this.query({ isPlatform: false });
+  }
+
+  /** Gimnasios con su invitación de arranque más reciente y administradores. */
+  private async query(
+    where: Prisma.GymWhereInput,
+  ): Promise<GymSummaryRecord[]> {
     const gyms = await this.prisma.gym.findMany({
-      where: { isPlatform: false },
+      where,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -158,6 +168,102 @@ export class PrismaGymsRepository implements GymsRepository {
           : null,
       };
     });
+  }
+
+  async update(command: UpdateGymCommand): Promise<UpdateGymResult> {
+    if (!isUuid(command.gymId)) return { status: 'NO_EXISTE' };
+    let outcome: { status: 'OK' } | Exclude<UpdateGymResult, { status: 'OK' }>;
+    try {
+      outcome = await this.prisma.$transaction(async (tx) => {
+        const gym = await tx.gym.findFirst({
+          where: { id: command.gymId, isPlatform: false },
+          select: { name: true, timezone: true },
+        });
+        if (!gym) return { status: 'NO_EXISTE' as const };
+
+        const name = command.name ?? gym.name;
+        const timezone = command.timezone ?? gym.timezone;
+
+        if (name.toLowerCase() !== gym.name.toLowerCase()) {
+          const taken = await tx.gym.findFirst({
+            where: {
+              isPlatform: false,
+              id: { not: command.gymId },
+              name: { equals: name, mode: 'insensitive' },
+            },
+            select: { id: true },
+          });
+          if (taken) return { status: 'NOMBRE_DUPLICADO' as const };
+        }
+
+        if (timezone !== gym.timezone && !command.confirmTimezoneChange) {
+          const sessionCount = await tx.trainingSession.count({
+            where: { student: { user: { gymId: command.gymId } } },
+          });
+          if (sessionCount > 0) {
+            return { status: 'REQUIERE_CONFIRMACION' as const, sessionCount };
+          }
+        }
+
+        await tx.gym.update({
+          where: { id: command.gymId },
+          data: { name, timezone },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: command.actorUserId,
+            operation: 'EDICION_GIMNASIO',
+            entityType: 'GYM',
+            entityId: command.gymId,
+            previousValue: { nombre: gym.name, zonaHoraria: gym.timezone },
+            newValue: { nombre: name, zonaHoraria: timezone },
+          },
+        });
+        return { status: 'OK' as const };
+      });
+    } catch (error) {
+      if (esNombreDuplicado(error)) return { status: 'NOMBRE_DUPLICADO' };
+      throw error;
+    }
+    if (outcome.status !== 'OK') return outcome;
+    const [gym] = await this.query({ id: command.gymId });
+    return gym ? { status: 'OK', gym } : { status: 'NO_EXISTE' };
+  }
+
+  async setActive(input: {
+    gymId: string;
+    actorUserId: string;
+    active: boolean;
+  }): Promise<GymSummaryRecord | null> {
+    if (!isUuid(input.gymId)) return null;
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const gym = await tx.gym.findFirst({
+        where: { id: input.gymId, isPlatform: false },
+        select: { active: true },
+      });
+      if (!gym) return false;
+      if (gym.active !== input.active) {
+        await tx.gym.update({
+          where: { id: input.gymId },
+          data: { active: input.active },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: input.actorUserId,
+            operation: input.active
+              ? 'REACTIVACION_GIMNASIO'
+              : 'SUSPENSION_GIMNASIO',
+            entityType: 'GYM',
+            entityId: input.gymId,
+            previousValue: { activo: gym.active },
+            newValue: { activo: input.active },
+          },
+        });
+      }
+      return true;
+    });
+    if (!changed) return null;
+    return (await this.query({ id: input.gymId }))[0] ?? null;
   }
 
   async reissueBootstrapInvitation(

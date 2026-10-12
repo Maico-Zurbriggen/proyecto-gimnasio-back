@@ -4,6 +4,8 @@ import type {
   ListGymsUseCase,
   ListTimezonesUseCase,
   ReissueBootstrapInvitationUseCase,
+  SetGymStatusUseCase,
+  UpdateGymUseCase,
 } from '../../application/use-cases/manage-gyms.use-cases';
 import type { ProvisionGymUseCase } from '../../application/use-cases/provision-gym.use-case';
 import {
@@ -12,8 +14,14 @@ import {
   GymNotFoundError,
   InvalidTimezoneError,
   InvitationDeliveryError,
+  TimezoneChangeRequiresConfirmationError,
 } from '../../domain/errors/gym-errors';
-import { gymParamsSchema, provisionGymBodySchema } from './gyms.schemas';
+import {
+  gymParamsSchema,
+  gymStatusBodySchema,
+  provisionGymBodySchema,
+  updateGymBodySchema,
+} from './gyms.schemas';
 
 function sendGymError(error: unknown, res: Response, next: NextFunction): void {
   if (error instanceof InvalidTimezoneError) {
@@ -28,6 +36,14 @@ function sendGymError(error: unknown, res: Response, next: NextFunction): void {
       error: 'gym_name_taken',
       message: error.message,
       fields: { nombre: [error.message] },
+    });
+    return;
+  }
+  if (error instanceof TimezoneChangeRequiresConfirmationError) {
+    res.status(409).json({
+      error: 'timezone_change_requires_confirmation',
+      message: error.message,
+      sessionCount: error.sessionCount,
     });
     return;
   }
@@ -58,7 +74,76 @@ export class GymsController {
     private readonly listGyms: ListGymsUseCase,
     private readonly reissueInvitation: ReissueBootstrapInvitationUseCase,
     private readonly listTimezones: ListTimezonesUseCase,
+    private readonly updateGym: UpdateGymUseCase,
+    private readonly setGymStatus: SetGymStatusUseCase,
   ) {}
+
+  /** HU13 - criterios 22 y 23: edición sin borrar datos. */
+  update = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = gymParamsSchema.safeParse(req.params);
+      if (!params.success) {
+        res.status(404).json({ error: 'gym_not_found' });
+        return;
+      }
+      const body = updateGymBodySchema.safeParse(req.body ?? {});
+      if (!body.success) {
+        res.status(400).json({
+          error: 'invalid_request_body',
+          fields: body.error.flatten().fieldErrors,
+          message: body.error.flatten().formErrors[0],
+        });
+        return;
+      }
+      res.status(200).json(
+        await this.updateGym.execute({
+          actorUserId: req.user?.id ?? '',
+          gymId: params.data.gymId,
+          name: body.data.nombre,
+          timezone: body.data.zonaHoraria,
+          confirmTimezoneChange: body.data.confirmarCambioDeZona,
+        }),
+      );
+    } catch (error) {
+      sendGymError(error, res, next);
+    }
+  };
+
+  /** HU13 - criterio 22: suspender o reactivar sin borrar datos. */
+  status = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = gymParamsSchema.safeParse(req.params);
+      if (!params.success) {
+        res.status(404).json({ error: 'gym_not_found' });
+        return;
+      }
+      const body = gymStatusBodySchema.safeParse(req.body ?? {});
+      if (!body.success) {
+        res.status(400).json({
+          error: 'invalid_request_body',
+          fields: body.error.flatten().fieldErrors,
+        });
+        return;
+      }
+      res.status(200).json(
+        await this.setGymStatus.execute({
+          actorUserId: req.user?.id ?? '',
+          gymId: params.data.gymId,
+          active: body.data.activo,
+        }),
+      );
+    } catch (error) {
+      sendGymError(error, res, next);
+    }
+  };
 
   /** HU13 - T1: alta atómica del gimnasio y su primer administrador. */
   create = async (

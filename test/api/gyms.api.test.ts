@@ -10,6 +10,8 @@ import type {
   ProvisionedGym,
   ReissueBootstrapCommand,
   ReissuedInvitation,
+  UpdateGymCommand,
+  UpdateGymResult,
 } from '../../src/modules/gyms/application/ports/gyms.repository';
 import type {
   InvitationEmail,
@@ -26,6 +28,16 @@ const superAdmin = {
   'x-user-id': SUPERADMIN_ID,
   'x-user-roles': 'SUPERADMIN',
   'x-gym-id': '00000000-0000-4000-8000-000000000000',
+};
+
+const GYM_RECORD: GymSummaryRecord = {
+  id: GYM_ID,
+  name: 'Gimnasio Norte',
+  timezone: 'America/Argentina/Cordoba',
+  active: true,
+  createdAt: AHORA,
+  administratorCount: 1,
+  bootstrapInvitation: null,
 };
 
 const ALTA = {
@@ -66,6 +78,41 @@ class FakeGymsRepository implements GymsRepository {
 
   list(): Promise<GymSummaryRecord[]> {
     return Promise.resolve(this.listed);
+  }
+
+  sessionCount = 0;
+
+  update(command: UpdateGymCommand): Promise<UpdateGymResult> {
+    if (command.gymId !== GYM_ID)
+      return Promise.resolve({ status: 'NO_EXISTE' });
+    if (command.name && this.names.has(command.name.toLowerCase()))
+      return Promise.resolve({ status: 'NOMBRE_DUPLICADO' });
+    if (
+      command.timezone &&
+      this.sessionCount > 0 &&
+      !command.confirmTimezoneChange
+    ) {
+      return Promise.resolve({
+        status: 'REQUIERE_CONFIRMACION',
+        sessionCount: this.sessionCount,
+      });
+    }
+    return Promise.resolve({
+      status: 'OK',
+      gym: {
+        ...GYM_RECORD,
+        name: command.name ?? GYM_RECORD.name,
+        timezone: command.timezone ?? GYM_RECORD.timezone,
+      },
+    });
+  }
+
+  setActive(input: {
+    gymId: string;
+    active: boolean;
+  }): Promise<GymSummaryRecord | null> {
+    if (input.gymId !== GYM_ID) return Promise.resolve(null);
+    return Promise.resolve({ ...GYM_RECORD, active: input.active });
   }
 
   async reissueBootstrapInvitation(
@@ -326,6 +373,102 @@ describe('Gyms API - HU13', () => {
         .expect(200);
 
       expect(response.body).toContain('America/Argentina/Cordoba');
+    });
+  });
+
+  describe('edición y suspensión (criterios 22 y 23)', () => {
+    it('edita el nombre y la zona horaria', async () => {
+      const { app } = buildApp();
+
+      const response = await request(app)
+        .patch(`/platform/gyms/${GYM_ID}`)
+        .set(superAdmin)
+        .send({
+          nombre: 'Norte Renovado',
+          zonaHoraria: 'America/Argentina/Buenos_Aires',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        name: 'Norte Renovado',
+        timezone: 'America/Argentina/Buenos_Aires',
+      });
+    });
+
+    it('cambiar la zona con sesiones registradas exige confirmación', async () => {
+      const { app, gymsRepository } = buildApp();
+      gymsRepository.sessionCount = 12;
+
+      const sinConfirmar = await request(app)
+        .patch(`/platform/gyms/${GYM_ID}`)
+        .set(superAdmin)
+        .send({ zonaHoraria: 'America/Argentina/Buenos_Aires' })
+        .expect(409);
+      expect(sinConfirmar.body).toMatchObject({
+        error: 'timezone_change_requires_confirmation',
+        sessionCount: 12,
+      });
+
+      await request(app)
+        .patch(`/platform/gyms/${GYM_ID}`)
+        .set(superAdmin)
+        .send({
+          zonaHoraria: 'America/Argentina/Buenos_Aires',
+          confirmarCambioDeZona: true,
+        })
+        .expect(200);
+    });
+
+    it('rechaza una zona inválida y un nombre repetido en su campo', async () => {
+      const { app } = buildApp();
+
+      const zona = await request(app)
+        .patch(`/platform/gyms/${GYM_ID}`)
+        .set(superAdmin)
+        .send({ zonaHoraria: 'ZonaInventada' })
+        .expect(400);
+      expect(zona.body.fields.zonaHoraria).toBeDefined();
+
+      const nombre = await request(app)
+        .patch(`/platform/gyms/${GYM_ID}`)
+        .set(superAdmin)
+        .send({ nombre: 'Gimnasio Central' })
+        .expect(409);
+      expect(nombre.body.fields.nombre).toBeDefined();
+    });
+
+    it('suspende y reactiva sin borrar datos', async () => {
+      const { app } = buildApp();
+
+      const suspendido = await request(app)
+        .post(`/platform/gyms/${GYM_ID}/status`)
+        .set(superAdmin)
+        .send({ activo: false })
+        .expect(200);
+      expect(suspendido.body.status).toBe('INACTIVO');
+
+      const reactivado = await request(app)
+        .post(`/platform/gyms/${GYM_ID}/status`)
+        .set(superAdmin)
+        .send({ activo: true })
+        .expect(200);
+      expect(reactivado.body.status).toBe('ACTIVO');
+    });
+
+    it('el administrador de un gimnasio no puede editarlo ni suspenderlo', async () => {
+      const { app } = buildApp();
+      const admin = { ...superAdmin, 'x-user-roles': 'ADMINISTRADOR' };
+
+      await request(app)
+        .patch(`/platform/gyms/${GYM_ID}`)
+        .set(admin)
+        .send({ nombre: 'X' })
+        .expect(403);
+      await request(app)
+        .post(`/platform/gyms/${GYM_ID}/status`)
+        .set(admin)
+        .send({ activo: false })
+        .expect(403);
     });
   });
 });

@@ -59,6 +59,8 @@ export interface CompleteAccountCommand {
   passwordHash: string;
   /** Instante del servidor con el que se revalida la vigencia al consumirla. */
   now: Date;
+  /** FL-19/3: consentimiento para datos de salud, separado del alta. */
+  healthDataConsent: boolean;
 }
 
 export interface CompletedAccountResult {

@@ -46,6 +46,12 @@ import {
 } from './modules/assignments/application/assignments';
 import { createAssignmentsRouter } from './modules/assignments/infrastructure/assignments.http';
 import { PrismaAssignmentsRepository } from './modules/assignments/infrastructure/prisma-assignments.repository';
+import {
+  InventoryUseCases,
+  type InventoryRepository,
+} from './modules/inventory/application/inventory';
+import { createInventoryRouter } from './modules/inventory/infrastructure/inventory.http';
+import { PrismaInventoryRepository } from './modules/inventory/infrastructure/prisma-inventory.repository';
 import type { GymsRepository } from './modules/gyms/application/ports/gyms.repository';
 import type { InvitationMailer } from './modules/invitations/application/ports/invitation-mailer';
 import type { TimezoneCatalog } from './modules/gyms/application/ports/timezone-catalog';
@@ -53,6 +59,8 @@ import {
   ListGymsUseCase,
   ListTimezonesUseCase,
   ReissueBootstrapInvitationUseCase,
+  SetGymStatusUseCase,
+  UpdateGymUseCase,
 } from './modules/gyms/application/use-cases/manage-gyms.use-cases';
 import { ProvisionGymUseCase } from './modules/gyms/application/use-cases/provision-gym.use-case';
 import { createInvitationMailerFromEnv } from './modules/invitations/infrastructure/email/invitation-mailers';
@@ -172,6 +180,7 @@ interface AppDependencies {
   invitationMailer?: InvitationMailer;
   studentContextRepository?: StudentContextRepository;
   assignmentsRepository?: AssignmentsRepository;
+  inventoryRepository?: InventoryRepository;
   prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
@@ -227,6 +236,7 @@ export function createApp({
   invitationMailer,
   studentContextRepository,
   assignmentsRepository,
+  inventoryRepository,
   prescriptionsRepository,
   trainerAssignments,
   clock,
@@ -360,6 +370,12 @@ export function createApp({
           resolvedClock,
         ),
         new ListTimezonesUseCase(resolvedTimezones),
+        new UpdateGymUseCase(
+          resolvedGymsRepo,
+          resolvedTimezones,
+          resolvedClock,
+        ),
+        new SetGymStatusUseCase(resolvedGymsRepo, resolvedClock),
       ),
     ),
   );
@@ -369,6 +385,15 @@ export function createApp({
     createAssignmentsRouter(
       new AssignmentsUseCases(
         assignmentsRepository ?? new PrismaAssignmentsRepository(prisma),
+      ),
+    ),
+  );
+
+  // FL-20 / CB-59: inventario del gimnasio y primeros pasos del administrador.
+  app.use(
+    createInventoryRouter(
+      new InventoryUseCases(
+        inventoryRepository ?? new PrismaInventoryRepository(prisma),
       ),
     ),
   );

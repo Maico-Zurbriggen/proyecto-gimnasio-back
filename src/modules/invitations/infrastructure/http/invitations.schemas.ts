@@ -23,6 +23,8 @@ export const completeAccountBodySchema = z.object({
     .string({ message: 'La contraseña es obligatoria' })
     .min(1, 'La contraseña es obligatoria')
     .max(256, 'La contraseña es demasiado larga'),
+  /** FL-19/3: separado y opcional; sin él la cuenta se crea igual (A2). */
+  healthDataConsent: z.boolean().optional(),
 });
 
 export type CompleteAccountBody = z.infer<typeof completeAccountBodySchema>;

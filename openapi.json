@@ -249,6 +249,52 @@
           "administratorCount",
           "bootstrapInvitation"
         ]
+      },
+      "Inventory": {
+        "type": "object",
+        "properties": {
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "present": {
+                  "type": "boolean"
+                },
+                "alwaysPresent": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "prescribableExercises": {
+            "type": "integer"
+          },
+          "totalExercises": {
+            "type": "integer"
+          },
+          "missingPatterns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "EMPUJE_HORIZONTAL",
+                "TRACCION",
+                "DOMINANTE_RODILLA",
+                "DOMINANTE_CADERA"
+              ]
+            }
+          },
+          "onlyBodyweight": {
+            "type": "boolean"
+          }
+        }
       }
     }
   },
@@ -946,6 +992,10 @@
                     "trainerName": {
                       "type": ["string", "null"],
                       "description": "Profesor que va a tener el alumno, si lo invitó un entrenador."
+                    },
+                    "healthConsentText": {
+                      "type": ["string", "null"],
+                      "description": "Texto del consentimiento para datos de salud (sólo alumnos)."
                     }
                   },
                   "required": [
@@ -1035,6 +1085,11 @@
                     "minLength": 8,
                     "maxLength": 64,
                     "description": "Al menos una mayúscula, una minúscula y un número."
+                  },
+                  "healthDataConsent": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "FL-19/3: separado y opcional; se guarda con el texto aceptado."
                   }
                 },
                 "required": ["displayName", "password"]
@@ -1590,6 +1645,12 @@
                         }
                       },
                       "description": "Profesor asignado (asignación vigente)."
+                    },
+                    "healthDataConsent": {
+                      "type": "boolean"
+                    },
+                    "healthConsentText": {
+                      "type": "string"
                     }
                   }
                 }
@@ -1757,8 +1818,19 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "health_data_consent_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
           }
-        }
+        },
+        "description": "Requiere consentimiento para datos de salud (409 health_data_consent_required, RN-104)."
       }
     },
     "/invitations": {
@@ -2174,6 +2246,476 @@
           },
           "403": {
             "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/inventory": {
+      "get": {
+        "operationId": "getInventory",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Inventario y catálogo prescribible (FL-20, RN-115 a RN-118)",
+        "description": "PESO_CORPORAL se considera siempre presente. missingPatterns lista los grupos de patrones mínimos que el catálogo prescribible no cubre.",
+        "responses": {
+          "200": {
+            "description": "Inventario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inventory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveInventory",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Declarar el inventario del gimnasio (RF-114)",
+        "description": "Ejercicios de rutinas vigentes que pierden su equipamiento pasan a INCOMPATIBLE y los que lo recuperan vuelven a COMPATIBLE (RN-117). Queda en auditoría.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "present": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["present"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inventario guardado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Inventory"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "markedIncompatible": {
+                          "type": "integer"
+                        },
+                        "restored": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "unknown_equipment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/setup": {
+      "get": {
+        "operationId": "getGymSetup",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Primeros pasos del gimnasio (CB-59)",
+        "responses": {
+          "200": {
+            "description": "Lo que falta para que alguien pueda entrenar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hasTrainer": {
+                      "type": "boolean"
+                    },
+                    "hasInventory": {
+                      "type": "boolean"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/platform/gyms/{gymId}": {
+      "parameters": [
+        {
+          "name": "gymId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateGym",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Editar un gimnasio (HU13 criterios 22 y 23)",
+        "description": "No borra datos. Cambiar la zona horaria de un gimnasio con sesiones registradas exige confirmarCambioDeZona.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string"
+                  },
+                  "zonaHoraria": {
+                    "type": "string"
+                  },
+                  "confirmarCambioDeZona": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Gimnasio actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GymSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Errores por campo (zona no reconocida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "gym_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "gym_name_taken o timezone_change_requires_confirmation (con sessionCount).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo SUPERADMIN.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/platform/gyms/{gymId}/status": {
+      "parameters": [
+        {
+          "name": "gymId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "setGymStatus",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Suspender o reactivar un gimnasio",
+        "description": "No borra datos. Mientras está suspendido, sus usuarios no pueden ingresar y sus sesiones abiertas dejan de valer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "activo": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["activo"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estado actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GymSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "gym_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo SUPERADMIN.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/me/health-consent": {
+      "post": {
+        "operationId": "grantHealthConsent",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Otorgar el consentimiento para datos de salud (FL-19/A2)",
+        "responses": {
+          "201": {
+            "description": "Contexto actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "experienceLevel": {
+                      "type": ["string", "null"],
+                      "enum": ["PRINCIPIANTE", "INTERMEDIO", "AVANZADO", null]
+                    },
+                    "availableDaysPerWeek": {
+                      "type": ["integer", "null"]
+                    },
+                    "birthDate": {
+                      "type": ["string", "null"],
+                      "format": "date"
+                    },
+                    "sex": {
+                      "type": ["string", "null"],
+                      "enum": ["MASCULINO", "FEMENINO", null]
+                    },
+                    "heightCm": {
+                      "type": ["number", "null"]
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "weightKg": {
+                      "type": ["number", "null"],
+                      "description": "Último peso registrado."
+                    },
+                    "trainer": {
+                      "type": ["object", "null"],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Profesor asignado (asignación vigente)."
+                    },
+                    "healthDataConsent": {
+                      "type": "boolean"
+                    },
+                    "healthConsentText": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sin perfil de alumno.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ALUMNO.",
             "content": {
               "application/json": {
                 "schema": {

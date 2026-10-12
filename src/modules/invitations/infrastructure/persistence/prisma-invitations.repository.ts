@@ -11,6 +11,7 @@ import type {
   IssuedInvitationRecord,
 } from '../../application/ports/invitations.repository';
 import { errorPorMotivo } from '../../application/use-cases/validate-invitation.use-case';
+import { TEXTO_CONSENTIMIENTO_DATOS_SALUD } from '../../../student-context/domain/health-consent';
 import {
   InvitationNotFoundError,
   UserAlreadyExistsError,
@@ -283,6 +284,16 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
         // (FL-01). Existir desde el alta permite registrar la asignación.
         if (roles.includes('ALUMNO')) {
           await tx.studentProfile.create({ data: { userId: user.id } });
+          // FL-19/3 y RN-104: la decisión queda registrada con el texto
+          // exacto, se haya aceptado o no.
+          await tx.consent.create({
+            data: {
+              userId: user.id,
+              type: 'DATOS_SALUD',
+              granted: command.healthDataConsent,
+              acceptedText: TEXTO_CONSENTIMIENTO_DATOS_SALUD,
+            },
+          });
         }
         // Sin perfil profesional un entrenador no puede revisar rutinas ni
         // recibir asignaciones; los datos se completan desde su perfil.

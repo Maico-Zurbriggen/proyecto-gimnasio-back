@@ -1,5 +1,6 @@
 import type { AuthUser } from '../../../shared/types/auth';
 import type { Clock } from '../../routines/application/ports/clock';
+import { TEXTO_CONSENTIMIENTO_DATOS_SALUD } from '../domain/health-consent';
 import {
   validarContexto,
   type NivelExperiencia,
@@ -22,6 +23,8 @@ export interface StudentContextRecord {
    * gimnasio se lo asigna (FL-01/A2).
    */
   trainer: { id: string; displayName: string } | null;
+  /** RN-104: último consentimiento para datos de salud. */
+  healthDataConsent: boolean;
 }
 
 export interface StudentContextRepository {
@@ -32,9 +35,21 @@ export interface StudentContextRepository {
     input: StudentContextInput,
     now: Date,
   ): Promise<StudentContextRecord | null>;
+  /** Registra el consentimiento con el texto aceptado. */
+  grantHealthConsent(actor: AuthUser): Promise<boolean>;
 }
 
 export class StudentContextNotFoundError extends Error {}
+
+/** RN-104: sin consentimiento no se registran peso ni altura. */
+export class HealthDataConsentRequiredError extends Error {
+  constructor(
+    message = 'Para cargar tu peso y tu altura necesitamos tu consentimiento para datos de salud',
+  ) {
+    super(message);
+    this.name = 'HealthDataConsentRequiredError';
+  }
+}
 
 export class InvalidStudentContextError extends Error {
   constructor(readonly fields: StudentContextErrors) {
@@ -52,7 +67,11 @@ function conCompletitud(record: StudentContextRecord) {
     record.heightCm,
     record.weightKg,
   ];
-  return { ...record, complete: datos.every((value) => value !== null) };
+  return {
+    ...record,
+    healthConsentText: TEXTO_CONSENTIMIENTO_DATOS_SALUD,
+    complete: datos.every((value) => value !== null),
+  };
 }
 
 export class StudentContextUseCases {
@@ -73,8 +92,19 @@ export class StudentContextUseCases {
     if (Object.keys(errores).length > 0) {
       throw new InvalidStudentContextError(errores);
     }
+    const actual = await this.repository.find(actor);
+    if (!actual) throw new StudentContextNotFoundError();
+    if (!actual.healthDataConsent) throw new HealthDataConsentRequiredError();
     const record = await this.repository.save(actor, input, now);
     if (!record) throw new StudentContextNotFoundError();
     return conCompletitud(record);
+  }
+
+  /** FL-19/A2: el consentimiento se puede otorgar después del alta. */
+  async grantHealthConsent(actor: AuthUser) {
+    if (!(await this.repository.grantHealthConsent(actor))) {
+      throw new StudentContextNotFoundError();
+    }
+    return this.read(actor);
   }
 }

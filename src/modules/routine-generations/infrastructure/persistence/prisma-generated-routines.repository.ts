@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { equipamientoDisponible } from '../../../inventory/domain/prescribable-catalog';
 
 import { adaptRoutineGenerationOutput } from '../../../../integrations/ai/routine-generation-output.mapper';
 
@@ -100,7 +101,8 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
       }),
     ]);
 
-    const availableEquipment = new Set(
+    // RN-115: el peso corporal está siempre presente aunque no se declare.
+    const availableEquipment = equipamientoDisponible(
       equipment.map((item) => item.equipmentCode),
     );
     const now = new Date();

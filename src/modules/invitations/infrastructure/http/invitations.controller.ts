@@ -223,6 +223,7 @@ export class InvitationsController {
         token: params.data.token,
         displayName: body.data.displayName,
         password: body.data.password,
+        healthDataConsent: body.data.healthDataConsent,
       });
 
       emitirCookieDeSesion(res, result.token, result.expiresAt);

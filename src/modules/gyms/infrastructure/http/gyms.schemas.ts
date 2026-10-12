@@ -31,3 +31,30 @@ export const provisionGymBodySchema = z.object({
 export const gymParamsSchema = z.object({
   gymId: z.string().uuid(),
 });
+
+/** Edición (criterio 22): cualquiera de los dos campos, nunca vacío. */
+export const updateGymBodySchema = z
+  .object({
+    nombre: z
+      .string()
+      .trim()
+      .min(1, 'El nombre del gimnasio es obligatorio')
+      .max(LARGO_MAXIMO_NOMBRE_GIMNASIO)
+      .optional(),
+    zonaHoraria: z
+      .string()
+      .trim()
+      .min(1, 'La zona horaria es obligatoria')
+      .optional(),
+    confirmarCambioDeZona: z.boolean().optional(),
+  })
+  .refine(
+    (body) => body.nombre !== undefined || body.zonaHoraria !== undefined,
+    {
+      message: 'Indicá qué querés cambiar',
+    },
+  );
+
+export const gymStatusBodySchema = z.object({
+  activo: z.boolean({ message: 'Indicá si el gimnasio queda activo' }),
+});

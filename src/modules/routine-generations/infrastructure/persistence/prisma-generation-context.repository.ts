@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { equipamientoDisponible } from '../../../inventory/domain/prescribable-catalog';
 
 import type {
   CatalogExerciseRef,
@@ -81,7 +82,8 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       }),
     ]);
 
-    const availableEquipmentCodes = new Set(
+    // RN-115: el peso corporal está siempre presente aunque no se declare.
+    const availableEquipmentCodes = equipamientoDisponible(
       presentEquipment.map((equipment) => equipment.equipmentCode),
     );
 

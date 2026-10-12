@@ -124,6 +124,8 @@ describe('Invitations API - HU06', () => {
         expiresAt: '2026-09-25T10:00:00.000Z',
         // FL-19/4: quien invita al alumno va a ser su profesor.
         trainerName: 'Lucía Entrenadora',
+        // FL-19/3: el texto del consentimiento lo define el servidor.
+        healthConsentText: expect.stringContaining('datos de salud'),
       });
     });
 
@@ -219,6 +221,25 @@ describe('Invitations API - HU06', () => {
       expect(primera?.startsWith('$2')).toBe(true);
       // Misma contraseña, hashes distintos.
       expect(primera).not.toBe(segunda);
+    });
+
+    it('FL-19/3: el consentimiento de datos de salud llega al alta, separado', async () => {
+      const { app, invitationsRepository } = buildApp();
+
+      await request(app)
+        .post(`/invitations/${TOKEN_VIGENTE}/complete`)
+        .send({ ...DATOS_VALIDOS, healthDataConsent: true })
+        .expect(201);
+      await request(app)
+        .post(`/invitations/${TOKEN_VIGENTE}/complete`)
+        .send(DATOS_VALIDOS)
+        .expect(201);
+
+      const llamadas = vi.mocked(invitationsRepository.completeAccount).mock
+        .calls;
+      expect(llamadas[0]?.[0].healthDataConsent).toBe(true);
+      // Sin marcarlo, la cuenta se crea igual (FL-19/A2).
+      expect(llamadas[1]?.[0].healthDataConsent).toBe(false);
     });
 
     it('criterio 8: los roles del pedido se ignoran', async () => {
