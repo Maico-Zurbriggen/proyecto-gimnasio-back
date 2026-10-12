@@ -9,6 +9,7 @@ const VALIDO: StudentContextInput = {
   birthDate: '1995-05-20',
   sex: 'FEMENINO',
   heightCm: 165,
+  weightKg: 60,
 };
 
 describe('validarContexto (FL-01)', () => {
@@ -23,6 +24,7 @@ describe('validarContexto (FL-01)', () => {
         availableDaysPerWeek: 8,
         heightCm: 40,
         birthDate: '2020-01-01',
+        weightKg: 500,
       },
       AHORA,
     );
@@ -30,6 +32,7 @@ describe('validarContexto (FL-01)', () => {
       'availableDaysPerWeek',
       'birthDate',
       'heightCm',
+      'weightKg',
     ]);
   });
 

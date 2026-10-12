@@ -13,6 +13,44 @@ export interface InvitationRecord {
   issuedAt: Date;
   expiresAt: Date;
   roles: UserRole[];
+  /**
+   * Entrenador que emitió la invitación de un alumno: va a ser su profesor
+   * asignado (FL-19/4). `null` si la emitió otro rol o el aprovisionamiento.
+   */
+  trainerName: string | null;
+}
+
+/** Invitación a emitir, ya resuelta por el caso de uso. */
+export interface IssueInvitationCommand {
+  gymId: string;
+  issuedByUserId: string;
+  emailNormalized: string;
+  roles: UserRole[];
+  tokenHash: string;
+  issuedAt: Date;
+  expiresAt: Date;
+}
+
+/** Invitación recién emitida, con lo que hace falta para el correo. */
+export interface IssuedInvitation {
+  id: string;
+  gymName: string;
+  emailNormalized: string;
+  roles: UserRole[];
+  expiresAt: Date;
+  /** Nombre del emisor si es entrenador del gimnasio. */
+  trainerName: string | null;
+}
+
+/** Invitación en el listado de quien la emitió. */
+export interface IssuedInvitationRecord {
+  id: string;
+  emailNormalized: string;
+  roles: UserRole[];
+  status: InvitationStatus;
+  issuedAt: Date;
+  expiresAt: Date;
+  issuedByName: string | null;
 }
 
 export interface CompleteAccountCommand {
@@ -32,6 +70,25 @@ export interface CompletedAccountResult {
 }
 
 export interface InvitationsRepository {
+  /**
+   * Emite una invitación con su auditoría en una sola transacción. El paso
+   * `beforeCommit` corre adentro: si el correo no sale, no queda nada.
+   * Responde con el motivo si el correo ya tiene cuenta en el gimnasio o una
+   * invitación vigente.
+   */
+  issue(
+    command: IssueInvitationCommand,
+    beforeCommit: (issued: IssuedInvitation) => Promise<void>,
+  ): Promise<
+    IssuedInvitation | 'EMAIL_YA_REGISTRADO' | 'INVITACION_VIGENTE_EXISTENTE'
+  >;
+
+  /** Invitaciones del gimnasio; acotadas al emisor si se indica. */
+  list(filter: {
+    gymId: string;
+    issuedByUserId?: string;
+  }): Promise<IssuedInvitationRecord[]>;
+
   /** Busca la invitación por el hash de su token. `null` si no existe. */
   findByTokenHash(tokenHash: string): Promise<InvitationRecord | null>;
 

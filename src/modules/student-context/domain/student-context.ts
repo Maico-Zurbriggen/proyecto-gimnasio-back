@@ -1,6 +1,8 @@
 import {
   ALTURA_MAX_CM,
   ALTURA_MIN_CM,
+  PESO_MAX_KG,
+  PESO_MIN_KG,
 } from '../../measurements/domain/services/measurement-ranges';
 
 /**
@@ -32,6 +34,8 @@ export interface StudentContextInput {
   birthDate: string;
   sex: Sexo;
   heightCm: number;
+  /** Peso actual: se guarda como medición de PESO_CORPORAL del día. */
+  weightKg: number;
 }
 
 /** Errores por campo, con el texto que la pantalla muestra junto a cada input. */
@@ -71,6 +75,16 @@ export function validarContexto(
   ) {
     errores.heightCm = [
       `La altura debe estar entre ${String(ALTURA_MIN_CM)} y ${String(ALTURA_MAX_CM)} cm.`,
+    ];
+  }
+
+  if (
+    !Number.isFinite(input.weightKg) ||
+    input.weightKg < PESO_MIN_KG ||
+    input.weightKg > PESO_MAX_KG
+  ) {
+    errores.weightKg = [
+      `El peso debe estar entre ${String(PESO_MIN_KG)} y ${String(PESO_MAX_KG)} kg.`,
     ];
   }
 

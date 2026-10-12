@@ -25,6 +25,8 @@ export interface ValidatedInvitationDto {
   email: string;
   roles: UserRole[];
   expiresAt: string;
+  /** Profesor que va a tener el alumno, si lo invitó un entrenador. */
+  trainerName: string | null;
 }
 
 /** Largo máximo razonable de un token; uno más largo ni se consulta. */
@@ -58,6 +60,7 @@ export class ValidateInvitationUseCase {
         invitation.issuedAt,
         invitation.expiresAt,
       ).toISOString(),
+      trainerName: invitation.trainerName,
     };
   }
 }

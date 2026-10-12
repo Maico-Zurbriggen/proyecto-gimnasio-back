@@ -26,3 +26,18 @@ export const completeAccountBodySchema = z.object({
 });
 
 export type CompleteAccountBody = z.infer<typeof completeAccountBodySchema>;
+
+/** Emisión (FL-19/1): el gimnasio sale del emisor, nunca del pedido. */
+export const issueInvitationBodySchema = z.object({
+  email: z
+    .string({ message: 'El correo es obligatorio' })
+    .trim()
+    .min(1, 'El correo es obligatorio')
+    .email('El correo no tiene un formato válido'),
+  roles: z
+    .array(z.enum(['ALUMNO', 'ENTRENADOR', 'ADMINISTRADOR']), {
+      message: 'Elegí al menos un rol',
+    })
+    .min(1, 'Elegí al menos un rol')
+    .default(['ALUMNO']),
+});

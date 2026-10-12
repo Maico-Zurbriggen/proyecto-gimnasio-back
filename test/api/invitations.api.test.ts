@@ -39,6 +39,7 @@ function invitacion(
     issuedAt: new Date('2026-09-15T10:00:00Z'),
     expiresAt,
     roles: ['ALUMNO'],
+    trainerName: 'Lucía Entrenadora',
   };
 }
 
@@ -58,6 +59,8 @@ function buildApp() {
   const sessions: CreateSessionCommand[] = [];
 
   const invitationsRepository: InvitationsRepository = {
+    issue: vi.fn(() => Promise.reject(new Error('no usado'))),
+    list: vi.fn(() => Promise.resolve([])),
     findByTokenHash: vi.fn((tokenHash: string) =>
       Promise.resolve(REGISTROS[tokenHash] ?? null),
     ),
@@ -119,6 +122,8 @@ describe('Invitations API - HU06', () => {
         email: 'nuevo.alumno@gym.test',
         roles: ['ALUMNO'],
         expiresAt: '2026-09-25T10:00:00.000Z',
+        // FL-19/4: quien invita al alumno va a ser su profesor.
+        trainerName: 'Lucía Entrenadora',
       });
     });
 

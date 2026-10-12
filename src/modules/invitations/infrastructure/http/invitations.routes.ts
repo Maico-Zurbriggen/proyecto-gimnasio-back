@@ -1,5 +1,10 @@
 import { Router, type RequestHandler } from 'express';
 
+import {
+  requireAuth,
+  requireRoles,
+} from '../../../../shared/middleware/auth.middleware';
+
 import type { InvitationsController } from './invitations.controller';
 
 export function createInvitationsRouter(
@@ -7,6 +12,12 @@ export function createInvitationsRouter(
   limitAttempts: (scope: string) => RequestHandler,
 ): Router {
   const router = Router();
+
+  // FL-19: emitir y listar exige sesión de administrador o entrenador. Qué
+  // roles puede otorgar cada uno lo decide el dominio, no la ruta.
+  const emisores = [requireAuth, requireRoles('ADMINISTRADOR', 'ENTRENADOR')];
+  router.post('/invitations', ...emisores, controller.issue);
+  router.get('/invitations', ...emisores, controller.list);
 
   // Las dos rutas son públicas por definición: quien las usa todavía no tiene
   // cuenta. La invitación misma es la credencial (RF-116), y por eso los

@@ -14,7 +14,7 @@ import {
   type EstadoInvitacionArranque,
 } from '../../domain/services/gym-provisioning';
 import type { GymsRepository } from '../ports/gyms.repository';
-import type { InvitationMailer } from '../ports/invitation-mailer';
+import type { InvitationMailer } from '../../../invitations/application/ports/invitation-mailer';
 import type { TimezoneCatalog } from '../ports/timezone-catalog';
 
 /** Gimnasio en el listado del SuperAdmin (HU13 - T2, criterio 21). */
@@ -103,11 +103,13 @@ export class ReissueBootstrapInvitationUseCase {
       },
       async (reissued) => {
         try {
-          await this.mailer.sendBootstrapInvitation({
+          await this.mailer.sendInvitation({
             to: reissued.email,
             gymName: reissued.gymName,
             token,
             expiresAt,
+            roles: ['ADMINISTRADOR'],
+            trainerName: null,
           });
         } catch {
           throw new InvitationDeliveryError();

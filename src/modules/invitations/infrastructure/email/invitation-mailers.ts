@@ -1,5 +1,5 @@
 import type {
-  BootstrapInvitationEmail,
+  InvitationEmail,
   InvitationMailer,
 } from '../../application/ports/invitation-mailer';
 
@@ -12,6 +12,42 @@ function fechaLegible(fecha: Date): string {
   return fecha.toISOString().slice(0, 10);
 }
 
+/** Asunto y primer párrafo según para qué se invita a la persona. */
+export function contenidoDeInvitacion(email: InvitationEmail): {
+  subject: string;
+  intro: string;
+} {
+  if (email.roles.includes('ADMINISTRADOR')) {
+    return {
+      subject: `Te invitaron a administrar ${email.gymName}`,
+      intro: `Te invitaron a crear tu cuenta de administración de ${email.gymName}.`,
+    };
+  }
+  if (email.roles.includes('ENTRENADOR')) {
+    return {
+      subject: `Te invitaron a entrenar alumnos en ${email.gymName}`,
+      intro: `Te invitaron a crear tu cuenta de entrenador en ${email.gymName}.`,
+    };
+  }
+  return {
+    subject: `Te invitaron a entrenar en ${email.gymName}`,
+    intro: email.trainerName
+      ? `${email.trainerName} te invitó a entrenar en ${email.gymName} y va a ser tu profesor.`
+      : `Te invitaron a entrenar en ${email.gymName}.`,
+  };
+}
+
+function cuerpo(email: InvitationEmail, link: string): string {
+  return [
+    contenidoDeInvitacion(email).intro,
+    '',
+    `Creá tu cuenta acá: ${link}`,
+    '',
+    `El enlace es de un solo uso y vence el ${fechaLegible(email.expiresAt)}.`,
+    'Si no esperabas este correo, podés ignorarlo.',
+  ].join('\n');
+}
+
 /**
  * Envío por la API HTTP de Resend, igual que la recuperación de contraseña
  * (HU09): mismo proveedor y sin SDK. No registra el contenido ni la respuesta.
@@ -20,9 +56,7 @@ function fechaLegible(fecha: Date): string {
  * `INVITATION_EMAIL_FROM`/`INVITATION_EMAIL_API_KEY` heredan las de HU09.
  */
 export class HttpInvitationMailer implements InvitationMailer {
-  async sendBootstrapInvitation(
-    email: BootstrapInvitationEmail,
-  ): Promise<void> {
+  async sendInvitation(email: InvitationEmail): Promise<void> {
     const pageUrl = process.env.INVITATION_PAGE_URL;
     const from =
       process.env.INVITATION_EMAIL_FROM || process.env.RECOVERY_EMAIL_FROM;
@@ -50,15 +84,8 @@ export class HttpInvitationMailer implements InvitationMailer {
       body: JSON.stringify({
         from,
         to: [email.to],
-        subject: `Te invitaron a administrar ${email.gymName}`,
-        text: [
-          `Te invitaron a crear tu cuenta de administración de ${email.gymName}.`,
-          '',
-          `Completala acá: ${link.toString()}`,
-          '',
-          `El enlace es de un solo uso y vence el ${fechaLegible(email.expiresAt)}.`,
-          'Si no esperabas este correo, podés ignorarlo.',
-        ].join('\n'),
+        subject: contenidoDeInvitacion(email).subject,
+        text: cuerpo(email, link.toString()),
       }),
     });
     if (!response.ok) throw new Error('Invitation delivery failed');
@@ -71,11 +98,11 @@ export class HttpInvitationMailer implements InvitationMailer {
  * consola del backend para poder recorrer el alta. Nunca se usa en producción.
  */
 export class ConsoleInvitationMailer implements InvitationMailer {
-  sendBootstrapInvitation(email: BootstrapInvitationEmail): Promise<void> {
+  sendInvitation(email: InvitationEmail): Promise<void> {
     const base =
       process.env.INVITATION_PAGE_URL ?? 'http://localhost:5173/invitacion';
     console.info(
-      `[dev] Invitación de arranque para ${email.to} (${email.gymName}): ${enlaceDeInvitacion(base, email.token)}`,
+      `[dev] Invitación para ${email.to} (${email.gymName}): ${enlaceDeInvitacion(base, email.token)}`,
     );
     return Promise.resolve();
   }

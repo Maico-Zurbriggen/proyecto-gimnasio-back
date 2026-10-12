@@ -6,6 +6,9 @@ import type {
   CompletedAccountResult,
   InvitationRecord,
   InvitationsRepository,
+  IssueInvitationCommand,
+  IssuedInvitation,
+  IssuedInvitationRecord,
 } from '../../application/ports/invitations.repository';
 import { errorPorMotivo } from '../../application/use-cases/validate-invitation.use-case';
 import {
@@ -18,6 +21,35 @@ import {
 } from '../../domain/services/invitation-validity';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+/** El envío del correo corre dentro de la transacción. */
+const OPCIONES_TRANSACCION = { maxWait: 5_000, timeout: 20_000 } as const;
+
+/** Nombre del emisor si es entrenador activo con perfil (será el profesor). */
+function nombreDeEntrenador(
+  issuer: {
+    displayName: string;
+    roles: { role: string }[];
+    trainerProfile: { userId: string } | null;
+  } | null,
+): string | null {
+  if (
+    !issuer ||
+    !issuer.trainerProfile ||
+    !issuer.roles.some((r) => r.role === 'ENTRENADOR')
+  ) {
+    return null;
+  }
+  return issuer.displayName;
+}
+
+const emisorSelect = {
+  select: {
+    displayName: true,
+    roles: { select: { role: true } },
+    trainerProfile: { select: { userId: true } },
+  },
+} as const;
 
 function esViolacionDeUnicidad(error: unknown): boolean {
   return (
@@ -35,11 +67,13 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
       include: {
         gym: { select: { name: true } },
         roles: { select: { role: true } },
+        issuedBy: emisorSelect,
       },
     });
     if (!invitation) {
       return null;
     }
+    const roles = invitation.roles.map((r) => r.role as UserRole);
 
     return {
       id: invitation.id,
@@ -49,8 +83,126 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
       status: invitation.status,
       issuedAt: invitation.issuedAt,
       expiresAt: invitation.expiresAt,
-      roles: invitation.roles.map((r) => r.role as UserRole),
+      roles,
+      trainerName: roles.includes('ALUMNO')
+        ? nombreDeEntrenador(invitation.issuedBy)
+        : null,
     };
+  }
+
+  async issue(
+    command: IssueInvitationCommand,
+    beforeCommit: (issued: IssuedInvitation) => Promise<void>,
+  ): Promise<
+    IssuedInvitation | 'EMAIL_YA_REGISTRADO' | 'INVITACION_VIGENTE_EXISTENTE'
+  > {
+    return this.prisma.$transaction(async (tx) => {
+      // Serializa las emisiones al mismo correo en el mismo gimnasio: dos
+      // pedidos simultáneos no dejan dos invitaciones vigentes.
+      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(${`${command.gymId}:${command.emailNormalized}`}))) AS bloqueo`;
+
+      const registered = await tx.user.findUnique({
+        where: {
+          gymId_emailNormalized: {
+            gymId: command.gymId,
+            emailNormalized: command.emailNormalized,
+          },
+        },
+        select: { id: true },
+      });
+      if (registered) return 'EMAIL_YA_REGISTRADO' as const;
+
+      const pending = await tx.invitation.findFirst({
+        where: {
+          gymId: command.gymId,
+          emailNormalized: command.emailNormalized,
+          status: 'VIGENTE',
+          expiresAt: { gt: command.issuedAt },
+        },
+        select: { id: true },
+      });
+      if (pending) return 'INVITACION_VIGENTE_EXISTENTE' as const;
+
+      const invitation = await tx.invitation.create({
+        data: {
+          gymId: command.gymId,
+          issuedByUserId: command.issuedByUserId,
+          emailNormalized: command.emailNormalized,
+          tokenHash: command.tokenHash,
+          issuedAt: command.issuedAt,
+          expiresAt: command.expiresAt,
+          roles: { create: command.roles.map((role) => ({ role })) },
+        },
+        select: {
+          id: true,
+          emailNormalized: true,
+          expiresAt: true,
+          gym: { select: { name: true } },
+          issuedBy: emisorSelect,
+        },
+      });
+
+      // RN-108/109: auditoría sin el token.
+      await tx.auditLog.create({
+        data: {
+          actorUserId: command.issuedByUserId,
+          operation: 'EMISION_INVITACION',
+          entityType: 'INVITATION',
+          entityId: invitation.id,
+          newValue: {
+            correo: command.emailNormalized,
+            roles: command.roles,
+            venceEl: command.expiresAt.toISOString(),
+          },
+        },
+      });
+
+      const issued: IssuedInvitation = {
+        id: invitation.id,
+        gymName: invitation.gym.name,
+        emailNormalized: invitation.emailNormalized,
+        roles: command.roles,
+        expiresAt: invitation.expiresAt,
+        trainerName: nombreDeEntrenador(invitation.issuedBy),
+      };
+      await beforeCommit(issued);
+      return issued;
+    }, OPCIONES_TRANSACCION);
+  }
+
+  async list(filter: {
+    gymId: string;
+    issuedByUserId?: string;
+  }): Promise<IssuedInvitationRecord[]> {
+    const invitations = await this.prisma.invitation.findMany({
+      where: {
+        gymId: filter.gymId,
+        issuedByProvisioning: false,
+        ...(filter.issuedByUserId
+          ? { issuedByUserId: filter.issuedByUserId }
+          : {}),
+      },
+      orderBy: { issuedAt: 'desc' },
+      take: 200,
+      select: {
+        id: true,
+        emailNormalized: true,
+        status: true,
+        issuedAt: true,
+        expiresAt: true,
+        roles: { select: { role: true } },
+        issuedBy: { select: { displayName: true } },
+      },
+    });
+    return invitations.map((invitation) => ({
+      id: invitation.id,
+      emailNormalized: invitation.emailNormalized,
+      roles: invitation.roles.map((r) => r.role as UserRole),
+      status: invitation.status,
+      issuedAt: invitation.issuedAt,
+      expiresAt: invitation.expiresAt,
+      issuedByName: invitation.issuedBy?.displayName ?? null,
+    }));
   }
 
   async completeAccount(

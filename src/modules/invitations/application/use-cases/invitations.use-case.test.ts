@@ -42,6 +42,15 @@ class InMemoryInvitations implements InvitationsRepository {
     return this.records.get(hashearToken(TOKEN))!;
   }
 
+  // La emisión se prueba en su propio archivo.
+  issue(): Promise<never> {
+    return Promise.reject(new Error('no usado en las pruebas de alta'));
+  }
+
+  list(): Promise<[]> {
+    return Promise.resolve([]);
+  }
+
   findByTokenHash(tokenHash: string): Promise<InvitationRecord | null> {
     return Promise.resolve(this.records.get(tokenHash) ?? null);
   }
@@ -109,6 +118,7 @@ describe('Casos de uso de invitaciones (HU06)', () => {
       issuedAt: new Date('2026-09-15T10:00:00Z'),
       expiresAt: new Date('2026-09-25T10:00:00Z'),
       roles: ['ALUMNO'],
+      trainerName: 'Lucía',
     });
   });
 
@@ -122,6 +132,7 @@ describe('Casos de uso de invitaciones (HU06)', () => {
         email: 'nuevo.alumno@gym.test',
         roles: ['ALUMNO'],
         expiresAt: '2026-09-25T10:00:00.000Z',
+        trainerName: 'Lucía',
       });
     });
 

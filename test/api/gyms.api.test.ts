@@ -12,9 +12,9 @@ import type {
   ReissuedInvitation,
 } from '../../src/modules/gyms/application/ports/gyms.repository';
 import type {
-  BootstrapInvitationEmail,
+  InvitationEmail,
   InvitationMailer,
-} from '../../src/modules/gyms/application/ports/invitation-mailer';
+} from '../../src/modules/invitations/application/ports/invitation-mailer';
 import type { TimezoneCatalog } from '../../src/modules/gyms/application/ports/timezone-catalog';
 import { hashearToken } from '../../src/modules/auth/domain/services/session-token';
 
@@ -101,9 +101,9 @@ const timezones: TimezoneCatalog = {
 
 function buildApp({ mailFails = false } = {}) {
   const gymsRepository = new FakeGymsRepository();
-  const sent: BootstrapInvitationEmail[] = [];
+  const sent: InvitationEmail[] = [];
   const invitationMailer: InvitationMailer = {
-    sendBootstrapInvitation: vi.fn((email: BootstrapInvitationEmail) => {
+    sendInvitation: vi.fn((email: InvitationEmail) => {
       if (mailFails) return Promise.reject(new Error('smtp down'));
       sent.push(email);
       return Promise.resolve();

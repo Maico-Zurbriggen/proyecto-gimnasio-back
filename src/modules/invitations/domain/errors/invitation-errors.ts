@@ -64,3 +64,40 @@ export class UserAlreadyExistsError extends Error {
     this.name = 'UserAlreadyExistsError';
   }
 }
+
+/** El emisor no puede otorgar alguno de los roles pedidos (RN-02d, RA-10). */
+export class ForbiddenRoleError extends Error {
+  constructor(message = 'No podés invitar con esos roles') {
+    super(message);
+    this.name = 'ForbiddenRoleError';
+  }
+}
+
+/** El correo ya tiene una cuenta en el gimnasio del emisor. */
+export class EmailAlreadyRegisteredError extends Error {
+  constructor(message = 'Ese correo ya tiene una cuenta en el gimnasio') {
+    super(message);
+    this.name = 'EmailAlreadyRegisteredError';
+  }
+}
+
+/** Ya hay una invitación vigente para ese correo en el gimnasio. */
+export class PendingInvitationExistsError extends Error {
+  constructor(message = 'Ya hay una invitación vigente para ese correo') {
+    super(message);
+    this.name = 'PendingInvitationExistsError';
+  }
+}
+
+/**
+ * El correo no salió. La invitación se deshace: el token sólo viaja en el
+ * correo, así que una invitación sin enviar no le serviría a nadie.
+ */
+export class InvitationDeliveryError extends Error {
+  constructor(
+    message = 'No se pudo enviar el correo de invitación; no se guardó nada',
+  ) {
+    super(message);
+    this.name = 'InvitationDeliveryError';
+  }
+}

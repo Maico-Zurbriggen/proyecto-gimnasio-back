@@ -41,7 +41,7 @@ import { ProposalsController } from './modules/evolution/infrastructure/http/pro
 import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
 import type { GymsRepository } from './modules/gyms/application/ports/gyms.repository';
-import type { InvitationMailer } from './modules/gyms/application/ports/invitation-mailer';
+import type { InvitationMailer } from './modules/invitations/application/ports/invitation-mailer';
 import type { TimezoneCatalog } from './modules/gyms/application/ports/timezone-catalog';
 import {
   ListGymsUseCase,
@@ -49,7 +49,7 @@ import {
   ReissueBootstrapInvitationUseCase,
 } from './modules/gyms/application/use-cases/manage-gyms.use-cases';
 import { ProvisionGymUseCase } from './modules/gyms/application/use-cases/provision-gym.use-case';
-import { createInvitationMailerFromEnv } from './modules/gyms/infrastructure/email/invitation-mailers';
+import { createInvitationMailerFromEnv } from './modules/invitations/infrastructure/email/invitation-mailers';
 import { GymsController } from './modules/gyms/infrastructure/http/gyms.controller';
 import { createGymsRouter } from './modules/gyms/infrastructure/http/gyms.routes';
 import { PrismaGymsRepository } from './modules/gyms/infrastructure/persistence/prisma-gyms.repository';
@@ -57,6 +57,10 @@ import { PrismaTimezoneCatalog } from './modules/gyms/infrastructure/persistence
 import type { AttemptLimiter } from './modules/invitations/application/ports/attempt-limiter';
 import type { InvitationsRepository } from './modules/invitations/application/ports/invitations.repository';
 import { CompleteAccountUseCase } from './modules/invitations/application/use-cases/complete-account.use-case';
+import {
+  IssueInvitationUseCase,
+  ListInvitationsUseCase,
+} from './modules/invitations/application/use-cases/issue-invitation.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
 import { InvitationsController } from './modules/invitations/infrastructure/http/invitations.controller';
 import { createAttemptLimit } from './modules/invitations/infrastructure/http/attempt-limit.middleware';
@@ -296,6 +300,10 @@ export function createApp({
   // HU06: completar la cuenta desde la invitación. Va junto al router de auth
   // porque comparte su mecanismo de sesión: al completarla se emite la misma
   // cookie que emite el login.
+  // El correo con el enlace lo usan la emisión (FL-19) y el aprovisionamiento
+  // del primer administrador (HU13).
+  const resolvedInvitationMailer =
+    invitationMailer ?? createInvitationMailerFromEnv();
   const resolvedInvitationsRepo =
     invitationsRepository ?? new PrismaInvitationsRepository(prisma);
   app.use(
@@ -307,6 +315,12 @@ export function createApp({
           resolvedAuthRepo,
           resolvedClock,
         ),
+        new IssueInvitationUseCase(
+          resolvedInvitationsRepo,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
+        new ListInvitationsUseCase(resolvedInvitationsRepo, resolvedClock),
       ),
       createAttemptLimit(
         invitationAttemptLimiter ??
@@ -322,8 +336,6 @@ export function createApp({
   const resolvedGymsRepo = gymsRepository ?? new PrismaGymsRepository(prisma);
   const resolvedTimezones =
     timezoneCatalog ?? new PrismaTimezoneCatalog(prisma);
-  const resolvedInvitationMailer =
-    invitationMailer ?? createInvitationMailerFromEnv();
   app.use(
     createGymsRouter(
       new GymsController(

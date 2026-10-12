@@ -15,6 +15,13 @@ export interface StudentContextRecord {
   birthDate: string | null;
   sex: Sexo | null;
   heightCm: number | null;
+  /** Último peso registrado. */
+  weightKg: number | null;
+  /**
+   * Profesor asignado (asignación vigente). `null` si todavía no tiene: el
+   * gimnasio se lo asigna (FL-01/A2).
+   */
+  trainer: { id: string; displayName: string } | null;
 }
 
 export interface StudentContextRepository {
@@ -35,11 +42,17 @@ export class InvalidStudentContextError extends Error {
   }
 }
 
+/** El contexto está completo cuando todos sus datos están declarados. */
 function conCompletitud(record: StudentContextRecord) {
-  return {
-    ...record,
-    complete: Object.values(record).every((value) => value !== null),
-  };
+  const datos = [
+    record.experienceLevel,
+    record.availableDaysPerWeek,
+    record.birthDate,
+    record.sex,
+    record.heightCm,
+    record.weightKg,
+  ];
+  return { ...record, complete: datos.every((value) => value !== null) };
 }
 
 export class StudentContextUseCases {

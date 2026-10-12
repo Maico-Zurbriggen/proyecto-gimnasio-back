@@ -25,6 +25,7 @@ const body = z.object({
   birthDate: z.iso.date({ message: 'Indicá tu fecha de nacimiento' }),
   sex: z.enum(SEXOS, { message: 'Elegí una opción' }),
   heightCm: z.number({ message: 'Indicá tu altura' }),
+  weightKg: z.number({ message: 'Indicá tu peso' }),
 });
 
 function sendError(error: unknown, res: Response, next: NextFunction) {

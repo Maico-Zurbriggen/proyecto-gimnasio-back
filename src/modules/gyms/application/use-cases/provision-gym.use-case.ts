@@ -15,7 +15,7 @@ import {
   tieneFormaDeZonaIana,
 } from '../../domain/services/gym-provisioning';
 import type { GymsRepository } from '../ports/gyms.repository';
-import type { InvitationMailer } from '../ports/invitation-mailer';
+import type { InvitationMailer } from '../../../invitations/application/ports/invitation-mailer';
 import type { TimezoneCatalog } from '../ports/timezone-catalog';
 
 export interface ProvisionGymInput {
@@ -84,11 +84,13 @@ export class ProvisionGymUseCase {
       },
       async (gym) => {
         try {
-          await this.mailer.sendBootstrapInvitation({
+          await this.mailer.sendInvitation({
             to: adminEmail,
             gymName: gym.name,
             token,
             expiresAt,
+            roles: ['ADMINISTRADOR'],
+            trainerName: null,
           });
         } catch {
           throw new InvitationDeliveryError();

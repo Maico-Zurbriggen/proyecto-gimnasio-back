@@ -2,19 +2,28 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { emitirCookieDeSesion } from '../../../auth/infrastructure/http/session-cookie';
 import type { CompleteAccountUseCase } from '../../application/use-cases/complete-account.use-case';
+import type {
+  IssueInvitationUseCase,
+  ListInvitationsUseCase,
+} from '../../application/use-cases/issue-invitation.use-case';
 import type { ValidateInvitationUseCase } from '../../application/use-cases/validate-invitation.use-case';
 import {
+  EmailAlreadyRegisteredError,
+  ForbiddenRoleError,
   InvalidDisplayNameError,
+  InvitationDeliveryError,
   InvitationAlreadyUsedError,
   InvitationExpiredError,
   InvitationNotFoundError,
   InvitationRevokedError,
+  PendingInvitationExistsError,
   UserAlreadyExistsError,
   WeakPasswordError,
 } from '../../domain/errors/invitation-errors';
 import {
   completeAccountBodySchema,
   invitationTokenParamSchema,
+  issueInvitationBodySchema,
 } from './invitations.schemas';
 
 /**
@@ -78,6 +87,37 @@ function sendInvitationError(
     });
     return;
   }
+  if (error instanceof ForbiddenRoleError) {
+    res.status(403).json({
+      error: 'forbidden_role',
+      message: error.message,
+      fields: { roles: [error.message] },
+    });
+    return;
+  }
+  if (error instanceof EmailAlreadyRegisteredError) {
+    res.status(409).json({
+      error: 'email_already_registered',
+      message: error.message,
+      fields: { email: [error.message] },
+    });
+    return;
+  }
+  if (error instanceof PendingInvitationExistsError) {
+    res.status(409).json({
+      error: 'pending_invitation_exists',
+      message: error.message,
+      fields: { email: [error.message] },
+    });
+    return;
+  }
+  if (error instanceof InvitationDeliveryError) {
+    res.status(502).json({
+      error: 'invitation_delivery_failed',
+      message: error.message,
+    });
+    return;
+  }
   if (error instanceof UserAlreadyExistsError) {
     res.status(409).json({
       error: 'user_already_exists',
@@ -93,7 +133,48 @@ export class InvitationsController {
   constructor(
     private readonly validateInvitation: ValidateInvitationUseCase,
     private readonly completeAccount: CompleteAccountUseCase,
+    private readonly issueInvitation: IssueInvitationUseCase,
+    private readonly listInvitations: ListInvitationsUseCase,
   ) {}
+
+  /** FL-19/1-2: emisión de una invitación y envío del enlace por correo. */
+  issue = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const body = issueInvitationBodySchema.safeParse(req.body ?? {});
+      if (!body.success) {
+        res.status(400).json({
+          error: 'invalid_request_body',
+          fields: body.error.flatten().fieldErrors,
+        });
+        return;
+      }
+      const issued = await this.issueInvitation.execute({
+        actor: req.user!,
+        email: body.data.email,
+        roles: body.data.roles,
+      });
+      res.status(201).json(issued);
+    } catch (error) {
+      sendInvitationError(error, res, next);
+    }
+  };
+
+  /** Invitaciones emitidas por el gimnasio (o por el entrenador). */
+  list = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      res.status(200).json(await this.listInvitations.execute(req.user!));
+    } catch (error) {
+      sendInvitationError(error, res, next);
+    }
+  };
 
   /** HU06 - T1 y T6: estado de la invitación antes de mostrar el formulario. */
   validate = async (

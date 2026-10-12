@@ -942,9 +942,19 @@
                     "expiresAt": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "trainerName": {
+                      "type": ["string", "null"],
+                      "description": "Profesor que va a tener el alumno, si lo invitó un entrenador."
                     }
                   },
-                  "required": ["gymName", "email", "roles", "expiresAt"]
+                  "required": [
+                    "gymName",
+                    "email",
+                    "roles",
+                    "expiresAt",
+                    "trainerName"
+                  ]
                 }
               }
             }
@@ -1563,6 +1573,23 @@
                     },
                     "complete": {
                       "type": "boolean"
+                    },
+                    "weightKg": {
+                      "type": ["number", "null"],
+                      "description": "Último peso registrado."
+                    },
+                    "trainer": {
+                      "type": ["object", "null"],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Profesor asignado (asignación vigente)."
                     }
                   }
                 }
@@ -1637,6 +1664,12 @@
                     "type": "number",
                     "minimum": 100,
                     "maximum": 250
+                  },
+                  "weightKg": {
+                    "type": "number",
+                    "minimum": 20,
+                    "maximum": 250,
+                    "description": "Se guarda como medición PESO_CORPORAL del día."
                   }
                 },
                 "required": [
@@ -1644,7 +1677,8 @@
                   "availableDaysPerWeek",
                   "birthDate",
                   "sex",
-                  "heightCm"
+                  "heightCm",
+                  "weightKg"
                 ]
               }
             }
@@ -1720,6 +1754,204 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations": {
+      "post": {
+        "operationId": "issueInvitation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Emitir una invitación (FL-19)",
+        "description": "ADMINISTRADOR invita con cualquier rol del gimnasio; ENTRENADOR sólo ALUMNO, que queda asignado a él al completar la cuenta. El token sólo viaja en el correo (se guarda su hash); si el envío falla no se guarda nada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR"]
+                    },
+                    "default": ["ALUMNO"]
+                  }
+                },
+                "required": ["email"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitación emitida y enviada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR"]
+                      }
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "trainerName": {
+                      "type": ["string", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "fields.email / fields.roles.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "email_already_registered o pending_invitation_exists (fields.email).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "invitation_delivery_failed: no se guardó nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado o rol que el emisor no puede otorgar (forbidden_role).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listInvitations",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Invitaciones emitidas",
+        "description": "El administrador ve las del gimnasio; el entrenador, sólo las suyas.",
+        "responses": {
+          "200": {
+            "description": "Invitaciones, de la más reciente a la más vieja.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "roles": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR"]
+                        }
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["PENDIENTE", "USADA", "VENCIDA", "REVOCADA"]
+                      },
+                      "issuedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "expiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "issuedByName": {
+                        "type": ["string", "null"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado o rol que el emisor no puede otorgar (forbidden_role).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
                 }
               }
             }
