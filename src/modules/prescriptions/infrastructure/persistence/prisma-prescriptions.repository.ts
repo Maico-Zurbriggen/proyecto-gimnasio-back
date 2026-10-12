@@ -330,30 +330,22 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
       )
         throw new GoalMismatchConfirmationError();
 
-      // HU17: la decisión sólo procede si la rutina sigue PROPUESTA. Si otra
-      // pestaña ya la resolvió, ésta no la pisa.
-      const transitioned = await tx.routine.updateMany({
-        where: { id: command.routineId, state: 'PROPUESTA' },
-        data: { state: aprueba ? 'VIGENTE' : 'RECHAZADA' },
+      // HU17: la decisión sólo procede si la rutina sigue PROPUESTA. Se relee
+      // con el bloqueo del alumno tomado: si otra pestaña ya la resolvió,
+      // ésta esperó al bloqueo y ahora la ve resuelta, así que no la pisa.
+      const current = await tx.routine.findUniqueOrThrow({
+        where: { id: command.routineId },
+        select: { state: true },
       });
-      if (transitioned.count === 0) {
+      if (current.state !== 'PROPUESTA') {
         throw new RoutineNotReviewableError();
       }
 
-      await tx.routineReview.create({
-        data: {
-          routineId: command.routineId,
-          reviewedVersionId: command.versionId,
-          reviewerTrainerId: command.reviewerTrainerId,
-          result: command.result,
-          observation: command.observation,
-        },
-      });
-
       let archivedRoutineId: string | null = null;
       if (aprueba) {
-        // El alumno no puede quedar con dos rutinas vigentes (RN-36): la
-        // anterior se archiva y su versión deja de ser la current.
+        // El alumno no puede quedar con dos rutinas vigentes (RN-36, índice
+        // único en la base): la anterior se archiva antes de poner ésta en
+        // vigencia, y su versión deja de ser la current.
         const previous = await tx.routine.findFirst({
           where: {
             studentId: routine.studentId,
@@ -373,11 +365,31 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
             data: { current: false },
           });
         }
+      }
+
+      const transitioned = await tx.routine.updateMany({
+        where: { id: command.routineId, state: 'PROPUESTA' },
+        data: { state: aprueba ? 'VIGENTE' : 'RECHAZADA' },
+      });
+      if (transitioned.count === 0) {
+        throw new RoutineNotReviewableError();
+      }
+      if (aprueba) {
         await tx.routineVersion.update({
           where: { id: command.versionId },
           data: { current: true },
         });
       }
+
+      await tx.routineReview.create({
+        data: {
+          routineId: command.routineId,
+          reviewedVersionId: command.versionId,
+          reviewerTrainerId: command.reviewerTrainerId,
+          result: command.result,
+          observation: command.observation,
+        },
+      });
 
       // El aviso de "rutina pendiente" que recibió el entrenador ya no aplica.
       await tx.notice.updateMany({
