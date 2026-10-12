@@ -1958,6 +1958,232 @@
           }
         }
       }
+    },
+    "/admin/assignments": {
+      "get": {
+        "operationId": "listAssignments",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Alumnos con su entrenador y entrenadores del gimnasio (RF-066)",
+        "responses": {
+          "200": {
+            "description": "Panel de asignaciones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "students": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "trainer": {
+                            "type": ["object", "null"],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "assignedAt": {
+                            "type": ["string", "null"],
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "trainers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "studentCount": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/students/{studentId}/trainer": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "assignTrainer",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Asignar o cambiar el entrenador de un alumno (RF-066)",
+        "description": "Cierra la asignación vigente y abre otra; las rutinas BLOQUEADAS pasan a PROPUESTA y las propuestas de adaptación BLOQUEADAS a PENDIENTE (RF-109, RF-112). Queda en auditoría.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "trainerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": ["trainerId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Asignado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "studentId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "trainer": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "previousTrainerId": {
+                      "type": ["string", "null"]
+                    },
+                    "unblockedRoutines": {
+                      "type": "integer"
+                    },
+                    "unblockedProposals": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "fields.trainerId.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "student_not_found (incluye alumnos de otro gimnasio).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid_trainer: no es entrenador del gimnasio o es el mismo alumno.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

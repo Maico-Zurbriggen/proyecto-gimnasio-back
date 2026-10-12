@@ -1,5 +1,4 @@
 import {
-  INTENTOS_POR_VENTANA,
   inicioDeVentana,
   segundosHastaProximaVentana,
   type AttemptLimiter,
@@ -16,12 +15,13 @@ export class InMemoryAttemptLimiter implements AttemptLimiter {
     originHash: string;
     scope: string;
     now: Date;
+    limit: number;
   }): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
     const key = `${input.scope}:${input.originHash}:${String(inicioDeVentana(input.now).getTime())}`;
     const attempts = (this.counts.get(key) ?? 0) + 1;
     this.counts.set(key, attempts);
     return Promise.resolve({
-      allowed: attempts <= INTENTOS_POR_VENTANA,
+      allowed: attempts <= input.limit,
       retryAfterSeconds: segundosHastaProximaVentana(input.now),
     });
   }

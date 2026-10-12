@@ -9,11 +9,23 @@ export interface AttemptLimiter {
     originHash: string;
     scope: string;
     now: Date;
+    /** Intentos admitidos en la ventana; el siguiente se rechaza. */
+    limit: number;
   }): Promise<{ allowed: boolean; retryAfterSeconds: number }>;
 }
 
-/** Intentos admitidos por origen y por ventana: el sexto se rechaza. */
-export const INTENTOS_POR_VENTANA = 5;
+/**
+ * Intentos de alta admitidos por origen y por ventana: el sexto se rechaza
+ * (HU06 - criterio 19).
+ */
+export const INTENTOS_DE_ALTA_POR_VENTANA = 5;
+
+/**
+ * Consultas del enlace por origen y por ventana. Más holgado que el alta: abrir
+ * o recargar la pantalla no es un intento de credencial, y el token tiene 256
+ * bits de azar, así que el límite sólo frena barridos.
+ */
+export const CONSULTAS_DE_ENLACE_POR_VENTANA = 30;
 
 /** Largo de la ventana de conteo. */
 export const VENTANA_MS = 60 * 1000;

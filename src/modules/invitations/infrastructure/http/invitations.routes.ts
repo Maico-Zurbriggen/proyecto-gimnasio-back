@@ -5,11 +5,15 @@ import {
   requireRoles,
 } from '../../../../shared/middleware/auth.middleware';
 
+import {
+  CONSULTAS_DE_ENLACE_POR_VENTANA,
+  INTENTOS_DE_ALTA_POR_VENTANA,
+} from '../../application/ports/attempt-limiter';
 import type { InvitationsController } from './invitations.controller';
 
 export function createInvitationsRouter(
   controller: InvitationsController,
-  limitAttempts: (scope: string) => RequestHandler,
+  limitAttempts: (scope: string, limit: number) => RequestHandler,
 ): Router {
   const router = Router();
 
@@ -26,14 +30,14 @@ export function createInvitationsRouter(
   // HU06 - T1 y T6: estado de la invitación.
   router.get(
     '/invitations/:token',
-    limitAttempts('invitation-validate'),
+    limitAttempts('invitation-validate', CONSULTAS_DE_ENLACE_POR_VENTANA),
     controller.validate,
   );
 
   // HU06 - T2, T3 y T4: completar la cuenta con nombre y contraseña.
   router.post(
     '/invitations/:token/complete',
-    limitAttempts('invitation-complete'),
+    limitAttempts('invitation-complete', INTENTOS_DE_ALTA_POR_VENTANA),
     controller.complete,
   );
 

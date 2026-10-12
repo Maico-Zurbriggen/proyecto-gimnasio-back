@@ -311,11 +311,15 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
             select: { id: true },
           });
           if (issuer && issuer.id !== user.id) {
+            // Reloj de la base: el trigger de revisión de rutinas compara la
+            // asignación contra now() de la base.
+            const clock = await tx.$queryRaw<Array<{ now: Date }>>`
+              SELECT clock_timestamp() AS now`;
             await tx.trainerStudentAssignment.create({
               data: {
                 studentId: user.id,
                 trainerId: issuer.id,
-                startsAt: command.now,
+                startsAt: clock[0]!.now,
                 startedByUserId: issuer.id,
               },
             });

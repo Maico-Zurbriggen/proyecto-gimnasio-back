@@ -1,7 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
 import {
-  INTENTOS_POR_VENTANA,
   VENTANA_MS,
   inicioDeVentana,
   segundosHastaProximaVentana,
@@ -26,6 +25,7 @@ export class PrismaAttemptLimiter implements AttemptLimiter {
     originHash: string;
     scope: string;
     now: Date;
+    limit: number;
   }): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
     const windowStart = inicioDeVentana(input.now);
     const row = await this.prisma.invitationAttemptLimit.upsert({
@@ -56,7 +56,7 @@ export class PrismaAttemptLimiter implements AttemptLimiter {
     }
 
     return {
-      allowed: row.attempts <= INTENTOS_POR_VENTANA,
+      allowed: row.attempts <= input.limit,
       retryAfterSeconds: segundosHastaProximaVentana(input.now),
     };
   }

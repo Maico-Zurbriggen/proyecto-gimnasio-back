@@ -13,7 +13,7 @@ import type { AttemptLimiter } from '../../application/ports/attempt-limiter';
  * debe impedir que alguien complete su cuenta.
  */
 export function createAttemptLimit(limiter: AttemptLimiter, clock: Clock) {
-  return (scope: string) =>
+  return (scope: string, limit: number) =>
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       let result: { allowed: boolean; retryAfterSeconds: number };
       try {
@@ -21,6 +21,7 @@ export function createAttemptLimit(limiter: AttemptLimiter, clock: Clock) {
           originHash: hashearToken(req.ip ?? 'desconocido'),
           scope,
           now: clock.now(),
+          limit,
         });
       } catch {
         next();

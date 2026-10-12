@@ -40,6 +40,12 @@ import { ResolveProposalUseCase } from './modules/evolution/application/use-case
 import { ProposalsController } from './modules/evolution/infrastructure/http/proposals.controller';
 import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
+import {
+  AssignmentsUseCases,
+  type AssignmentsRepository,
+} from './modules/assignments/application/assignments';
+import { createAssignmentsRouter } from './modules/assignments/infrastructure/assignments.http';
+import { PrismaAssignmentsRepository } from './modules/assignments/infrastructure/prisma-assignments.repository';
 import type { GymsRepository } from './modules/gyms/application/ports/gyms.repository';
 import type { InvitationMailer } from './modules/invitations/application/ports/invitation-mailer';
 import type { TimezoneCatalog } from './modules/gyms/application/ports/timezone-catalog';
@@ -165,6 +171,7 @@ interface AppDependencies {
   timezoneCatalog?: TimezoneCatalog;
   invitationMailer?: InvitationMailer;
   studentContextRepository?: StudentContextRepository;
+  assignmentsRepository?: AssignmentsRepository;
   prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
@@ -219,6 +226,7 @@ export function createApp({
   timezoneCatalog,
   invitationMailer,
   studentContextRepository,
+  assignmentsRepository,
   prescriptionsRepository,
   trainerAssignments,
   clock,
@@ -352,6 +360,15 @@ export function createApp({
           resolvedClock,
         ),
         new ListTimezonesUseCase(resolvedTimezones),
+      ),
+    ),
+  );
+
+  // RF-066: el administrador asigna y cambia el entrenador de cada alumno.
+  app.use(
+    createAssignmentsRouter(
+      new AssignmentsUseCases(
+        assignmentsRepository ?? new PrismaAssignmentsRepository(prisma),
       ),
     ),
   );
