@@ -1,4 +1,14 @@
 import { resolve } from 'node:path';
+import {
+  GenerationSettingsService,
+  type GenerationSettingsRepository,
+} from './modules/gyms/application/generation-settings.service';
+import { PrismaGenerationSettingsRepository } from './modules/gyms/infrastructure/persistence/prisma-generation-settings.repository';
+import { createGenerationSettingsRouter } from './modules/gyms/infrastructure/http/generation-settings.routes';
+import type { ProposalRegenerationsRepository } from './modules/evolution/application/ports/proposal-regenerations.repository';
+import { PrismaProposalRegenerationsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposal-regenerations.repository';
+import { RegenerateProposalUseCase } from './modules/evolution/application/use-cases/regenerate-proposal.use-case';
+import { createProposalRegenerationsRouter } from './modules/evolution/infrastructure/http/proposal-regenerations.routes';
 import type { ExerciseCatalogRepository } from './modules/exercise-catalog/application/catalog.repository';
 import { ExerciseCatalogService } from './modules/exercise-catalog/application/catalog.service';
 import { ExerciseCatalogController } from './modules/exercise-catalog/infrastructure/http/catalog.controller';
@@ -40,6 +50,10 @@ import { GoalsUseCases } from './modules/goals/application/use-cases/goals.use-c
 import { GoalsController } from './modules/goals/infrastructure/http/goals.controller';
 import { createGoalsRouter } from './modules/goals/infrastructure/http/goals.routes';
 import { PrismaGoalsRepository } from './modules/goals/infrastructure/persistence/prisma-goals.repository';
+import type { RoutineRenewalsRepository } from './modules/evolution/application/ports/routine-renewals.repository';
+import { RenewRoutineCyclesUseCase } from './modules/evolution/application/use-cases/renew-routine-cycles.use-case';
+import { createRoutineRenewalsRouter } from './modules/evolution/infrastructure/http/routine-renewals.routes';
+import { PrismaRoutineRenewalsRepository } from './modules/evolution/infrastructure/persistence/prisma-routine-renewals.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
 import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
 import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
@@ -55,12 +69,19 @@ import { createInvitationsRouter } from './modules/invitations/infrastructure/ht
 import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
+import { CreateManualRoutineUseCase } from './modules/prescriptions/application/use-cases/create-manual-routine.use-case';
+import { CreateRoutineTemplateUseCase } from './modules/prescriptions/application/use-cases/create-routine-template.use-case';
 import {
   GetRoutineContentUseCase,
+  GetRoutineTemplateUseCase,
   ListRoutineTemplatesUseCase,
   ListStudentRoutinesUseCase,
 } from './modules/prescriptions/application/use-cases/read-prescriptions.use-cases';
 import { ReviewRoutineUseCase } from './modules/prescriptions/application/use-cases/review-routine.use-case';
+import {
+  SetRoutineTemplateActiveUseCase,
+  UpdateRoutineTemplateUseCase,
+} from './modules/prescriptions/application/use-cases/update-routine-template.use-case';
 import { PrescriptionsController } from './modules/prescriptions/infrastructure/http/prescriptions.controller';
 import { createPrescriptionsRouter } from './modules/prescriptions/infrastructure/http/prescriptions.routes';
 import { PrismaPrescriptionsRepository } from './modules/prescriptions/infrastructure/persistence/prisma-prescriptions.repository';
@@ -126,6 +147,8 @@ interface AppDependencies {
   passwordRecoveryRepository?: PasswordRecoveryRepository;
   recoveryMailer?: RecoveryMailer;
   goalsRepository?: GoalsRepository;
+  generationSettingsRepository?: GenerationSettingsRepository;
+  proposalRegenerationsRepository?: ProposalRegenerationsRepository;
   exerciseCatalogRepository?: ExerciseCatalogRepository;
   catalogAssetsDirectory?: string;
   localGenerationTesting?: boolean;
@@ -139,6 +162,7 @@ interface AppDependencies {
   studentMeasurementAccess?: StudentMeasurementAccess;
   measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
+  routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
   prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
@@ -177,6 +201,8 @@ export function createApp({
   passwordRecoveryRepository,
   recoveryMailer,
   goalsRepository,
+  generationSettingsRepository,
+  proposalRegenerationsRepository,
   exerciseCatalogRepository,
   catalogAssetsDirectory = process.env.CATALOG_ASSETS_DIR ??
     resolve(process.cwd(), '.catalog-private/assets'),
@@ -191,6 +217,7 @@ export function createApp({
   studentMeasurementAccess,
   measurementsRepository,
   proposalsRepository,
+  routineRenewalsRepository,
   invitationsRepository,
   prescriptionsRepository,
   trainerAssignments,
@@ -348,6 +375,11 @@ export function createApp({
         new ListStudentRoutinesUseCase(resolvedPrescriptionsRepo),
         new GetRoutineContentUseCase(resolvedPrescriptionsRepo),
         new ReviewRoutineUseCase(resolvedPrescriptionsRepo),
+        new GetRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new CreateRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new UpdateRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new SetRoutineTemplateActiveUseCase(resolvedPrescriptionsRepo),
+        new CreateManualRoutineUseCase(resolvedPrescriptionsRepo),
       ),
       requireTrainerAssignment(resolvedAssignments),
       requireMeasurementAccess,
@@ -386,6 +418,7 @@ export function createApp({
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,
     requireMeasurementAccess,
+    requireTrainerAssignment(resolvedAssignments),
   );
 
   app.use(routineGenerationsRouter);
@@ -415,6 +448,22 @@ export function createApp({
     ),
   );
 
+  app.use(
+    createRoutineRenewalsRouter(
+      new RenewRoutineCyclesUseCase(
+        routineRenewalsRepository ??
+          new PrismaRoutineRenewalsRepository(prisma),
+        new EvaluateMeasurementCheckpointsUseCase(
+          resolvedMeasurementCheckpointsRepo,
+          resolvedClock,
+        ),
+        requestRoutineGenerationUseCase,
+        resolvedRoutineGenerationGateway,
+        resolvedClock,
+      ),
+    ),
+  );
+
   // HU02 - T1: carga de medidas del alumno desde el aviso de renovación.
   const resolvedMeasurementsRepo =
     measurementsRepository ?? new PrismaMeasurementsRepository(prisma);
@@ -437,6 +486,27 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+  app.use(
+    createGenerationSettingsRouter(
+      new GenerationSettingsService(
+        generationSettingsRepository ??
+          new PrismaGenerationSettingsRepository(prisma),
+      ),
+    ),
+  );
+  app.use(
+    createProposalRegenerationsRouter(
+      new RegenerateProposalUseCase(
+        proposalRegenerationsRepository ??
+          new PrismaProposalRegenerationsRepository(prisma),
+        resolvedProposalsRepo,
+        resolvedAssignments,
+        requestRoutineGenerationUseCase,
+        resolvedRoutineGenerationGateway,
+        resolvedClock,
+      ),
+    ),
+  );
 
   const errorHandler: ErrorRequestHandler = (
     error,

@@ -216,8 +216,45 @@ describe('Routine Generations API', () => {
       );
     });
 
-    it('returns 403 when an ENTRENADOR attempts to request a generation', async () => {
-      const app = createApp({ clock: mockClock });
+    it('lets an assigned ENTRENADOR request a generation for their student', async () => {
+      const generationContextRepository: GenerationContextRepository = {
+        getStudentContext: vi
+          .fn()
+          .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
+        getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
+      };
+      const routineGenerationsRepository = createGenerationRepository();
+      const app = createApp({
+        trainerAssignments,
+        clock: mockClock,
+        idGenerator: mockIdGenerator,
+        generationContextRepository,
+        routineGenerationGateway: { dispatchGeneration: vi.fn() },
+        routineGenerationsRepository,
+      });
+
+      const response = await request(app)
+        .post(`/students/${studentId}/routine-generations`)
+        .set('x-user-id', trainerId)
+        .set('x-user-roles', 'ENTRENADOR')
+        .send({ textoLibre: 'quiero ganar fuerza' })
+        .expect(202);
+
+      expect(response.body.status).toBe('PENDIENTE');
+      expect(
+        routineGenerationsRepository.registerOwnership,
+      ).toHaveBeenCalledWith({
+        requestId: 'req-1',
+        studentId,
+        requestedByUserId: trainerId,
+      });
+    });
+
+    it('returns 403 when an ENTRENADOR without assignment requests a generation', async () => {
+      const app = createApp({
+        clock: mockClock,
+        trainerAssignments: { isActive: vi.fn().mockResolvedValue(false) },
+      });
 
       const response = await request(app)
         .post(`/students/${studentId}/routine-generations`)
@@ -226,11 +263,14 @@ describe('Routine Generations API', () => {
         .send({ textoLibre: 'quiero ganar fuerza' })
         .expect(403);
 
-      expect(response.body).toEqual({ error: 'forbidden_role' });
+      expect(response.body).toEqual({ error: 'forbidden_not_assigned' });
     });
 
-    it('returns 403 when a multi-role user requests for another student', async () => {
-      const app = createApp({ clock: mockClock });
+    it('returns 403 when a multi-role user without assignment requests for another student', async () => {
+      const app = createApp({
+        clock: mockClock,
+        trainerAssignments: { isActive: vi.fn().mockResolvedValue(false) },
+      });
 
       const response = await request(app)
         .post(`/students/${studentId}/routine-generations`)
@@ -239,7 +279,7 @@ describe('Routine Generations API', () => {
         .send({ textoLibre: 'quiero ganar fuerza' })
         .expect(403);
 
-      expect(response.body).toEqual({ error: 'forbidden_student_access' });
+      expect(response.body).toEqual({ error: 'forbidden_not_assigned' });
     });
 
     it('returns 401 when unauthenticated', async () => {
@@ -464,12 +504,16 @@ describe('Routine Generations API', () => {
       });
     });
 
-    it('returns 403 when an ENTRENADOR attempts to finalize a generation', async () => {
+    it('lets an assigned ENTRENADOR finalize a generation they requested', async () => {
       const generatedRoutinesRepository: GeneratedRoutinesRepository = {
-        finalize: vi.fn(),
+        finalize: vi.fn().mockResolvedValue({
+          routineId: '66666666-6666-4666-a666-666666666666',
+          status: 'PROPUESTA',
+        }),
       };
       const app = createApp({
         clock: mockClock,
+        trainerAssignments,
         generatedRoutinesRepository,
       });
 
@@ -480,9 +524,16 @@ describe('Routine Generations API', () => {
         .set('x-user-id', trainerId)
         .set('x-user-roles', 'ENTRENADOR')
         .send({})
-        .expect(403, { error: 'forbidden_role' });
+        .expect(201, {
+          routineId: '66666666-6666-4666-a666-666666666666',
+          status: 'PROPUESTA',
+        });
 
-      expect(generatedRoutinesRepository.finalize).not.toHaveBeenCalled();
+      expect(generatedRoutinesRepository.finalize).toHaveBeenCalledWith({
+        requestId,
+        studentId,
+        requestedByUserId: trainerId,
+      });
     });
   });
 });

@@ -1,0 +1,99 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Routine renewal jobs",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/internal/jobs/routine-renewals": {
+      "get": {
+        "operationId": "renewRoutineCycles",
+        "summary": "Detect due 60-day cycles, dispatch AI and finalize completed structure proposals",
+        "description": "Independent of fortnightly RF-088 diagnosis. Evaluates persisted measurement controls before generation. Uses the durable AI 2.0 pipeline; completion needs no student polling or action.",
+        "security": [
+          {
+            "CronSecret": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated result; no student identifiers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenewalJobResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid cron credential"
+          },
+          "500": {
+            "description": "Persistence or infrastructure error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "CronSecret": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "CRON_SECRET provided by the scheduler"
+      }
+    },
+    "schemas": {
+      "RenewalJobResult": {
+        "type": "object",
+        "required": [
+          "cyclesProcessed",
+          "requestsDispatched",
+          "proposalsGenerated",
+          "failures",
+          "measurementControls"
+        ],
+        "properties": {
+          "cyclesProcessed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "requestsDispatched": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "proposalsGenerated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failures": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "measurementControls": {
+            "type": "object",
+            "required": [
+              "checkpointsCreated",
+              "blocksCreated",
+              "skippedConcurrentRun"
+            ],
+            "properties": {
+              "checkpointsCreated": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "blocksCreated": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "skippedConcurrentRun": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -15,6 +15,7 @@ export class PrismaRoutinesRepository implements RoutinesRepository {
       include: {
         reviews: {
           where: {
+            reviewedVersion: { current: true },
             result: {
               in: ['APROBADA', 'APROBADA_CON_CAMBIOS'],
             },

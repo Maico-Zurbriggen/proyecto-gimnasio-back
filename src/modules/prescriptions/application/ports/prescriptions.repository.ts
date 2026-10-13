@@ -36,6 +36,45 @@ export interface RoutineTemplateSummary {
   exerciseCount: number;
 }
 
+/** Día, ejercicio y serie que el entrenador declara al crear una plantilla. */
+export interface TemplateDayInput {
+  name: string;
+  exercises: TemplateExerciseInput[];
+}
+
+export interface TemplateExerciseInput {
+  exerciseId: string;
+  note: string | null;
+  sets: TemplateSetInput[];
+}
+
+/** Serie declarada por el entrenador; la posición la da el orden enviado. */
+export interface TemplateSetInput {
+  minRepetitions: number;
+  maxRepetitions: number;
+  suggestedLoad: number | null;
+  restSeconds: number;
+  warmup: boolean;
+}
+
+/** Entrada de escritura de una plantilla (RF-019, RF-020, RF-082). */
+export interface WriteTemplateCommand {
+  name: string;
+  routineType: TrainingPurpose;
+  days: TemplateDayInput[];
+}
+
+/** Detalle de una plantilla del gimnasio, con su contenido editable. */
+export interface RoutineTemplateDetail {
+  id: string;
+  gymId: string;
+  authorTrainerId: string;
+  name: string;
+  routineType: TrainingPurpose;
+  active: boolean;
+  days: TemplateContentDay[];
+}
+
 /** Contenido de la plantilla que se copia al asignarla (RF-022). */
 export interface TemplateContent {
   id: string;
@@ -56,6 +95,8 @@ export interface TemplateContentExercise {
   note: string | null;
   /** Del ejercicio del catálogo; la plantilla no lo guarda por día. */
   movementPattern: MovementPattern;
+  /** Nombre al momento de leer, para mostrar sin otra consulta. */
+  exerciseName?: string;
   sets: PrescribedSetContent[];
 }
 
@@ -143,6 +184,38 @@ export interface PrescriptionsRepository {
   /** Contenido completo de una plantilla activa. `null` si no existe. */
   findTemplateContent(templateId: string): Promise<TemplateContent | null>;
 
+  /** Detalle editable de una plantilla del gimnasio del entrenador. */
+  findTemplateDetail(
+    trainerId: string,
+    templateId: string,
+  ): Promise<RoutineTemplateDetail | null>;
+
+  /**
+   * Crea una plantilla privada del gimnasio del entrenador (RF-019). Los
+   * ejercicios referenciados deben estar aprobados en ese gimnasio.
+   */
+  createTemplate(
+    trainerId: string,
+    command: WriteTemplateCommand,
+  ): Promise<{ templateId: string }>;
+
+  /**
+   * Reemplaza nombre, tipo y contenido de una plantilla activa del gimnasio
+   * del entrenador. Las rutinas ya creadas no cambian (RN-33).
+   */
+  updateTemplate(
+    trainerId: string,
+    templateId: string,
+    command: WriteTemplateCommand,
+  ): Promise<void>;
+
+  /** Activa o desactiva una plantilla del gimnasio. Idempotente. */
+  setTemplateActive(
+    trainerId: string,
+    templateId: string,
+    active: boolean,
+  ): Promise<{ active: boolean }>;
+
   /** Gimnasio del alumno, para verificar que la plantilla sea de su gimnasio. */
   findStudentGymId(studentId: string): Promise<string | null>;
 
@@ -153,6 +226,19 @@ export interface PrescriptionsRepository {
   createProposedRoutine(
     command: CreateRoutineCommand,
   ): Promise<{ routineId: string; versionId: string }>;
+
+  /**
+   * Crea una rutina manual del entrenador para su alumno (sin plantilla):
+   * valida que los ejercicios estén habilitados en el gimnasio y deriva el
+   * patrón dominante de cada día desde el catálogo. Nace en PROPUESTA con
+   * origen PLANTILLA_ENTRENADOR y sin plantilla de origen.
+   */
+  createManualRoutine(command: {
+    trainerId: string;
+    studentId: string;
+    routineType: TrainingPurpose;
+    days: TemplateDayInput[];
+  }): Promise<{ routineId: string; versionId: string }>;
 
   /** Rutinas del alumno, de la más reciente a la más vieja. */
   listByStudent(studentId: string): Promise<RoutineSummary[]>;

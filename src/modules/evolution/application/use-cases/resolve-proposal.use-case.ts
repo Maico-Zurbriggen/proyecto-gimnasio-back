@@ -18,6 +18,7 @@ import type { ProposalResolutionDto } from '../dto/proposal.dto';
 import type { ProposalsRepository } from '../ports/proposals.repository';
 
 export interface ResolveProposalInput {
+  candidateRequestId?: string;
   trainerId: string;
   proposalId: string;
   decision: ProposalDecision;
@@ -63,6 +64,8 @@ export class ResolveProposalUseCase {
 
     let routineId: string | null = null;
     let newVersionDays: RoutineDayPlan[] | null = null;
+    let structure:
+      { routineType: string; targetWeeklyFrequency: number } | undefined;
 
     if (plan.reviewResult) {
       const current = record.routine
@@ -72,21 +75,46 @@ export class ResolveProposalUseCase {
         throw new RoutineNotAvailableError();
       }
       routineId = current.routineId;
-      newVersionDays = applyAdjustments(
-        current.days,
-        record.adjustments.filter((adjustment) =>
-          plan.acceptedIds.includes(adjustment.id),
-        ),
+      const accepted = record.adjustments.filter((adjustment) =>
+        plan.acceptedIds.includes(adjustment.id),
       );
+      if (
+        record.renewal &&
+        accepted.some((adjustment) => adjustment.type === 'ESTRUCTURA')
+      ) {
+        // T6 / RN-89a: la versión nueva toma el candidato ESTRUCTURA tal cual;
+        // la resolución del entrenador es la revisión (RN-35a).
+        const candidate = record.renewal.candidate;
+        structure = {
+          routineType: candidate.routineType,
+          targetWeeklyFrequency: candidate.targetWeeklyFrequency,
+        };
+        newVersionDays = candidate.days.map((day) => ({
+          ...day,
+          exercises: day.exercises.map((exercise) => ({
+            ...exercise,
+            sourceId: exercise.exerciseId,
+            compatibilityState: 'ADVERTIDO',
+            compatibilityReason: 'Propuesta de IA revisada por el entrenador.',
+          })),
+        }));
+      } else newVersionDays = applyAdjustments(current.days, accepted);
     }
 
     const result = await this.proposals.persistResolution({
+      ...(record.renewal
+        ? {
+            candidateRequestId:
+              input.candidateRequestId ?? record.renewal.requestId,
+          }
+        : {}),
       proposalId: record.id,
       trainerId: input.trainerId,
       studentId: record.student.id,
       plan,
       routineId,
       newVersionDays,
+      ...(structure ? { structure } : {}),
       resolvedAt: this.clock.now(),
     });
     if (!result.resolved) {

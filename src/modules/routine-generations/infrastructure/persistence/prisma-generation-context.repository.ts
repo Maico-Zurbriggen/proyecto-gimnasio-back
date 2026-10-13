@@ -24,7 +24,14 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
         user: {
           select: {
             gymId: true,
-            gym: { select: { inventoryRevision: true, timezone: true } },
+            gym: {
+              select: {
+                inventoryRevision: true,
+                timezone: true,
+                generationSettings: true,
+                generationSettingsRevision: true,
+              },
+            },
           },
         },
         goals: true,
@@ -215,7 +222,16 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       context,
     });
     context.captured_at = asOf.toISOString();
-    return { gymId: student.user.gymId, minimizedContext: context };
+    return {
+      gymId: student.user.gymId,
+      minimizedContext: context,
+      generationSettings: {
+        settings: student.user.gym.generationSettings as unknown as
+          | import('../../../gyms/domain/generation-settings').GenerationSettings
+          | null,
+        revision: student.user.gym.generationSettingsRevision,
+      },
+    };
   }
 
   async getEnabledCatalog(gymId: string): Promise<CatalogExerciseRef[]> {

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Clock } from '../../../routines/application/ports/clock';
+import type {
+  RoutineGenerationPreferences,
+  RoutineRenewalStructureInput,
+} from '../dto/routine-generation-context.dto';
 import {
   EmptyPrefilteredCatalogError,
   MissingGenerationInputError,
@@ -89,6 +93,93 @@ describe('RequestRoutineGenerationUseCase', () => {
     });
     expect(gateway.dispatchGeneration).toHaveBeenCalled();
     expect(generationsRepository.createOrGetRequest).toHaveBeenCalled();
+  });
+
+  it('maps both structures to the same full catalog and keeps trainer feedback separate from instructions', async () => {
+    const generationsRepository = repositories();
+    const structure: RoutineRenewalStructureInput = {
+      routineType: 'HIPERTROFIA',
+      targetWeeklyFrequency: 1,
+      days: [
+        {
+          name: 'Origen',
+          dominantPattern: 'CORE',
+          exercises: [{ exerciseId: 'z-source', note: null, sets: [] }],
+        },
+      ],
+    };
+    const useCase = new RequestRoutineGenerationUseCase(
+      {
+        getStudentContext: vi
+          .fn()
+          .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
+        getEnabledCatalog: vi.fn().mockResolvedValue([
+          {
+            id: 'a-chest',
+            nombre: 'Press de banca plano',
+            patronMovimiento: 'EMPUJE_HORIZONTAL',
+            musculosPrimarios: ['PECTORAL'],
+          },
+          { id: 'z-source', nombre: 'Core', patronMovimiento: 'CORE' },
+        ]),
+      },
+      { dispatchGeneration: vi.fn() },
+      idGenerator,
+      clock,
+      generationsRepository,
+    );
+    await useCase.execute({
+      studentId,
+      requestedByUserId,
+      routineRenewal: true,
+      routineRenewalStructure: structure,
+      generationTask: {
+        kind: 'TRAINER_REGENERATION',
+        trainer_feedback: 'Hacela enfocada en pecho',
+        cycle: {
+          starts_on: '2026-08-09',
+          due_on: '2026-10-08',
+          criterion: 'Ciclo vencido',
+          without_updated_measurements: true,
+          missing_information: 'Medición nueva',
+          measurements: [],
+        },
+        previous_candidate: {
+          ...structure,
+          days: [
+            {
+              ...structure.days[0]!,
+              exercises: [
+                { exerciseId: 'a-chest', note: null, sets: [] },
+                { exerciseId: 'disabled-history', note: null, sets: [] },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const preferences = vi.mocked(generationsRepository.createOrGetRequest).mock
+      .calls[0]![0].preferences as RoutineGenerationPreferences;
+    expect(preferences.allowed_catalog).toHaveLength(2);
+    expect(preferences.free_text).toBeNull();
+    expect(
+      preferences.routine_renewal_structure?.days[0]?.exercises[0]
+        ?.catalog_index,
+    ).toBe(0);
+    expect(preferences.generation_task).toMatchObject({
+      kind: 'TRAINER_REGENERATION',
+      trainer_feedback: 'Hacela enfocada en pecho',
+      previous_candidate: {
+        days: [
+          {
+            exercises: [
+              { catalog_index: 1, exercise_name: 'Press de banca plano' },
+              { catalog_index: null },
+            ],
+          },
+        ],
+      },
+    });
   });
 
   function repositories(
