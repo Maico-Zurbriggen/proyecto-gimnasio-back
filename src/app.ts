@@ -95,6 +95,7 @@ import { CompleteAccountUseCase } from './modules/invitations/application/use-ca
 import {
   IssueInvitationUseCase,
   ListInvitationsUseCase,
+  ResendInvitationUseCase,
 } from './modules/invitations/application/use-cases/issue-invitation.use-case';
 import { RevokeInvitationUseCase } from './modules/invitations/application/use-cases/revoke-invitation.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
@@ -390,6 +391,11 @@ export function createApp({
         ),
         new ListInvitationsUseCase(resolvedInvitationsRepo, resolvedClock),
         new RevokeInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
+        new ResendInvitationUseCase(
+          resolvedInvitationsRepo,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
       ),
       createAttemptLimit(
         invitationAttemptLimiter ??

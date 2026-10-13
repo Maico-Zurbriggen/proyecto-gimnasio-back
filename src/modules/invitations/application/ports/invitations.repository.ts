@@ -104,6 +104,17 @@ export interface InvitationsRepository {
     now: Date;
   }): Promise<boolean>;
 
+  /**
+   * Rota el token de una invitación vigente (reenvío, criterio 19), con
+   * auditoría. `null` si ya no está vigente.
+   */
+  rotateToken(command: {
+    invitationId: string;
+    tokenHash: string;
+    actorUserId: string;
+    now: Date;
+  }): Promise<IssuedInvitation | null>;
+
   /** Busca la invitación por el hash de su token. `null` si no existe. */
   findByTokenHash(tokenHash: string): Promise<InvitationRecord | null>;
 

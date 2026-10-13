@@ -130,10 +130,16 @@ describe('HU09 password recovery API', () => {
   });
   it('rejects weak passwords without invoking persistence', async () => {
     const { app, repo } = setup();
-    await request(app)
+    const response = await request(app)
       .post('/auth/password-reset')
       .send({ token: 'valid', password: 'weak' })
       .expect(400);
     expect(repo.reset).not.toHaveBeenCalled();
+    // HU09 frontend - criterio 7: la respuesta dice qué regla incumple.
+    expect(response.body.error).toBe('weak_password');
+    expect(response.body.fields.password).toContain(
+      'Debe contener al menos un número.',
+    );
+    expect(JSON.stringify(response.body)).not.toContain('"weak"');
   });
 });
