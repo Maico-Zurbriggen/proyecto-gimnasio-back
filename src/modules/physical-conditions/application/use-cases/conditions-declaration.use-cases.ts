@@ -51,12 +51,13 @@ export class ConditionsDeclarationUseCases {
     if (!(await this.conditions.hasHealthConsent(studentId))) {
       throw new HealthConsentRequiredError();
     }
-    const now = this.clock.now();
-    const vigentes = (await this.conditions.listByStudent(studentId)).filter(
-      (condition) => estabaVigenteEn(condition, now),
+    // Bloquean las que siguen abiertas: una cerrada hoy todavía rige hasta el
+    // fin del día (RN-10), pero el alumno ya puede decir que no tiene ninguna.
+    const abiertas = (await this.conditions.listByStudent(studentId)).filter(
+      (condition) => condition.endsOn === null,
     );
-    if (vigentes.length > 0) throw new ActiveConditionsExistError();
-    await this.conditions.declareNoConditions(studentId, now);
+    if (abiertas.length > 0) throw new ActiveConditionsExistError();
+    await this.conditions.declareNoConditions(studentId, this.clock.now());
     return this.status(studentId);
   }
 }

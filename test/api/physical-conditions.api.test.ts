@@ -503,5 +503,17 @@ describe('Physical conditions API - HU11', () => {
         .expect(409);
       expect(response.body.error).toBe('active_conditions_exist');
     });
+
+    it('una condición cerrada hoy no impide declarar "ninguna"', async () => {
+      const { repo } = createRepo({
+        listed: [condicion({ endsOn: new Date('2026-10-05T00:00:00Z') })],
+      });
+      const app = crearApp(repo);
+
+      await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions/none`)
+        .send({})
+        .expect(200);
+      expect(repo.declareNoConditions).toHaveBeenCalledWith(ALUMNO, AHORA);
+    });
   });
 });
