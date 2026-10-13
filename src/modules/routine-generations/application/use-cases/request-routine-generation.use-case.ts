@@ -2,10 +2,7 @@ import type { Clock } from '../../../routines/application/ports/clock';
 import { goalContext } from '../../../goals/domain/context-policy';
 import { ContextInsufficientError } from '../../domain/errors/context-insufficient.error';
 import { generationPrescriptionConstraints } from '../../domain/services/generated-routine-validator';
-import {
-  extractMuscleCountRequirements,
-  GenerationPreferencesUnsatisfiableError,
-} from '../../domain/services/generation-request-requirements';
+import { extractMuscleCountRequirements } from '../../domain/services/generation-request-requirements';
 import {
   EmptyPrefilteredCatalogError,
   MissingGenerationInputError,
@@ -95,21 +92,6 @@ export class RequestRoutineGenerationUseCase {
     const muscleCounts = extractMuscleCountRequirements(
       command.freeText ?? null,
     );
-    const missing = muscleCounts.flatMap(({ muscle, count }) => {
-      const available = new Set(
-        generationCatalog
-          .filter((exercise) => exercise.musculosPrimarios?.includes(muscle))
-          .map((exercise) => exercise.id),
-      ).size;
-      return available >= count
-        ? []
-        : [
-            `Pediste ${count} ejercicios distintos de ${muscle} por día y hay ${available} habilitados en el catálogo.`,
-          ];
-    });
-    if (missing.length) {
-      throw new GenerationPreferencesUnsatisfiableError(missing);
-    }
 
     const sortedGenerationCatalog = [...generationCatalog].sort(
       (left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),

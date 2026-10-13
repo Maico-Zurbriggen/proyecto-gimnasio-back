@@ -789,7 +789,7 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
       }
       await lockGymCatalog(tx, before.student.user.gymId);
       await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${before.studentId}::uuid FOR UPDATE`;
-       const current = await tx.routine.findUniqueOrThrow({
+      const current = await tx.routine.findUniqueOrThrow({
         where: { id: command.routineId },
         include: {
           versions: {
@@ -799,22 +799,22 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           },
         },
       });
-       if (current.state !== 'PROPUESTA') {
-         throw new RoutineNotReviewableError();
-       }
-       if (current.versions[0]?.id !== command.versionId) {
-         throw new CatalogError('routine_review_conflict', 409);
-       }
-       const goal = await tx.goal.findFirst({
-         where: { studentId: before.studentId, endsOn: null },
-       });
-       if (
-         aprueba &&
-         requiresGoalConfirmation(current.routineType, goal?.type ?? null) &&
-         !command.confirmGoalMismatch
-       ) {
-         throw new GoalMismatchConfirmationError();
-       }
+      if (current.state !== 'PROPUESTA') {
+        throw new RoutineNotReviewableError();
+      }
+      if (current.versions[0]?.id !== command.versionId) {
+        throw new CatalogError('routine_review_conflict', 409);
+      }
+      const goal = await tx.goal.findFirst({
+        where: { studentId: before.studentId, endsOn: null },
+      });
+      if (
+        aprueba &&
+        requiresGoalConfirmation(current.routineType, goal?.type ?? null) &&
+        !command.confirmGoalMismatch
+      ) {
+        throw new GoalMismatchConfirmationError();
+      }
       const assignment = await tx.trainerStudentAssignment.findFirst({
         where: {
           trainerId: command.reviewerTrainerId,

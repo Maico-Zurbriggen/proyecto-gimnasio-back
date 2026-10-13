@@ -116,14 +116,15 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
     );
     const routine = student.routines[0];
     const birthday = student.birthDate;
-    const age =
-      day.getUTCFullYear() -
-      birthday.getUTCFullYear() -
-      (day.getUTCMonth() < birthday.getUTCMonth() ||
-      (day.getUTCMonth() === birthday.getUTCMonth() &&
-        day.getUTCDate() < birthday.getUTCDate())
-        ? 1
-        : 0);
+    const age = birthday
+      ? day.getUTCFullYear() -
+        birthday.getUTCFullYear() -
+        (day.getUTCMonth() < birthday.getUTCMonth() ||
+        (day.getUTCMonth() === birthday.getUTCMonth() &&
+          day.getUTCDate() < birthday.getUTCDate())
+          ? 1
+          : 0)
+      : null;
     const context: MinimizedContext = {
       schema_version: '2.0',
       nivelExperiencia: student.experienceLevel ?? '',
@@ -143,12 +144,16 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
           ends_on: condition.endsOn?.toISOString().slice(0, 10) ?? null,
         }))
         .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-      profile: {
-        age_years: age,
-        sex: student.sex,
-        height_cm: Number(student.heightCm),
-        weight_kg: weight ? Number(weight.value) : null,
-      },
+      ...(age !== null && student.sex && student.heightCm !== null
+        ? {
+            profile: {
+              age_years: age,
+              sex: student.sex,
+              height_cm: Number(student.heightCm),
+              weight_kg: weight ? Number(weight.value) : null,
+            },
+          }
+        : {}),
       available_equipment: [
         ...new Set([
           'PESO_CORPORAL',

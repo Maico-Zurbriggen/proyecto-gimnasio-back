@@ -80,24 +80,12 @@ class InMemoryInvitations implements InvitationsRepository {
 
   // HU08 agregó la emisión al puerto. Este doble cubre HU06 (el consumo), así
   // que los métodos de emisión no se ejercitan desde acá.
-  create(): Promise<never> {
-    return Promise.reject(new Error('no usado en las pruebas de HU06'));
-  }
-
-  findById(): Promise<null> {
+  findIssuedById(): Promise<null> {
     return Promise.resolve(null);
   }
 
-  list(): Promise<[]> {
-    return Promise.resolve([]);
-  }
-
-  revoke(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  recordAudit(): Promise<void> {
-    return Promise.resolve();
+  revoke(): Promise<boolean> {
+    return Promise.resolve(false);
   }
 }
 
