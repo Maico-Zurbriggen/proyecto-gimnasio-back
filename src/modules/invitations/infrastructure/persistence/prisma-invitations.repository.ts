@@ -239,6 +239,53 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
       : null;
   }
 
+  async rotateToken(command: {
+    invitationId: string;
+    tokenHash: string;
+    actorUserId: string;
+    now: Date;
+  }): Promise<IssuedInvitation | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const rotated = await tx.invitation.updateMany({
+        where: {
+          id: command.invitationId,
+          status: 'VIGENTE',
+          expiresAt: { gt: command.now },
+        },
+        data: { tokenHash: command.tokenHash },
+      });
+      if (rotated.count === 0) return null;
+      await tx.auditLog.create({
+        data: {
+          actorUserId: command.actorUserId,
+          operation: 'REENVIO_INVITACION',
+          entityType: 'INVITATION',
+          entityId: command.invitationId,
+          newValue: { tokenRotado: true },
+        },
+      });
+      const invitation = await tx.invitation.findUniqueOrThrow({
+        where: { id: command.invitationId },
+        select: {
+          id: true,
+          emailNormalized: true,
+          expiresAt: true,
+          roles: { select: { role: true } },
+          gym: { select: { name: true } },
+          issuedBy: emisorSelect,
+        },
+      });
+      return {
+        id: invitation.id,
+        gymName: invitation.gym.name,
+        emailNormalized: invitation.emailNormalized,
+        roles: invitation.roles.map((r) => r.role as UserRole),
+        expiresAt: invitation.expiresAt,
+        trainerName: nombreDeEntrenador(invitation.issuedBy),
+      };
+    });
+  }
+
   async revoke(command: {
     invitationId: string;
     actorUserId: string;

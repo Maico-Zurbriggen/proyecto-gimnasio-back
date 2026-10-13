@@ -1,6 +1,7 @@
 import type { Clock } from '../../../routines/application/ports/clock';
 import {
   FutureStartDateError,
+  HealthConsentRequiredError,
   InvalidBodyZoneError,
   StudentNotFoundError,
 } from '../../domain/errors/condition-errors';
@@ -52,6 +53,11 @@ export class DeclareConditionUseCase {
   async execute(input: DeclareConditionInput): Promise<PhysicalConditionDto> {
     if (!esZonaCorporalValida(input.bodyZoneCode)) {
       throw new InvalidBodyZoneError();
+    }
+
+    // RN-104: sin consentimiento no se registra ningún dato de salud.
+    if (!(await this.conditions.hasHealthConsent(input.studentId))) {
+      throw new HealthConsentRequiredError();
     }
 
     const now = this.clock.now();

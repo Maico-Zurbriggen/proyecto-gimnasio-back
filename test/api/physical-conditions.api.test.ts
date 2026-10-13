@@ -35,6 +35,9 @@ interface RepoOptions {
   declared?: PhysicalConditionRecord | null;
   listed?: PhysicalConditionRecord[];
   found?: PhysicalConditionRecord | null;
+  /** RN-104: por defecto el alumno ya dio su consentimiento. */
+  consent?: boolean;
+  declaredNoneAt?: Date | null;
 }
 
 function createRepo(options: RepoOptions = {}) {
@@ -65,9 +68,26 @@ function createRepo(options: RepoOptions = {}) {
       closed.push({ id, endsOn });
       return condicion({ endsOn });
     }),
+    hasHealthConsent: vi.fn(async () => options.consent ?? true),
+    findNoConditionsDeclaration: vi.fn(
+      async () => options.declaredNoneAt ?? null,
+    ),
+    declareNoConditions: vi.fn(async () => undefined),
   };
 
   return { repo, declarations, closed };
+}
+
+/** El entrenador de prueba tiene asignado a ALUMNO y a nadie más. */
+function crearApp(repo: PhysicalConditionsRepository) {
+  return createApp({
+    physicalConditionsRepository: repo,
+    clock,
+    trainerAssignments: {
+      isActive: (trainerId: string, studentId: string) =>
+        Promise.resolve(trainerId === ENTRENADOR && studentId === ALUMNO),
+    },
+  });
 }
 
 function comoAlumno(
@@ -89,7 +109,7 @@ describe('Physical conditions API - HU11', () => {
   describe('POST /students/:id/conditions (T1)', () => {
     it('declara una condición con zona corporal y severidad', async () => {
       const { repo, declarations } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       const response = await comoAlumno(
         app,
@@ -107,7 +127,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('acepta una articulación y un grupo muscular como zona', async () => {
       const { repo } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions`)
         .send({ bodyZoneCode: 'HOMBRO', severity: 'LEVE' })
@@ -120,7 +140,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RN-10a: rechaza una zona fuera de la enumeración cerrada', async () => {
       const { repo, declarations } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions`)
         .send({ bodyZoneCode: 'ESPALDA_BAJA', severity: 'LEVE' })
@@ -131,7 +151,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RN-10a: rechaza una severidad inventada', async () => {
       const { repo, declarations } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions`)
         .send({ bodyZoneCode: 'RODILLA', severity: 'GRAVISIMA' })
@@ -142,7 +162,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('guarda la descripción libre como complementaria', async () => {
       const { repo, declarations } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions`)
         .send({
@@ -157,7 +177,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('rechaza una fecha de inicio futura', async () => {
       const { repo, declarations } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions`)
         .send({
@@ -172,7 +192,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RN-10: varias condiciones pueden declararse a la vez', async () => {
       const { repo, declarations } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions`)
         .send({ bodyZoneCode: 'RODILLA', severity: 'MODERADA' })
@@ -186,7 +206,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('404 cuando el alumno no existe', async () => {
       const { repo } = createRepo({ declared: null });
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions`)
         .send({ bodyZoneCode: 'RODILLA', severity: 'LEVE' })
@@ -195,7 +215,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RNF-14: un alumno no declara condiciones de otro', async () => {
       const { repo, declarations } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(app, 'post', `/students/${OTRO_ALUMNO}/conditions`)
         .send({ bodyZoneCode: 'RODILLA', severity: 'LEVE' })
@@ -206,7 +226,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('sin sesión responde 401', async () => {
       const { repo } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await request(app)
         .post(`/students/${ALUMNO}/conditions`)
@@ -228,7 +248,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('devuelve el historial con la vigencia de cada condición', async () => {
       const { repo } = createRepo({ listed: historial });
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       const response = await comoAlumno(
         app,
@@ -244,7 +264,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RF-085: responde qué condiciones regían en una fecha pasada', async () => {
       const { repo } = createRepo({ listed: historial });
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       const response = await comoAlumno(
         app,
@@ -258,7 +278,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('rechaza una fecha de consulta mal formada', async () => {
       const { repo } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(
         app,
@@ -269,7 +289,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('el entrenador puede consultar las condiciones del alumno', async () => {
       const { repo } = createRepo({ listed: historial });
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await request(app)
         .get(`/students/${ALUMNO}/conditions`)
@@ -280,7 +300,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RNF-14: un alumno no consulta las de otro', async () => {
       const { repo } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(
         app,
@@ -293,7 +313,7 @@ describe('Physical conditions API - HU11', () => {
   describe('POST /students/:id/conditions/:conditionId/close (T2)', () => {
     it('cierra una condición vigente', async () => {
       const { repo, closed } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       const response = await comoAlumno(
         app,
@@ -309,7 +329,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('acepta una fecha de cierre explícita', async () => {
       const { repo, closed } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(
         app,
@@ -326,7 +346,7 @@ describe('Physical conditions API - HU11', () => {
       const { repo, closed } = createRepo({
         found: condicion({ endsOn: new Date('2026-09-15T00:00:00Z') }),
       });
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(
         app,
@@ -341,7 +361,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RI-17: no cierra antes de la fecha de inicio', async () => {
       const { repo, closed } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(
         app,
@@ -356,7 +376,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('404 cuando la condición no existe o es de otro alumno', async () => {
       const { repo } = createRepo({ found: null });
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(
         app,
@@ -369,7 +389,7 @@ describe('Physical conditions API - HU11', () => {
 
     it('RNF-14: un alumno no cierra condiciones de otro', async () => {
       const { repo, closed } = createRepo();
-      const app = createApp({ physicalConditionsRepository: repo, clock });
+      const app = crearApp(repo);
 
       await comoAlumno(
         app,
@@ -380,6 +400,120 @@ describe('Physical conditions API - HU11', () => {
         .expect(403);
 
       expect(closed).toHaveLength(0);
+    });
+  });
+
+  describe('permisos, consentimiento y "ninguna condición" (criterios 7, 8, 16 a 18)', () => {
+    const declarar = { bodyZoneCode: 'RODILLA', severity: 'LEVE' };
+
+    it('criterio 16: el entrenador no declara ni cierra condiciones', async () => {
+      const app = crearApp(createRepo().repo);
+      await request(app)
+        .post(`/students/${ALUMNO}/conditions`)
+        .set('x-user-id', ENTRENADOR)
+        .set('x-user-roles', 'ENTRENADOR')
+        .send(declarar)
+        .expect(403);
+      await request(app)
+        .post(`/students/${ALUMNO}/conditions/${CONDICION}/close`)
+        .set('x-user-id', ENTRENADOR)
+        .set('x-user-roles', 'ENTRENADOR')
+        .send({})
+        .expect(403);
+    });
+
+    it('criterio 17: el administrador no accede al detalle', async () => {
+      const app = crearApp(createRepo().repo);
+      await request(app)
+        .get(`/students/${ALUMNO}/conditions`)
+        .set('x-user-id', '20000000-0000-4000-8000-000000000001')
+        .set('x-user-roles', 'ADMINISTRADOR')
+        .expect(403);
+    });
+
+    it('criterio 18: un entrenador sin asignación no lee nada', async () => {
+      const app = crearApp(createRepo().repo);
+      const response = await request(app)
+        .get(`/students/${OTRO_ALUMNO}/conditions`)
+        .set('x-user-id', ENTRENADOR)
+        .set('x-user-roles', 'ENTRENADOR')
+        .expect(403);
+      expect(JSON.stringify(response.body)).not.toContain('RODILLA');
+    });
+
+    it('criterio 7: sin consentimiento no se declara, ni se lee, ni se cierra', async () => {
+      const { repo, declarations } = createRepo({ consent: false });
+      const app = crearApp(repo);
+
+      const declarado = await comoAlumno(
+        app,
+        'post',
+        `/students/${ALUMNO}/conditions`,
+      )
+        .send(declarar)
+        .expect(403);
+      expect(declarado.body.error).toBe('health_data_consent_required');
+      expect(declarations).toHaveLength(0);
+
+      await comoAlumno(app, 'get', `/students/${ALUMNO}/conditions`).expect(
+        403,
+      );
+      await comoAlumno(
+        app,
+        'post',
+        `/students/${ALUMNO}/conditions/${CONDICION}/close`,
+      )
+        .send({})
+        .expect(403);
+    });
+
+    it('el estado informa consentimiento y declaración para la pantalla', async () => {
+      const app = crearApp(createRepo({ consent: false }).repo);
+      const response = await comoAlumno(
+        app,
+        'get',
+        `/students/${ALUMNO}/conditions/status`,
+      ).expect(200);
+      expect(response.body).toEqual({
+        healthDataConsent: false,
+        declaredNone: false,
+        declaredNoneAt: null,
+        activeCount: 0,
+      });
+    });
+
+    it('criterio 8: declarar "ninguna" queda registrado y es distinto de no responder', async () => {
+      const { repo } = createRepo({ listed: [] });
+      const app = crearApp(repo);
+
+      await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions/none`)
+        .send({})
+        .expect(200);
+      expect(repo.declareNoConditions).toHaveBeenCalledWith(ALUMNO, AHORA);
+    });
+
+    it('no se puede declarar "ninguna" con condiciones vigentes', async () => {
+      const app = crearApp(createRepo().repo);
+      const response = await comoAlumno(
+        app,
+        'post',
+        `/students/${ALUMNO}/conditions/none`,
+      )
+        .send({})
+        .expect(409);
+      expect(response.body.error).toBe('active_conditions_exist');
+    });
+
+    it('una condición cerrada hoy no impide declarar "ninguna"', async () => {
+      const { repo } = createRepo({
+        listed: [condicion({ endsOn: new Date('2026-10-05T00:00:00Z') })],
+      });
+      const app = crearApp(repo);
+
+      await comoAlumno(app, 'post', `/students/${ALUMNO}/conditions/none`)
+        .send({})
+        .expect(200);
+      expect(repo.declareNoConditions).toHaveBeenCalledWith(ALUMNO, AHORA);
     });
   });
 });

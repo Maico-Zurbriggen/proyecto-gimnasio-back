@@ -756,6 +756,8 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           available:
             exercise.exercise.state === 'APROBADO' &&
             (exercise.exercise.availability[0]?.enabled ?? false),
+          compatibilityState: exercise.compatibilityState,
+          compatibilityReason: exercise.compatibilityReason,
           movementPattern: exercise.exercise.movementPattern,
           note: exercise.note,
           sets: exercise.sets.map((set) => ({
@@ -867,8 +869,8 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
             referenceType: 'ROUTINE',
             referenceId: command.routineId,
             text: aprueba
-              ? 'Tu entrenador aprobÃ³ tu nueva rutina: ya estÃ¡ vigente.'
-              : `Tu entrenador rechazÃ³ la rutina propuesta. Motivo: ${command.observation ?? ''}`,
+              ? 'Tu entrenador aprobó tu nueva rutina: ya está vigente.'
+              : `Tu entrenador rechazó la rutina propuesta. Motivo: ${command.observation ?? ''}`,
           },
         });
         await tx.auditLog.create({
