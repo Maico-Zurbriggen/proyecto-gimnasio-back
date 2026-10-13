@@ -22,6 +22,7 @@ export interface CompleteAccountInput {
   token: string;
   displayName: string;
   password: string;
+  healthDataConsent?: boolean;
 }
 
 export interface CompleteAccountResult {
@@ -76,10 +77,14 @@ export class CompleteAccountUseCase {
 
     // T2: alta del usuario con los roles de la invitación y marcado de la
     // invitación como usada, en una sola transacción del repositorio.
+    // La vigencia se vuelve a comprobar al consumirla, con el mismo instante del
+    // servidor: entre la lectura y la escritura otra pestaña pudo usarla.
     const account = await this.invitations.completeAccount({
       invitationId: invitation.id,
       displayName,
       passwordHash,
+      now,
+      healthDataConsent: input.healthDataConsent ?? false,
     });
 
     const token = generarTokenDeSesion();

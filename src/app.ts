@@ -1,3 +1,20 @@
+import { resolve } from 'node:path';
+import {
+  GenerationSettingsService,
+  type GenerationSettingsRepository,
+} from './modules/gyms/application/generation-settings.service';
+import { PrismaGenerationSettingsRepository } from './modules/gyms/infrastructure/persistence/prisma-generation-settings.repository';
+import { createGenerationSettingsRouter } from './modules/gyms/infrastructure/http/generation-settings.routes';
+import type { ProposalRegenerationsRepository } from './modules/evolution/application/ports/proposal-regenerations.repository';
+import { PrismaProposalRegenerationsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposal-regenerations.repository';
+import { RegenerateProposalUseCase } from './modules/evolution/application/use-cases/regenerate-proposal.use-case';
+import { createProposalRegenerationsRouter } from './modules/evolution/infrastructure/http/proposal-regenerations.routes';
+import type { ExerciseCatalogRepository } from './modules/exercise-catalog/application/catalog.repository';
+import { ExerciseCatalogService } from './modules/exercise-catalog/application/catalog.service';
+import { ExerciseCatalogController } from './modules/exercise-catalog/infrastructure/http/catalog.controller';
+import { createExerciseCatalogRouter } from './modules/exercise-catalog/infrastructure/http/catalog.routes';
+import { createCatalogMediaRouter } from './modules/exercise-catalog/infrastructure/http/catalog-media.routes';
+import { PrismaExerciseCatalogRepository } from './modules/exercise-catalog/infrastructure/persistence/prisma-catalog.repository';
 import cors, { type CorsOptions } from 'cors';
 import express, { type ErrorRequestHandler } from 'express';
 
@@ -15,6 +32,28 @@ import { ResolveSessionUseCase } from './modules/auth/application/use-cases/reso
 import { AuthController } from './modules/auth/infrastructure/http/auth.controller';
 import { createAuthRouter } from './modules/auth/infrastructure/http/auth.routes';
 import { PrismaAuthRepository } from './modules/auth/infrastructure/persistence/prisma-auth.repository';
+import type {
+  PasswordRecoveryRepository,
+  RecoveryMailer,
+} from './modules/auth/application/ports/password-recovery.repository';
+import {
+  ChangePasswordUseCase,
+  RequestPasswordRecoveryUseCase,
+  ResetPasswordUseCase,
+} from './modules/auth/application/use-cases/password-recovery.use-cases';
+import { PasswordRecoveryController } from './modules/auth/infrastructure/http/password-recovery.controller';
+import { createPasswordRecoveryRouter } from './modules/auth/infrastructure/http/password-recovery.routes';
+import { PrismaPasswordRecoveryRepository } from './modules/auth/infrastructure/persistence/prisma-password-recovery.repository';
+import { HttpRecoveryMailer } from './modules/auth/infrastructure/email/http-recovery.mailer';
+import type { GoalsRepository } from './modules/goals/application/ports/goals.repository';
+import { GoalsUseCases } from './modules/goals/application/use-cases/goals.use-cases';
+import { GoalsController } from './modules/goals/infrastructure/http/goals.controller';
+import { createGoalsRouter } from './modules/goals/infrastructure/http/goals.routes';
+import { PrismaGoalsRepository } from './modules/goals/infrastructure/persistence/prisma-goals.repository';
+import type { RoutineRenewalsRepository } from './modules/evolution/application/ports/routine-renewals.repository';
+import { RenewRoutineCyclesUseCase } from './modules/evolution/application/use-cases/renew-routine-cycles.use-case';
+import { createRoutineRenewalsRouter } from './modules/evolution/infrastructure/http/routine-renewals.routes';
+import { PrismaRoutineRenewalsRepository } from './modules/evolution/infrastructure/persistence/prisma-routine-renewals.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
 import { GetProposalReviewUseCase } from './modules/evolution/application/use-cases/get-proposal-review.use-case';
 import { ListTrainerProposalsUseCase } from './modules/evolution/application/use-cases/list-trainer-proposals.use-case';
@@ -22,20 +61,72 @@ import { ResolveProposalUseCase } from './modules/evolution/application/use-case
 import { ProposalsController } from './modules/evolution/infrastructure/http/proposals.controller';
 import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
+import {
+  AssignmentsUseCases,
+  type AssignmentsRepository,
+} from './modules/assignments/application/assignments';
+import { createAssignmentsRouter } from './modules/assignments/infrastructure/assignments.http';
+import { PrismaAssignmentsRepository } from './modules/assignments/infrastructure/prisma-assignments.repository';
+import {
+  InventoryUseCases,
+  type InventoryRepository,
+} from './modules/inventory/application/inventory';
+import { createInventoryRouter } from './modules/inventory/infrastructure/inventory.http';
+import { PrismaInventoryRepository } from './modules/inventory/infrastructure/prisma-inventory.repository';
+import type { GymsRepository } from './modules/gyms/application/ports/gyms.repository';
+import type { InvitationMailer } from './modules/invitations/application/ports/invitation-mailer';
+import type { TimezoneCatalog } from './modules/gyms/application/ports/timezone-catalog';
+import {
+  ListGymsUseCase,
+  ListTimezonesUseCase,
+  ReissueBootstrapInvitationUseCase,
+  SetGymStatusUseCase,
+  UpdateGymUseCase,
+} from './modules/gyms/application/use-cases/manage-gyms.use-cases';
+import { ProvisionGymUseCase } from './modules/gyms/application/use-cases/provision-gym.use-case';
+import { createInvitationMailerFromEnv } from './modules/invitations/infrastructure/email/invitation-mailers';
+import { GymsController } from './modules/gyms/infrastructure/http/gyms.controller';
+import { createGymsRouter } from './modules/gyms/infrastructure/http/gyms.routes';
+import { PrismaGymsRepository } from './modules/gyms/infrastructure/persistence/prisma-gyms.repository';
+import { PrismaTimezoneCatalog } from './modules/gyms/infrastructure/persistence/prisma-timezone-catalog';
+import type { AttemptLimiter } from './modules/invitations/application/ports/attempt-limiter';
 import type { InvitationsRepository } from './modules/invitations/application/ports/invitations.repository';
 import { CompleteAccountUseCase } from './modules/invitations/application/use-cases/complete-account.use-case';
+import {
+  IssueInvitationUseCase,
+  ListInvitationsUseCase,
+} from './modules/invitations/application/use-cases/issue-invitation.use-case';
+import { RevokeInvitationUseCase } from './modules/invitations/application/use-cases/revoke-invitation.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
 import { InvitationsController } from './modules/invitations/infrastructure/http/invitations.controller';
+import { createAttemptLimit } from './modules/invitations/infrastructure/http/attempt-limit.middleware';
 import { createInvitationsRouter } from './modules/invitations/infrastructure/http/invitations.routes';
+import { InMemoryAttemptLimiter } from './modules/invitations/infrastructure/persistence/in-memory-attempt-limiter';
+import { PrismaAttemptLimiter } from './modules/invitations/infrastructure/persistence/prisma-attempt-limiter';
 import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
+import type { PhysicalConditionsRepository } from './modules/physical-conditions/application/ports/physical-conditions.repository';
+import { CloseConditionUseCase } from './modules/physical-conditions/application/use-cases/close-condition.use-case';
+import { DeclareConditionUseCase } from './modules/physical-conditions/application/use-cases/declare-condition.use-case';
+import { ListConditionsUseCase } from './modules/physical-conditions/application/use-cases/list-conditions.use-case';
+import { PhysicalConditionsController } from './modules/physical-conditions/infrastructure/http/physical-conditions.controller';
+import { createPhysicalConditionsRouter } from './modules/physical-conditions/infrastructure/http/physical-conditions.routes';
+import { PrismaPhysicalConditionsRepository } from './modules/physical-conditions/infrastructure/persistence/prisma-physical-conditions.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
+import { CreateManualRoutineUseCase } from './modules/prescriptions/application/use-cases/create-manual-routine.use-case';
+import { CreateRoutineTemplateUseCase } from './modules/prescriptions/application/use-cases/create-routine-template.use-case';
 import {
   GetRoutineContentUseCase,
+  GetRoutineTemplateUseCase,
+  ListPendingRoutineReviewsUseCase,
   ListRoutineTemplatesUseCase,
   ListStudentRoutinesUseCase,
 } from './modules/prescriptions/application/use-cases/read-prescriptions.use-cases';
 import { ReviewRoutineUseCase } from './modules/prescriptions/application/use-cases/review-routine.use-case';
+import {
+  SetRoutineTemplateActiveUseCase,
+  UpdateRoutineTemplateUseCase,
+} from './modules/prescriptions/application/use-cases/update-routine-template.use-case';
 import { PrescriptionsController } from './modules/prescriptions/infrastructure/http/prescriptions.controller';
 import { createPrescriptionsRouter } from './modules/prescriptions/infrastructure/http/prescriptions.routes';
 import { PrismaPrescriptionsRepository } from './modules/prescriptions/infrastructure/persistence/prisma-prescriptions.repository';
@@ -69,6 +160,12 @@ import { RecordMeasurementUseCase } from './modules/measurements/application/use
 import { MeasurementsController } from './modules/measurements/infrastructure/http/measurements.controller';
 import { createMeasurementsRouter } from './modules/measurements/infrastructure/http/measurements.routes';
 import { PrismaMeasurementsRepository } from './modules/measurements/infrastructure/persistence/prisma-measurements.repository';
+import {
+  StudentContextUseCases,
+  type StudentContextRepository,
+} from './modules/student-context/application/student-context.use-cases';
+import { PrismaStudentContextRepository } from './modules/student-context/infrastructure/prisma-student-context.repository';
+import { createStudentContextRouter } from './modules/student-context/infrastructure/student-context.http';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
 import type { MeasurementCheckpointsRepository } from './modules/students/application/ports/measurement-checkpoints.repository';
 import type { StudentMeasurementAccess } from './modules/students/application/ports/student-measurement-access.port';
@@ -98,6 +195,13 @@ import { requireStudentMeasurementAccess } from './shared/middleware/student-mea
 class CorsOriginError extends Error {}
 
 interface AppDependencies {
+  passwordRecoveryRepository?: PasswordRecoveryRepository;
+  recoveryMailer?: RecoveryMailer;
+  goalsRepository?: GoalsRepository;
+  generationSettingsRepository?: GenerationSettingsRepository;
+  proposalRegenerationsRepository?: ProposalRegenerationsRepository;
+  exerciseCatalogRepository?: ExerciseCatalogRepository;
+  catalogAssetsDirectory?: string;
   localGenerationTesting?: boolean;
   allowedOrigins?: readonly string[];
   database?: HealthCheck;
@@ -109,7 +213,16 @@ interface AppDependencies {
   studentMeasurementAccess?: StudentMeasurementAccess;
   measurementsRepository?: MeasurementsRepository;
   proposalsRepository?: ProposalsRepository;
+  routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
+  physicalConditionsRepository?: PhysicalConditionsRepository;
+  invitationAttemptLimiter?: AttemptLimiter;
+  gymsRepository?: GymsRepository;
+  timezoneCatalog?: TimezoneCatalog;
+  invitationMailer?: InvitationMailer;
+  studentContextRepository?: StudentContextRepository;
+  assignmentsRepository?: AssignmentsRepository;
+  inventoryRepository?: InventoryRepository;
   prescriptionsRepository?: PrescriptionsRepository;
   trainerAssignments?: TrainerAssignments;
   clock?: Clock;
@@ -144,6 +257,14 @@ function createCorsOptions(allowedOrigins: readonly string[]): CorsOptions {
 }
 
 export function createApp({
+  passwordRecoveryRepository,
+  recoveryMailer,
+  goalsRepository,
+  generationSettingsRepository,
+  proposalRegenerationsRepository,
+  exerciseCatalogRepository,
+  catalogAssetsDirectory = process.env.CATALOG_ASSETS_DIR ??
+    resolve(process.cwd(), '.catalog-private/assets'),
   localGenerationTesting = isLocalGenerationTestingEnabled(),
   allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS),
   database = databaseHealthCheck,
@@ -155,7 +276,16 @@ export function createApp({
   studentMeasurementAccess,
   measurementsRepository,
   proposalsRepository,
+  routineRenewalsRepository,
   invitationsRepository,
+  physicalConditionsRepository,
+  invitationAttemptLimiter,
+  gymsRepository,
+  timezoneCatalog,
+  invitationMailer,
+  studentContextRepository,
+  assignmentsRepository,
+  inventoryRepository,
   prescriptionsRepository,
   trainerAssignments,
   clock,
@@ -168,6 +298,10 @@ export function createApp({
   const app = express();
 
   app.disable('x-powered-by');
+  // Configurar sólo según la topología del proxy que realmente protege la API.
+  const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+  if (Number.isInteger(proxyHops) && proxyHops > 0 && proxyHops <= 5)
+    app.set('trust proxy', proxyHops);
   app.use(cors(createCorsOptions(allowedOrigins)));
   app.use(express.json({ limit: '1mb' }));
 
@@ -197,6 +331,28 @@ export function createApp({
   );
 
   app.use(authenticateWithSession);
+  const recoveryRepo =
+    passwordRecoveryRepository ?? new PrismaPasswordRecoveryRepository(prisma);
+  app.use(
+    createPasswordRecoveryRouter(
+      new PasswordRecoveryController(
+        new RequestPasswordRecoveryUseCase(
+          recoveryRepo,
+          recoveryMailer ?? new HttpRecoveryMailer(),
+          resolvedClock,
+        ),
+        new ResetPasswordUseCase(recoveryRepo, resolvedClock),
+        new ChangePasswordUseCase(recoveryRepo, resolvedClock),
+      ),
+    ),
+  );
+  app.use(
+    createGoalsRouter(
+      new GoalsController(
+        new GoalsUseCases(goalsRepository ?? new PrismaGoalsRepository(prisma)),
+      ),
+    ),
+  );
 
   app.use(
     createAuthRouter(
@@ -211,6 +367,10 @@ export function createApp({
   // HU06: completar la cuenta desde la invitación. Va junto al router de auth
   // porque comparte su mecanismo de sesión: al completarla se emite la misma
   // cookie que emite el login.
+  // El correo con el enlace lo usan la emisión (FL-19) y el aprovisionamiento
+  // del primer administrador (HU13).
+  const resolvedInvitationMailer =
+    invitationMailer ?? createInvitationMailerFromEnv();
   const resolvedInvitationsRepo =
     invitationsRepository ?? new PrismaInvitationsRepository(prisma);
   app.use(
@@ -222,9 +382,96 @@ export function createApp({
           resolvedAuthRepo,
           resolvedClock,
         ),
+        new IssueInvitationUseCase(
+          resolvedInvitationsRepo,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
+        new ListInvitationsUseCase(resolvedInvitationsRepo, resolvedClock),
+        new RevokeInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
+      ),
+      createAttemptLimit(
+        invitationAttemptLimiter ??
+          (process.env.NODE_ENV === 'test'
+            ? new InMemoryAttemptLimiter()
+            : new PrismaAttemptLimiter(prisma)),
+        resolvedClock,
       ),
     ),
   );
+
+  // HU13: aprovisionamiento de gimnasios por el SuperAdmin.
+  const resolvedGymsRepo = gymsRepository ?? new PrismaGymsRepository(prisma);
+  const resolvedTimezones =
+    timezoneCatalog ?? new PrismaTimezoneCatalog(prisma);
+  app.use(
+    createGymsRouter(
+      new GymsController(
+        new ProvisionGymUseCase(
+          resolvedGymsRepo,
+          resolvedTimezones,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
+        new ListGymsUseCase(resolvedGymsRepo, resolvedClock),
+        new ReissueBootstrapInvitationUseCase(
+          resolvedGymsRepo,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
+        new ListTimezonesUseCase(resolvedTimezones),
+        new UpdateGymUseCase(
+          resolvedGymsRepo,
+          resolvedTimezones,
+          resolvedClock,
+        ),
+        new SetGymStatusUseCase(resolvedGymsRepo, resolvedClock),
+      ),
+    ),
+  );
+
+  // RF-066: el administrador asigna y cambia el entrenador de cada alumno.
+  app.use(
+    createAssignmentsRouter(
+      new AssignmentsUseCases(
+        assignmentsRepository ?? new PrismaAssignmentsRepository(prisma),
+      ),
+    ),
+  );
+
+  // FL-20 / CB-59: inventario del gimnasio y primeros pasos del administrador.
+  app.use(
+    createInventoryRouter(
+      new InventoryUseCases(
+        inventoryRepository ?? new PrismaInventoryRepository(prisma),
+      ),
+    ),
+  );
+
+  // FL-01: puesta en contexto del alumno recién dado de alta.
+  app.use(
+    createStudentContextRouter(
+      new StudentContextUseCases(
+        studentContextRepository ?? new PrismaStudentContextRepository(prisma),
+        resolvedClock,
+      ),
+    ),
+  );
+
+  // HU11: declaraciÃ³n, historial y cierre de condiciones fÃ­sicas.
+  const resolvedConditionsRepo =
+    physicalConditionsRepository ??
+    new PrismaPhysicalConditionsRepository(prisma);
+  app.use(
+    createPhysicalConditionsRouter(
+      new PhysicalConditionsController(
+        new DeclareConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new ListConditionsUseCase(resolvedConditionsRepo, resolvedClock),
+        new CloseConditionUseCase(resolvedConditionsRepo, resolvedClock),
+      ),
+    ),
+  );
+
   const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
     resolvedUsersRepository,
     resolvedClock,
@@ -244,6 +491,19 @@ export function createApp({
   const requireMeasurementAccess = requireStudentMeasurementAccess(
     resolvedStudentMeasurementAccess,
   );
+
+  app.use(
+    createExerciseCatalogRouter(
+      new ExerciseCatalogController(
+        new ExerciseCatalogService(
+          exerciseCatalogRepository ??
+            new PrismaExerciseCatalogRepository(prisma),
+        ),
+      ),
+      requireMeasurementAccess,
+    ),
+  );
+  app.use(createCatalogMediaRouter(prisma, catalogAssetsDirectory));
 
   const resolvedRoutinesRepo =
     routinesRepository ?? new PrismaRoutinesRepository(prisma);
@@ -273,6 +533,12 @@ export function createApp({
         new ListStudentRoutinesUseCase(resolvedPrescriptionsRepo),
         new GetRoutineContentUseCase(resolvedPrescriptionsRepo),
         new ReviewRoutineUseCase(resolvedPrescriptionsRepo),
+        new GetRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new CreateRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new UpdateRoutineTemplateUseCase(resolvedPrescriptionsRepo),
+        new SetRoutineTemplateActiveUseCase(resolvedPrescriptionsRepo),
+        new CreateManualRoutineUseCase(resolvedPrescriptionsRepo),
+        new ListPendingRoutineReviewsUseCase(resolvedPrescriptionsRepo),
       ),
       requireTrainerAssignment(resolvedAssignments),
       requireMeasurementAccess,
@@ -311,6 +577,7 @@ export function createApp({
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,
     requireMeasurementAccess,
+    requireTrainerAssignment(resolvedAssignments),
   );
 
   app.use(routineGenerationsRouter);
@@ -340,6 +607,22 @@ export function createApp({
     ),
   );
 
+  app.use(
+    createRoutineRenewalsRouter(
+      new RenewRoutineCyclesUseCase(
+        routineRenewalsRepository ??
+          new PrismaRoutineRenewalsRepository(prisma),
+        new EvaluateMeasurementCheckpointsUseCase(
+          resolvedMeasurementCheckpointsRepo,
+          resolvedClock,
+        ),
+        requestRoutineGenerationUseCase,
+        resolvedRoutineGenerationGateway,
+        resolvedClock,
+      ),
+    ),
+  );
+
   // HU02 - T1: carga de medidas del alumno desde el aviso de renovación.
   const resolvedMeasurementsRepo =
     measurementsRepository ?? new PrismaMeasurementsRepository(prisma);
@@ -362,6 +645,27 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+  app.use(
+    createGenerationSettingsRouter(
+      new GenerationSettingsService(
+        generationSettingsRepository ??
+          new PrismaGenerationSettingsRepository(prisma),
+      ),
+    ),
+  );
+  app.use(
+    createProposalRegenerationsRouter(
+      new RegenerateProposalUseCase(
+        proposalRegenerationsRepository ??
+          new PrismaProposalRegenerationsRepository(prisma),
+        resolvedProposalsRepo,
+        resolvedAssignments,
+        requestRoutineGenerationUseCase,
+        resolvedRoutineGenerationGateway,
+        resolvedClock,
+      ),
+    ),
+  );
 
   const errorHandler: ErrorRequestHandler = (
     error,
@@ -376,7 +680,8 @@ export function createApp({
       return;
     }
 
-    console.error('Unhandled request error', error);
+    // Un error de infraestructura puede incluir argumentos Prisma con secretos.
+    console.error('Unhandled request error');
     response.status(500).json({ error: 'internal_server_error' });
   };
 

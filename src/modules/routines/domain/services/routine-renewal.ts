@@ -73,7 +73,7 @@ export function differenceInCalendarDays(
 }
 
 /**
- * Calcula la fecha de vencimiento del ciclo (por defecto, 90 días).
+ * Calcula la fecha de vencimiento del ciclo (por defecto, 60 días).
  */
 export function calculateRenewalDate(
   startDate: Date,

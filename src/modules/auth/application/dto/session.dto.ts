@@ -5,4 +5,5 @@ export interface AuthenticatedUserDto {
   id: string;
   gymId: string;
   roles: UserRole[];
+  sessionId?: string;
 }

@@ -40,7 +40,7 @@ function toRecord(row: StudentRow): StudentRecord {
     id: row.userId,
     displayName: row.user.displayName,
     registeredAt: row.user.createdAt,
-    heightCm: Number(row.heightCm),
+    heightCm: row.heightCm === null ? null : Number(row.heightCm),
     lastMeasurementOn: row.bodyMeasurements[0]?.measuredOn ?? null,
     activeMeasurementBlock: activeBlock
       ? {
@@ -99,7 +99,10 @@ export class PrismaStudentsRepository implements StudentsRepository {
           take: 1,
           include: {
             reviews: {
-              where: { result: { in: ['APROBADA', 'APROBADA_CON_CAMBIOS'] } },
+              where: {
+                reviewedVersion: { current: true },
+                result: { in: ['APROBADA', 'APROBADA_CON_CAMBIOS'] },
+              },
               orderBy: { reviewedAt: 'desc' },
               take: 1,
             },

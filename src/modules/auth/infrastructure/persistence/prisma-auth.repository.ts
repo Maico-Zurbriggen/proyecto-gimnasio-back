@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import type { UserRole } from '../../../../shared/types/auth';
 import { isUuid } from '../../../../shared/types/uuid';
+import { InvalidCredentialsError } from '../../domain/errors/auth-errors';
 import type {
   AuthRepository,
   AuthSessionRecord,
@@ -17,11 +18,13 @@ export class PrismaAuthRepository implements AuthRepository {
   ): Promise<UserCredentialsRecord | null> {
     const user = await this.prisma.user.findFirst({
       where: { emailNormalized },
+      orderBy: { id: 'asc' },
       select: {
         id: true,
         gymId: true,
         passwordHash: true,
         state: true,
+        gym: { select: { active: true } },
         roles: { select: { role: true } },
       },
     });
@@ -34,18 +37,30 @@ export class PrismaAuthRepository implements AuthRepository {
       id: user.id,
       gymId: user.gymId,
       passwordHash: user.passwordHash,
-      state: user.state,
+      // HU13: un gimnasio suspendido deja a sus usuarios sin acceso.
+      state: user.gym.active ? user.state : 'SUSPENDIDO',
       roles: user.roles.map((assignment) => assignment.role as UserRole),
     };
   }
 
   async createSession(command: CreateSessionCommand): Promise<void> {
-    await this.prisma.authSession.create({
-      data: {
-        userId: command.userId,
-        tokenHash: command.tokenHash,
-        expiresAt: command.expiresAt,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM app.users WHERE id = ${command.userId}::uuid FOR UPDATE`;
+      const user = await tx.user.findUnique({ where: { id: command.userId } });
+      if (
+        !user ||
+        user.state !== 'ACTIVO' ||
+        (command.expectedPasswordHash &&
+          user.passwordHash !== command.expectedPasswordHash)
+      )
+        throw new InvalidCredentialsError();
+      await tx.authSession.create({
+        data: {
+          userId: command.userId,
+          tokenHash: command.tokenHash,
+          expiresAt: command.expiresAt,
+        },
+      });
     });
   }
 
@@ -64,6 +79,7 @@ export class PrismaAuthRepository implements AuthRepository {
           select: {
             gymId: true,
             state: true,
+            gym: { select: { active: true } },
             roles: { select: { role: true } },
           },
         },
@@ -82,7 +98,8 @@ export class PrismaAuthRepository implements AuthRepository {
       lastActivityAt: session.lastActivityAt,
       expiresAt: session.expiresAt,
       revokedAt: session.revokedAt,
-      userState: session.user.state,
+      // HU13: suspender el gimnasio corta también las sesiones abiertas.
+      userState: session.user.gym.active ? session.user.state : 'SUSPENDIDO',
     };
   }
 
@@ -94,8 +111,8 @@ export class PrismaAuthRepository implements AuthRepository {
     if (!isUuid(sessionId)) {
       return;
     }
-    await this.prisma.authSession.update({
-      where: { id: sessionId },
+    await this.prisma.authSession.updateMany({
+      where: { id: sessionId, revokedAt: null },
       data: { lastActivityAt, expiresAt },
     });
   }

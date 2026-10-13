@@ -1,3 +1,5 @@
+import type { ValidGeneratedRoutine } from '../../../routine-generations/domain/services/generated-routine-validator';
+import type { RenewalEvaluation } from './routine-renewals.repository';
 import type {
   AdjustmentType,
   RoutineDayPlan,
@@ -38,6 +40,13 @@ export interface ProposalRecord {
     currentVersionNumber: number | null;
   } | null;
   adjustments: ProposalAdjustmentRecord[];
+  /** Immutable evidence and technically validated candidate of automatic renewal. */
+  renewal?: {
+    evaluation: RenewalEvaluation;
+    candidate: ValidGeneratedRoutine;
+    sourceVersionId: string;
+    requestId: string;
+  };
   /** Fechas de todas las mediciones corporales del alumno. */
   measurementDates: Date[];
   /** Creación de las propuestas anteriores del alumno, de la más reciente a la más antigua. */
@@ -50,6 +59,7 @@ export interface CurrentVersionSnapshot {
 }
 
 export interface PersistResolutionCommand {
+  candidateRequestId?: string;
   proposalId: string;
   trainerId: string;
   studentId: string;
@@ -57,6 +67,7 @@ export interface PersistResolutionCommand {
   /** Rutina y días de la versión nueva; `null` al rechazar. */
   routineId: string | null;
   newVersionDays: RoutineDayPlan[] | null;
+  structure?: { routineType: string; targetWeeklyFrequency: number };
   resolvedAt: Date;
 }
 

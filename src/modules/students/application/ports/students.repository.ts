@@ -4,7 +4,7 @@ export interface StudentRecord {
   id: string;
   displayName: string;
   registeredAt: Date;
-  heightCm: number;
+  heightCm: number | null;
   lastMeasurementOn: Date | null;
   activeMeasurementBlock: ActiveMeasurementBlock | null;
   checkpointResults: Array<'CUMPLIDO' | 'FALTA'>;

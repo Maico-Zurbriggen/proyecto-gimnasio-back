@@ -5,6 +5,7 @@ import type {
 
 export interface StudentGenerationContext {
   gymId: string;
+  generationSettings?: import('../../../gyms/domain/generation-settings').GenerationSettingsSnapshot;
   minimizedContext: MinimizedContext;
 }
 
@@ -13,9 +14,5 @@ export interface GenerationContextRepository {
     studentId: string,
     asOf: Date,
   ): Promise<StudentGenerationContext | null>;
-  getPrefilteredCatalog(
-    studentId: string,
-    gymId: string,
-    asOf: Date,
-  ): Promise<CatalogExerciseRef[]>;
+  getEnabledCatalog(gymId: string): Promise<CatalogExerciseRef[]>;
 }

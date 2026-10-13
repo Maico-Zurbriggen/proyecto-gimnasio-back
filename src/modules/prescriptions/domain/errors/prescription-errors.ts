@@ -50,3 +50,37 @@ export class PendingProposalError extends Error {
     this.name = 'PendingProposalError';
   }
 }
+export class GoalMismatchConfirmationError extends Error {}
+
+export class TemplateExerciseNotFoundError extends Error {
+  constructor(
+    message = 'Un ejercicio de la plantilla no existe en el gimnasio',
+  ) {
+    super(message);
+    this.name = 'TemplateExerciseNotFoundError';
+  }
+}
+
+export class TemplateExerciseNotApprovedError extends Error {
+  constructor(
+    message = 'Un ejercicio de la plantilla no está aprobado para prescribir',
+  ) {
+    super(message);
+    this.name = 'TemplateExerciseNotApprovedError';
+  }
+}
+
+export class TemplateInactiveError extends Error {
+  constructor(message = 'La plantilla no está activa') {
+    super(message);
+    this.name = 'TemplateInactiveError';
+  }
+}
+
+/** Rechazar exige motivo: el alumno lo recibe en su aviso (FL-02/A2). */
+export class RejectionReasonRequiredError extends Error {
+  constructor(message = 'Para rechazar la rutina indicá el motivo') {
+    super(message);
+    this.name = 'RejectionReasonRequiredError';
+  }
+}

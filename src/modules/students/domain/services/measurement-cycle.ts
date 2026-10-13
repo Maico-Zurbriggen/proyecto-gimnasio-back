@@ -1,3 +1,5 @@
+import { DURACION_CICLO_DIAS } from '../../../routines/domain/services/routine-renewal';
+
 const DAY_MS = 86_400_000;
 
 /** Inicio del seguimiento persistido; evita inferir faltas sobre datos históricos incompletos. */
@@ -37,7 +39,7 @@ export function dueMeasurementCycles(
   let cycleStartsOn = lastDueOn ?? baseline;
 
   while (true) {
-    const dueOn = addUtcDays(cycleStartsOn, 60);
+    const dueOn = addUtcDays(cycleStartsOn, DURACION_CICLO_DIAS);
     if (dueOn > today) {
       return cycles;
     }

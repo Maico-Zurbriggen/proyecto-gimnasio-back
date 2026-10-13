@@ -74,6 +74,11 @@ function applyToExercise(
       return;
     }
     case 'ESQUEMA': {
+      if (field(value, 'requires_type_change') === true) {
+        fail(
+          'goal change requires the trainer to review the new routine type and its complete structure',
+        );
+      }
       const min = field(value, 'min_repetitions');
       const max = field(value, 'max_repetitions');
       if (!isInteger(min, 1) || !isInteger(max, min as number)) {
@@ -114,6 +119,8 @@ function applyToExercise(
       return;
     }
     case 'ESTRUCTURA':
+      // T6 / RN-89a: la estructura de renovación se aplica desde el candidato
+      // validado (resolve-proposal), nunca por parche automático aquí.
       fail('structure adjustments must be applied manually by the trainer');
   }
 }

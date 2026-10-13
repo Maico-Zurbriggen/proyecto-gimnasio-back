@@ -52,6 +52,7 @@ export class ResolveSessionUseCase {
       id: session.userId,
       gymId: session.gymId,
       roles: session.roles,
+      sessionId: session.id,
     };
   }
 }
