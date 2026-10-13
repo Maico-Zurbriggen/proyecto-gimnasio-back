@@ -21,6 +21,11 @@ export interface MedicionFechada {
   measuredOn: Date;
 }
 
+/** Una medición corporal con tipo, para la verificación estricta RN-130. */
+export interface MedicionCorporalConTipo extends MedicionFechada {
+  type: string;
+}
+
 /**
  * Una propuesta de renovación ya resuelta o emitida, en orden cronológico
  * inverso (de la más reciente a la más antigua).
@@ -37,6 +42,10 @@ export interface PropuestaDeRenovacion {
  * Cuenta como dentro del ciclo toda medición **posterior** a su fecha de inicio.
  * Una medición del mismo día en que arrancó el ciclo no cuenta: pertenece al
  * ciclo anterior, que es el que la motivó.
+ *
+ * Nota HU03: este ayudante genérico sigue usándose para la advertencia de
+ * propuestas históricas sin tipos persistidos (DTO legacy). La renovación
+ * automática (job) usa `hayDatosActualizadosEnElCiclo` (estricto RN-130).
  */
 export function hayMedicionEnElCiclo(
   mediciones: readonly MedicionFechada[],
@@ -46,6 +55,38 @@ export function hayMedicionEnElCiclo(
     (medicion) =>
       differenceInCalendarDays(medicion.measuredOn, inicioDelCiclo) > 0,
   );
+}
+
+/**
+ * T2 estricto (HU03 + RN-130) — Determina si el ciclo tiene datos actualizados.
+ *
+ * Exige **peso corporal + confirmación de altura** con instante
+ * `inicio < dato <= fin`, igual que el control de mediciones que alimenta las
+ * faltas y el bloqueo. Un perímetro solo no alcanza: daría `sinDatos=false`
+ * pero `FALTA` en el checkpoint, rompiendo la coherencia entre la advertencia
+ * y la racha.
+ *
+ * `alturaConfirmadaEn` debe llegar ya normalizada a fecha local del gimnasio
+ * (ver `localDateAt`); las mediciones y los bordes del ciclo son fechas
+ * calendario (medianoche UTC).
+ */
+export function hayDatosActualizadosEnElCiclo(
+  mediciones: readonly MedicionCorporalConTipo[],
+  alturaConfirmadaEn: Date | null,
+  inicioDelCiclo: Date,
+  finDelCiclo: Date,
+): boolean {
+  const peso = mediciones.some(
+    (medicion) =>
+      medicion.type === 'PESO_CORPORAL' &&
+      differenceInCalendarDays(medicion.measuredOn, inicioDelCiclo) > 0 &&
+      differenceInCalendarDays(medicion.measuredOn, finDelCiclo) <= 0,
+  );
+  const altura =
+    alturaConfirmadaEn !== null &&
+    differenceInCalendarDays(alturaConfirmadaEn, inicioDelCiclo) > 0 &&
+    differenceInCalendarDays(alturaConfirmadaEn, finDelCiclo) <= 0;
+  return peso && altura;
 }
 
 /**

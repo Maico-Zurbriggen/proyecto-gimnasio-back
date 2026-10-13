@@ -21,13 +21,9 @@ export interface AdvertenciaDatosDesactualizadosDto {
 /**
  * Construye la advertencia a partir de la evaluación del ciclo.
  *
- * El flag es **derivado**: se calcula al armar el payload y no se persiste, porque
- * `adaptation_proposals` todavía no tiene columna para él. Cuando se agregue, esta
- * función pasa a leerla en lugar de recalcularla y el resto del código no cambia.
- *
- * Consecuencia asumida mientras siga derivado: responde «¿hay medición ahora?», no
- * «¿había medición cuando se generó la propuesta?». Si el alumno carga una medición
- * atrasada, una propuesta vieja deja de aparecer marcada.
+ * Las renovaciones automáticas usan la evaluación inmutable persistida en el
+ * ciclo. Propuestas históricas sin esa instantánea conservan su derivación
+ * limitada a las mediciones fechadas antes de su creación.
  */
 export function construirAdvertenciaDatos(
   evaluacion: EvaluacionDatosRenovacion,

@@ -22,6 +22,7 @@ export interface AuthSessionRecord {
 }
 
 export interface CreateSessionCommand {
+  expectedPasswordHash?: string;
   userId: string;
   tokenHash: string;
   expiresAt: Date;

@@ -1,8 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 import { GenerationPreferencesUnsatisfiableError } from '../../domain/services/generation-request-requirements';
+import { ContextInsufficientError } from '../../domain/errors/context-insufficient.error';
 
 import {
   EmptyPrefilteredCatalogError,
+  GenerationContextChangedError,
+  GenerationUnableError,
   GeneratedRoutineInvalidError,
   MissingGenerationInputError,
   ProposedRoutineAlreadyExistsError,
@@ -73,6 +76,13 @@ export class RoutineGenerationsController {
         status: result.status,
       });
     } catch (error) {
+      if (error instanceof ContextInsufficientError) {
+        res.status(409).json({
+          error: 'student_context_insufficient',
+          missing: error.missing,
+        });
+        return;
+      }
       if (error instanceof GenerationPreferencesUnsatisfiableError) {
         res.status(422).json({
           error: 'generation_preferences_unsatisfiable',
@@ -95,7 +105,7 @@ export class RoutineGenerationsController {
       }
 
       if (error instanceof EmptyPrefilteredCatalogError) {
-        res.status(422).json({ error: 'empty_prefiltered_catalog' });
+        res.status(422).json({ error: 'empty_gym_catalog' });
         return;
       }
 
@@ -184,6 +194,16 @@ export class RoutineGenerationsController {
       });
       res.status(201).json(result);
     } catch (error) {
+      if (error instanceof GenerationContextChangedError) {
+        res.status(409).json({ error: 'generation_context_changed' });
+        return;
+      }
+      if (error instanceof GenerationUnableError) {
+        res
+          .status(422)
+          .json({ error: 'generation_unable', reason: error.reason });
+        return;
+      }
       if (error instanceof RoutineGenerationNotFoundError) {
         res.status(404).json({ error: 'routine_generation_not_found' });
         return;

@@ -27,6 +27,7 @@ enum UserRole {
   ALUMNO
   ENTRENADOR
   ADMINISTRADOR
+  SUPERADMIN
 
   @@schema("app")
 }
@@ -115,6 +116,23 @@ enum MovementPattern {
   @@schema("app")
 }
 
+enum ExerciseState {
+  PROPUESTO
+  APROBADO
+  RECHAZADO
+  DESACTIVADO
+
+  @@schema("app")
+}
+
+enum ExerciseMediaPose {
+  INICIO
+  FINAL
+  PRINCIPAL
+
+  @@schema("app")
+}
+
 enum ExerciseOrigin {
   CATALOGO_BASE
   GIMNASIO
@@ -156,6 +174,7 @@ enum RoutineReviewResult {
 }
 
 enum CompatibilityState {
+  EJERCICIO_DESACTIVADO
   COMPATIBLE
   ADVERTIDO
   INCOMPATIBLE
@@ -256,33 +275,42 @@ enum AiGenerationAttemptState {
 }
 
 model Gym {
-  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name              String
-  timezone          String
-  affiliationStatus GymAffiliationStatus @default(AFFILIATED) @map("affiliation_status")
-  active            Boolean              @default(true)
-  invitations       Invitation[]
-  users             User[]
-  equipment         GymEquipment[]
-  exercises         Exercise[]
-  routineTemplates  RoutineTemplate[]
+  generationSettings         Json?                @map("generation_settings")
+  generationSettingsRevision Int                  @default(0) @map("generation_settings_revision")
+  inventoryRevision          Int                  @default(0) @map("inventory_revision")
+  id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                       String
+  timezone                   String
+  affiliationStatus          GymAffiliationStatus @default(AFFILIATED) @map("affiliation_status")
+  active                     Boolean              @default(true)
+  createdAt                  DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  isPlatform                 Boolean              @default(false) @map("is_platform")
+  invitations                Invitation[]
+  users                      User[]
+  enabledExercises           GymExercise[]
+  equipment                  GymEquipment[]
+  exercises                  Exercise[]
+  routineTemplates           RoutineTemplate[]
 
   @@map("gyms")
   @@schema("app")
 }
 
 model Invitation {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  gymId           String           @map("gym_id") @db.Uuid
-  issuedByUserId  String           @map("issued_by_user_id") @db.Uuid
-  emailNormalized String           @map("email_normalized")
-  status          InvitationStatus @default(VIGENTE)
-  issuedAt        DateTime         @default(now()) @map("issued_at") @db.Timestamptz(6)
-  expiresAt       DateTime         @map("expires_at") @db.Timestamptz(6)
-  gym             Gym              @relation(fields: [gymId], references: [id], onDelete: Restrict)
-  issuedBy        User             @relation("IssuedInvitations", fields: [issuedByUserId], references: [id], onDelete: Restrict)
-  roles           InvitationRole[]
-  createdUser     User?            @relation("InvitationCreatedUser")
+  id                   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gymId                String           @map("gym_id") @db.Uuid
+  issuedByUserId       String?          @map("issued_by_user_id") @db.Uuid
+  issuedByProvisioning Boolean          @default(false) @map("issued_by_provisioning")
+  emailNormalized      String           @map("email_normalized")
+  tokenHash            String?          @unique @map("token_hash")
+  status               InvitationStatus @default(VIGENTE)
+  issuedAt             DateTime         @default(now()) @map("issued_at") @db.Timestamptz(6)
+  expiresAt            DateTime         @map("expires_at") @db.Timestamptz(6)
+  usedAt               DateTime?        @map("used_at") @db.Timestamptz(6)
+  gym                  Gym              @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  issuedBy             User?            @relation("IssuedInvitations", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  roles                InvitationRole[]
+  createdUser          User?            @relation("InvitationCreatedUser")
 
   @@index([gymId, status])
   @@index([emailNormalized])
@@ -301,32 +329,35 @@ model InvitationRole {
 }
 
 model User {
-  id                  String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  gymId               String                     @map("gym_id") @db.Uuid
-  invitationId        String?                    @unique @map("invitation_id") @db.Uuid
-  emailNormalized     String                     @map("email_normalized")
-  displayName         String                     @map("display_name")
-  passwordHash        String                     @map("password_hash")
-  state               UserState                  @default(ACTIVO)
-  createdAt           DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  gym                 Gym                        @relation(fields: [gymId], references: [id], onDelete: Restrict)
-  sourceInvitation    Invitation?                @relation("InvitationCreatedUser", fields: [invitationId], references: [id], onDelete: Restrict)
-  issuedInvitations   Invitation[]               @relation("IssuedInvitations")
-  roles               UserRoleAssignment[]
-  consents            Consent[]
-  authSessions        AuthSession[]
-  passwordResetTokens PasswordResetToken[]
-  studentProfile      StudentProfile?
-  trainerProfile      TrainerProfile?
-  recordedClearances  FitnessClearance[]         @relation("ClearanceRecorder")
-  assignmentsStarted  TrainerStudentAssignment[] @relation("AssignmentStarter")
-  assignmentsEnded    TrainerStudentAssignment[] @relation("AssignmentEnder")
-  updatedEquipment    GymEquipment[]             @relation("EquipmentUpdater")
-  authoredExercises   Exercise[]                 @relation("ExerciseAuthor")
-  requestedRoutines   Routine[]                  @relation("RoutineRequester")
-  createdVersions     RoutineVersion[]           @relation("RoutineVersionCreator")
-  notices             Notice[]
-  auditLogs           AuditLog[]
+  proposalRegenerations RoutineProposalRegeneration[] @relation("TrainerProposalRegenerations")
+  id                    String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gymId                 String                        @map("gym_id") @db.Uuid
+  invitationId          String?                       @unique @map("invitation_id") @db.Uuid
+  emailNormalized       String                        @map("email_normalized")
+  displayName           String                        @map("display_name")
+  passwordHash          String                        @map("password_hash")
+  state                 UserState                     @default(ACTIVO)
+  createdAt             DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  gym                   Gym                           @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  sourceInvitation      Invitation?                   @relation("InvitationCreatedUser", fields: [invitationId], references: [id], onDelete: Restrict)
+  issuedInvitations     Invitation[]                  @relation("IssuedInvitations")
+  roles                 UserRoleAssignment[]
+  consents              Consent[]
+  authSessions          AuthSession[]
+  passwordResetTokens   PasswordResetToken[]
+  studentProfile        StudentProfile?
+  trainerProfile        TrainerProfile?
+  recordedClearances    FitnessClearance[]            @relation("ClearanceRecorder")
+  assignmentsStarted    TrainerStudentAssignment[]    @relation("AssignmentStarter")
+  assignmentsEnded      TrainerStudentAssignment[]    @relation("AssignmentEnder")
+  updatedExercises      GymExercise[]                 @relation("ExerciseAvailabilityUpdater")
+  reviewedExercises     Exercise[]                    @relation("ExerciseReviewer")
+  updatedEquipment      GymEquipment[]                @relation("EquipmentUpdater")
+  authoredExercises     Exercise[]                    @relation("ExerciseAuthor")
+  requestedRoutines     Routine[]                     @relation("RoutineRequester")
+  createdVersions       RoutineVersion[]              @relation("RoutineVersionCreator")
+  notices               Notice[]
+  auditLogs             AuditLog[]
 
   @@unique([gymId, emailNormalized])
   @@index([gymId, state])
@@ -385,6 +416,27 @@ model PasswordResetToken {
   @@schema("app")
 }
 
+model PasswordRecoveryLimit {
+  originHash String   @map("origin_hash")
+  day        DateTime @db.Date
+  attempts   Int
+
+  @@id([originHash, day])
+  @@map("password_recovery_limits")
+  @@schema("app")
+}
+
+model InvitationAttemptLimit {
+  originHash  String   @map("origin_hash")
+  scope       String
+  windowStart DateTime @map("window_start") @db.Timestamptz(6)
+  attempts    Int
+
+  @@id([originHash, scope, windowStart])
+  @@map("invitation_attempt_limits")
+  @@schema("app")
+}
+
 model Equipment {
   code         String              @id
   name         String              @unique
@@ -420,12 +472,12 @@ model Joint {
 
 model StudentProfile {
   userId                 String                         @id @map("user_id") @db.Uuid
-  birthDate              DateTime                       @map("birth_date") @db.Date
-  sex                    String
-  heightCm               Decimal                        @map("height_cm") @db.Decimal(5, 2)
+  birthDate              DateTime?                      @map("birth_date") @db.Date
+  sex                    String?
+  heightCm               Decimal?                       @map("height_cm") @db.Decimal(5, 2)
   heightUpdatedAt        DateTime                       @default(now()) @map("height_updated_at") @db.Timestamptz(6)
-  experienceLevel        ExperienceLevel                @map("experience_level")
-  availableDaysPerWeek   Int                            @map("available_days_per_week")
+  experienceLevel        ExperienceLevel?               @map("experience_level")
+  availableDaysPerWeek   Int?                           @map("available_days_per_week")
   user                   User                           @relation(fields: [userId], references: [id], onDelete: Restrict)
   goals                  Goal[]
   physicalConditions     PhysicalCondition[]
@@ -464,8 +516,8 @@ model Goal {
   id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   studentId String          @map("student_id") @db.Uuid
   type      TrainingPurpose
-  startsOn  DateTime        @map("starts_on") @db.Date
-  endsOn    DateTime?       @map("ends_on") @db.Date
+  startsOn  DateTime        @map("starts_on") @db.Timestamptz(6)
+  endsOn    DateTime?       @map("ends_on") @db.Timestamptz(6)
   student   StudentProfile  @relation(fields: [studentId], references: [userId], onDelete: Restrict)
 
   @@index([studentId, startsOn])
@@ -562,6 +614,21 @@ model Exercise {
   difficultyLevel     ExperienceLevel      @map("difficulty_level")
   unilateral          Boolean              @default(false)
   visualResourceUrl   String               @map("visual_resource_url")
+  state               ExerciseState        @default(APROBADO)
+  revision            Int                  @default(1)
+  source              String?
+  sourceId            String?              @map("source_id")
+  sourceRevision      String?              @map("source_revision")
+  description         String?
+  tips                String[]             @default([])
+  reviewedByUserId    String?              @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt          DateTime?            @map("reviewed_at") @db.Timestamptz(6)
+  reviewObservation   String?              @map("review_observation")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  reviewedBy          User?                @relation("ExerciseReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  availability        GymExercise[]
+  media               ExerciseMedia[]
   origin              ExerciseOrigin
   gym                 Gym?                 @relation(fields: [gymId], references: [id], onDelete: Restrict)
   author              User?                @relation("ExerciseAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
@@ -575,9 +642,41 @@ model Exercise {
   exerciseDiagnostics ExerciseDiagnostic[]
   personalRecords     PersonalRecord[]
 
+  @@unique([source, sourceId])
   @@index([gymId])
+  @@index([state, name])
   @@index([movementPattern, difficultyLevel])
   @@map("exercises")
+  @@schema("app")
+}
+
+model GymExercise {
+  revision        Int      @default(1)
+  gymId           String   @map("gym_id") @db.Uuid
+  exerciseId      String   @map("exercise_id") @db.Uuid
+  enabled         Boolean  @default(false)
+  updatedByUserId String   @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  gym             Gym      @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  exercise        Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  updatedBy       User     @relation("ExerciseAvailabilityUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@id([gymId, exerciseId])
+  @@index([gymId, enabled])
+  @@map("gym_exercises")
+  @@schema("app")
+}
+
+model ExerciseMedia {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  exerciseId String            @map("exercise_id") @db.Uuid
+  position   Int
+  pose       ExerciseMediaPose
+  url        String
+  exercise   Exercise          @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([exerciseId, position])
+  @@map("exercise_media")
   @@schema("app")
 }
 
@@ -739,6 +838,7 @@ model RoutineVersion {
   originatingProposal    AdaptationProposal?            @relation("OriginatingAdaptation", fields: [adaptationProposalId], references: [id], onDelete: Restrict)
   resultingForProposal   AdaptationProposal?            @relation("ResultingRoutineVersion")
   measurementCheckpoints StudentMeasurementCheckpoint[]
+  renewalCycles          RoutineRenewalCycle[]
 
   @@unique([routineId, versionNumber])
   @@map("routine_versions")
@@ -876,7 +976,7 @@ model SessionSetRecord {
   performedExerciseId      String?         @map("performed_exercise_id") @db.Uuid
   prescribedMinRepetitions Int             @map("prescribed_min_repetitions")
   prescribedMaxRepetitions Int             @map("prescribed_max_repetitions")
-  prescribedLoad           Decimal         @map("prescribed_load") @db.Decimal(10, 2)
+  prescribedLoad           Decimal?        @map("prescribed_load") @db.Decimal(10, 2)
   warmup                   Boolean         @default(false)
   performedLoad            Decimal?        @map("performed_load") @db.Decimal(10, 2)
   performedRepetitions     Int?            @map("performed_repetitions")
@@ -969,26 +1069,52 @@ model ExerciseDiagnostic {
 }
 
 model AdaptationProposal {
-  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  diagnosticId        String                  @unique @map("diagnostic_id") @db.Uuid
-  studentId           String                  @map("student_id") @db.Uuid
-  state               AdaptationProposalState @default(PENDIENTE)
-  resolvedByTrainerId String?                 @map("resolved_by_trainer_id") @db.Uuid
-  resultingVersionId  String?                 @unique @map("resulting_version_id") @db.Uuid
-  resolutionReason    String?                 @map("resolution_reason")
-  componentVersion    String                  @map("component_version")
-  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  resolvedAt          DateTime?               @map("resolved_at") @db.Timestamptz(6)
-  diagnostic          EvolutionDiagnostic     @relation(fields: [diagnosticId], references: [id], onDelete: Restrict)
-  student             StudentProfile          @relation(fields: [studentId], references: [userId], onDelete: Restrict)
-  resolvedByTrainer   TrainerProfile?         @relation("AdaptationResolver", fields: [resolvedByTrainerId], references: [userId], onDelete: Restrict)
-  resultingVersion    RoutineVersion?         @relation("ResultingRoutineVersion", fields: [resultingVersionId], references: [id], onDelete: Restrict)
-  originatedVersion   RoutineVersion?         @relation("OriginatingAdaptation")
+  regenerations       RoutineProposalRegeneration[]
+  id                  String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diagnosticId        String                        @unique @map("diagnostic_id") @db.Uuid
+  studentId           String                        @map("student_id") @db.Uuid
+  state               AdaptationProposalState       @default(PENDIENTE)
+  resolvedByTrainerId String?                       @map("resolved_by_trainer_id") @db.Uuid
+  resultingVersionId  String?                       @unique @map("resulting_version_id") @db.Uuid
+  resolutionReason    String?                       @map("resolution_reason")
+  componentVersion    String                        @map("component_version")
+  createdAt           DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt          DateTime?                     @map("resolved_at") @db.Timestamptz(6)
+  diagnostic          EvolutionDiagnostic           @relation(fields: [diagnosticId], references: [id], onDelete: Restrict)
+  student             StudentProfile                @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  resolvedByTrainer   TrainerProfile?               @relation("AdaptationResolver", fields: [resolvedByTrainerId], references: [userId], onDelete: Restrict)
+  resultingVersion    RoutineVersion?               @relation("ResultingRoutineVersion", fields: [resultingVersionId], references: [id], onDelete: Restrict)
+  originatedVersion   RoutineVersion?               @relation("OriginatingAdaptation")
   adjustments         ProposedAdjustment[]
+  renewalCycle        RoutineRenewalCycle?
 
   @@index([studentId, state, createdAt])
   @@index([resolvedByTrainerId])
   @@map("adaptation_proposals")
+  @@schema("app")
+}
+
+// Durable orchestration and immutable evidence for automatic cycle renewal.
+model RoutineRenewalCycle {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routineVersionId String               @map("routine_version_id") @db.Uuid
+  cycleStartsOn    DateTime             @map("cycle_starts_on") @db.Date
+  dueOn            DateTime             @map("due_on") @db.Date
+  evaluation       Json
+  requestId        String?              @unique @map("request_id") @db.Uuid
+  proposalId       String?              @unique @map("proposal_id") @db.Uuid
+  state            String               @default("PENDIENTE")
+  leaseUntil       DateTime?            @map("lease_until") @db.Timestamptz(6)
+  alertedAt        DateTime?            @map("alerted_at") @db.Timestamptz(6)
+  lastError        String?              @map("last_error")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  routineVersion   RoutineVersion       @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)
+  request          AiGenerationRequest? @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  proposal         AdaptationProposal?  @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+
+  @@unique([routineVersionId, dueOn])
+  @@index([state, leaseUntil])
+  @@map("routine_renewal_cycles")
   @@schema("app")
 }
 
@@ -1031,25 +1157,52 @@ model PersonalRecord {
 }
 
 model AiGenerationRequest {
-  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  idempotencyKey   String                      @unique @map("idempotency_key")
-  state            AiGenerationRequestState    @default(PENDIENTE)
-  minimizedContext Json                        @map("minimized_context")
-  preferences      Json
-  contextHash      String                      @map("context_hash")
-  availableAt      DateTime                    @default(now()) @map("available_at") @db.Timestamptz(6)
-  leaseOwner       String?                     @map("lease_owner")
-  leaseUntil       DateTime?                   @map("lease_until") @db.Timestamptz(6)
-  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
-  finishedAt       DateTime?                   @map("finished_at") @db.Timestamptz(6)
-  retentionUntil   DateTime                    @map("retention_until") @db.Timestamptz(6)
-  attempts         AiGenerationAttempt[]
-  ownership        RoutineGenerationOwnership?
+  proposalRegeneration     RoutineProposalRegeneration?  @relation("ProposalRegenerationRequest")
+  previousProposalRequests RoutineProposalRegeneration[] @relation("PreviousProposalGenerationRequest")
+  id                       String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey           String                        @unique @map("idempotency_key")
+  state                    AiGenerationRequestState      @default(PENDIENTE)
+  minimizedContext         Json                          @map("minimized_context")
+  preferences              Json
+  contextHash              String                        @map("context_hash")
+  availableAt              DateTime                      @default(now()) @map("available_at") @db.Timestamptz(6)
+  leaseOwner               String?                       @map("lease_owner")
+  leaseUntil               DateTime?                     @map("lease_until") @db.Timestamptz(6)
+  createdAt                DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt               DateTime?                     @map("finished_at") @db.Timestamptz(6)
+  retentionUntil           DateTime                      @map("retention_until") @db.Timestamptz(6)
+  attempts                 AiGenerationAttempt[]
+  ownership                RoutineGenerationOwnership?
+  renewalCycle             RoutineRenewalCycle?
 
   @@index([state, availableAt])
   @@index([retentionUntil])
   @@map("ai_generation_requests")
   @@schema("ai_integration")
+}
+
+model RoutineProposalRegeneration {
+  sequence           Int                  @default(1)
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId         String               @map("proposal_id") @db.Uuid
+  trainerId          String               @map("trainer_id") @db.Uuid
+  idempotencyKey     String               @unique @map("idempotency_key")
+  feedback           String
+  requestId          String?              @unique @map("request_id") @db.Uuid
+  candidateRequestId String               @map("candidate_request_id") @db.Uuid
+  state              String               @default("PENDIENTE")
+  error              String?
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt         DateTime?            @map("finished_at") @db.Timestamptz(6)
+  proposal           AdaptationProposal   @relation(fields: [proposalId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trainer            User                 @relation("TrainerProposalRegenerations", fields: [trainerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  candidateRequest   AiGenerationRequest  @relation("PreviousProposalGenerationRequest", fields: [candidateRequestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  request            AiGenerationRequest? @relation("ProposalRegenerationRequest", fields: [requestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([proposalId, sequence])
+  @@index([proposalId, createdAt])
+  @@map("routine_proposal_regenerations")
+  @@schema("app")
 }
 
 model RoutineGenerationOwnership {

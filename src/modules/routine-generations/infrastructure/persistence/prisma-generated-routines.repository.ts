@@ -1,4 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { finalizeGenerationV2 } from './finalize-generation-v2';
+import { equipamientoDisponible } from '../../../inventory/domain/prescribable-catalog';
 
 import { adaptRoutineGenerationOutput } from '../../../../integrations/ai/routine-generation-output.mapper';
 
@@ -40,6 +42,7 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
       where: { id: owner.requestId },
       include: {
         ownership: true,
+        renewalCycle: { select: { id: true } },
         attempts: {
           orderBy: { attemptNumber: 'desc' },
           take: 1,
@@ -51,6 +54,7 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     });
     if (
       !request ||
+      request.renewalCycle ||
       request.ownership?.studentId !== owner.studentId ||
       request.ownership.requestedByUserId !== owner.requestedByUserId
     ) {
@@ -65,6 +69,21 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
       throw new RoutineGenerationNotCompletedError();
     }
     const replacementId = this.replacementRoutineId(request.preferences);
+    const preferences = request.preferences;
+    if (
+      preferences &&
+      typeof preferences === 'object' &&
+      !Array.isArray(preferences) &&
+      preferences.schema_version === '2.0'
+    ) {
+      return finalizeGenerationV2(
+        this.prisma,
+        request,
+        result,
+        owner,
+        replacementId,
+      );
+    }
     const proposed = await this.prisma.routine.findFirst({
       where: { studentId: owner.studentId, state: 'PROPUESTA' },
       select: { id: true },
@@ -100,7 +119,8 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
       }),
     ]);
 
-    const availableEquipment = new Set(
+    // RN-115: el peso corporal está siempre presente aunque no se declare.
+    const availableEquipment = equipamientoDisponible(
       equipment.map((item) => item.equipmentCode),
     );
     const now = new Date();
@@ -113,7 +133,8 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
     const compatibleExercises = exercises.filter((exercise) => {
       if (
         LEVEL_RANK[exercise.difficultyLevel] >
-        LEVEL_RANK[student.experienceLevel]
+        // Sin nivel declarado se valida con el más conservador.
+        LEVEL_RANK[student.experienceLevel ?? 'PRINCIPIANTE']
       ) {
         return false;
       }
