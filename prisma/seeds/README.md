@@ -12,6 +12,9 @@ CONFLICT` y nunca crean, alteran ni borran nada.
 | `seed-test.sql`      | Solo Test         | Todo `app` + `ai_integration`: 39 tablas con datos ficticios   |
 | `catalogo-base.csv`  | Solo Test         | Los 14 ejercicios base en CSV para probar                      |
 | `alumnos.csv`        | Solo Test         | Los 5 perfiles de alumno en CSV para probar                    |
+| `seed-login-demo.sql`       | Solo Test | Contraseña real (`Usuario2026`) para admin, Lucía y Martín      |
+| `seed-invitations-demo.sql` | Solo Test | Invitaciones con token conocido para recorrer HU06              |
+| `seed-superadmin-demo.sql`  | Solo Test | SuperAdmin `superadmin@vivaz.test` (`Usuario2026`) para HU13    |
 
 ## Orden de carga
 
@@ -68,3 +71,21 @@ seeds en el mismo PR antes de cargarlos en Neon Test.
 inmediatas. Las referencias entre una propuesta de adaptación y su versión
 resultante son diferibles y se validan al confirmar la transacción, porque
 forman una relación circular intencional.
+
+## Invitaciones y SuperAdmin (HU06, HU13)
+
+Desde la migración `20261012000000_invitation_tokens_platform_gyms` el enlace
+de invitación lleva un token aleatorio y la base guarda sólo su SHA-256
+(`invitations.token_hash`). Las invitaciones previas quedan sin hash y ya no
+sirven para el alta. `seed-invitations-demo.sql` carga tokens conocidos:
+
+| Enlace                                  | Resultado                               |
+| --------------------------------------- | --------------------------------------- |
+| `/invitacion/demo-invitacion-vigente`     | Formulario de alta (alumno)             |
+| `/invitacion/demo-invitacion-vencida`     | Invitación vencida                      |
+| `/invitacion/demo-invitacion-revocada`    | Invitación revocada                     |
+| `/invitacion/demo-invitacion-usada`       | Invitación ya usada                     |
+| `/invitacion/demo-invitacion-entrenadora` | Alta de alumno asignado a Lucía         |
+
+El SuperAdmin vive en un gimnasio técnico `is_platform`. En producción se crea
+con `SUPERADMIN_EMAIL=... SUPERADMIN_PASSWORD=... npm run db:create-superadmin`.

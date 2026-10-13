@@ -126,8 +126,8 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
         : 0);
     const context: MinimizedContext = {
       schema_version: '2.0',
-      nivelExperiencia: student.experienceLevel,
-      diasSemanalesDisponibles: student.availableDaysPerWeek,
+      nivelExperiencia: student.experienceLevel ?? '',
+      diasSemanalesDisponibles: student.availableDaysPerWeek ?? 0,
       objetivosActivos: student.goals
         .filter((goal) => active(goal.startsOn, goal.endsOn))
         .map((goal) => goal.type)

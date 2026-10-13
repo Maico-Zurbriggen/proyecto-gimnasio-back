@@ -1,11 +1,12 @@
 export function goalContext(input: {
   objective: string | null;
   experienceLevel: string | null;
-  availableDaysPerWeek: number;
+  availableDaysPerWeek: number | null;
 }) {
   const missing = [
     input.objective === null ? 'objetivo' : null,
     !input.experienceLevel ? 'nivelExperiencia' : null,
+    input.availableDaysPerWeek === null ||
     !Number.isInteger(input.availableDaysPerWeek) ||
     input.availableDaysPerWeek < 1
       ? 'diasSemanalesDisponibles'

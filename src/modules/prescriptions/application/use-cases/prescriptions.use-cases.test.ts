@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EmptyTemplateError,
   PendingProposalError,
+  RejectionReasonRequiredError,
   RoutineNotFoundError,
   RoutineNotReviewableError,
   StudentNotFoundError,
@@ -19,7 +20,10 @@ import type {
 import { AssignRoutineFromTemplateUseCase } from './assign-routine-from-template.use-case';
 import { CreateManualRoutineUseCase } from './create-manual-routine.use-case';
 import { CreateRoutineTemplateUseCase } from './create-routine-template.use-case';
-import { GetRoutineTemplateUseCase } from './read-prescriptions.use-cases';
+import {
+  GetRoutineTemplateUseCase,
+  ListPendingRoutineReviewsUseCase,
+} from './read-prescriptions.use-cases';
 import { ReviewRoutineUseCase } from './review-routine.use-case';
 import {
   SetRoutineTemplateActiveUseCase,
@@ -130,8 +134,13 @@ function createRepo(overrides: Partial<PrescriptionsRepository> = {}) {
     findContent: vi.fn(() => Promise.resolve(null)),
     review: vi.fn((command: ReviewRoutineCommand) => {
       revisiones.push(command);
-      return Promise.resolve();
+      // El repositorio archiva dentro de la transacción la vigente que haya.
+      return Promise.resolve({
+        archivedRoutineId:
+          command.result === 'RECHAZADA' ? null : 'vigente-anterior',
+      });
     }),
+    listPendingReviewsForTrainer: vi.fn(() => Promise.resolve([])),
     ...overrides,
   };
 
@@ -322,8 +331,8 @@ describe('ReviewRoutineUseCase (RF-110)', () => {
     });
     expect(repo.revisiones[0]).toMatchObject({
       reviewerTrainerId: TRAINER,
+      studentId: STUDENT,
       versionId: 'version-1',
-      previousActiveRoutineId: 'vigente-anterior',
       observation: null,
     });
   });
@@ -349,8 +358,25 @@ describe('ReviewRoutineUseCase (RF-110)', () => {
 
     expect(result.state).toBe('RECHAZADA');
     expect(result.archivedRoutineId).toBeNull();
-    expect(repo.revisiones[0]?.previousActiveRoutineId).toBeNull();
     expect(repo.revisiones[0]?.observation).toBe('No corresponde al objetivo');
+  });
+
+  it('FL-02/A2: rechazar sin motivo no llega al repositorio', async () => {
+    const repo = createRepo({
+      listByStudent: vi.fn(() => Promise.resolve([rutina()])),
+    });
+    const useCase = new ReviewRoutineUseCase(repo.repo);
+
+    await expect(
+      useCase.execute({
+        trainerId: TRAINER,
+        studentId: STUDENT,
+        routineId: 'rutina-propuesta',
+        result: 'RECHAZADA',
+        observation: '   ',
+      }),
+    ).rejects.toBeInstanceOf(RejectionReasonRequiredError);
+    expect(repo.revisiones).toHaveLength(0);
   });
 
   it('rechaza revisar una rutina que no está propuesta', async () => {
@@ -613,5 +639,50 @@ describe('GetRoutineTemplateUseCase', () => {
     await expect(
       useCase.execute({ trainerId: TRAINER, templateId: TEMPLATE }),
     ).rejects.toBeInstanceOf(TemplateNotFoundError);
+  });
+});
+
+describe('ListPendingRoutineReviewsUseCase (HU17)', () => {
+  const pendiente = {
+    routineId: 'rutina-propuesta',
+    studentId: STUDENT,
+    studentName: 'Ana',
+    routineType: 'FUERZA' as const,
+    origin: 'GENERADA',
+    targetWeeklyFrequency: 3,
+    requestedAt: new Date('2026-10-01T10:00:00Z'),
+    requestedByName: 'Ana',
+    requestedByStudent: true,
+    versionId: 'version-1',
+    versionNumber: 1,
+    dayCount: 3,
+    exerciseCount: 12,
+    currentGoal: null,
+    replacesActiveRoutine: false,
+  };
+
+  it('anticipa la confirmación de RN-40 cuando el tipo no coincide con el objetivo', async () => {
+    const repo = createRepo({
+      listPendingReviewsForTrainer: vi.fn(() =>
+        Promise.resolve([
+          { ...pendiente, currentGoal: 'HIPERTROFIA' as const },
+          { ...pendiente, routineId: 'otra', currentGoal: 'FUERZA' as const },
+          { ...pendiente, routineId: 'sin-objetivo' },
+        ]),
+      ),
+    });
+
+    const result = await new ListPendingRoutineReviewsUseCase(
+      repo.repo,
+    ).execute(TRAINER);
+
+    expect(result.map((item) => item.goalMismatch)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(repo.repo.listPendingReviewsForTrainer).toHaveBeenCalledWith(
+      TRAINER,
+    );
   });
 });

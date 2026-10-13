@@ -70,5 +70,8 @@ export const reviewRoutineBodySchema = z.object({
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
   result: z.enum(['APROBADA', 'APROBADA_CON_CAMBIOS', 'RECHAZADA']),
-  observation: z.string().max(500).optional(),
+  observation: z
+    .string()
+    .max(500, 'El motivo no puede tener más de 500 caracteres')
+    .optional(),
 });

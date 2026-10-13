@@ -1,8 +1,10 @@
+import { requiresGoalConfirmation } from '../../../goals/domain/goal-policy';
 import {
   RoutineNotFoundError,
   TemplateNotFoundError,
 } from '../../domain/errors/prescription-errors';
 import type {
+  PendingRoutineReview,
   PrescriptionsRepository,
   RoutineContent,
   RoutineSummary,
@@ -71,5 +73,30 @@ export class GetRoutineContentUseCase {
       throw new RoutineNotFoundError();
     }
     return content;
+  }
+}
+
+/**
+ * Bandeja de aceptación y rechazo de rutinas del entrenador (HU17).
+ *
+ * El alcance lo pone la asignación vigente: un entrenador nunca ve propuestas
+ * de alumnos que no están en su cartera (RF-066).
+ */
+export class ListPendingRoutineReviewsUseCase {
+  constructor(private readonly prescriptions: PrescriptionsRepository) {}
+
+  async execute(
+    trainerId: string,
+  ): Promise<(PendingRoutineReview & { goalMismatch: boolean })[]> {
+    const pending =
+      await this.prescriptions.listPendingReviewsForTrainer(trainerId);
+    // RN-40: se anticipa en la bandeja que aprobarla exigirá confirmación.
+    return pending.map((item) => ({
+      ...item,
+      goalMismatch: requiresGoalConfirmation(
+        item.routineType,
+        item.currentGoal,
+      ),
+    }));
   }
 }

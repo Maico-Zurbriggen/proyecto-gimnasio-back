@@ -7,6 +7,7 @@ import type { CreateRoutineTemplateUseCase } from '../../application/use-cases/c
 import type {
   GetRoutineContentUseCase,
   GetRoutineTemplateUseCase,
+  ListPendingRoutineReviewsUseCase,
   ListRoutineTemplatesUseCase,
   ListStudentRoutinesUseCase,
 } from '../../application/use-cases/read-prescriptions.use-cases';
@@ -19,6 +20,7 @@ import {
   EmptyTemplateError,
   GoalMismatchConfirmationError,
   PendingProposalError,
+  RejectionReasonRequiredError,
   RoutineNotFoundError,
   RoutineNotReviewableError,
   StudentNotFoundError,
@@ -88,7 +90,18 @@ function sendPrescriptionError(
     return;
   }
   if (error instanceof RoutineNotReviewableError) {
-    res.status(409).json({ error: 'routine_not_reviewable' });
+    res.status(409).json({
+      error: 'routine_not_reviewable',
+      message: 'La rutina ya fue resuelta o no está pendiente de revisión.',
+    });
+    return;
+  }
+  if (error instanceof RejectionReasonRequiredError) {
+    res.status(422).json({
+      error: 'rejection_reason_required',
+      message: error.message,
+      fields: { observation: [error.message] },
+    });
     return;
   }
   next(error);
@@ -106,7 +119,27 @@ export class PrescriptionsController {
     private readonly updateTemplate: UpdateRoutineTemplateUseCase,
     private readonly setTemplateActive: SetRoutineTemplateActiveUseCase,
     private readonly createManualRoutine: CreateManualRoutineUseCase,
+    private readonly listPendingReviews: ListPendingRoutineReviewsUseCase,
   ) {}
+
+  /** HU17: bandeja de rutinas propuestas esperando la decisión del entrenador. */
+  pendingReviews = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const pending = await this.listPendingReviews.execute(req.user?.id ?? '');
+      res.status(200).json(
+        pending.map((item) => ({
+          ...item,
+          requestedAt: item.requestedAt.toISOString(),
+        })),
+      );
+    } catch (error) {
+      sendPrescriptionError(error, res, next);
+    }
+  };
 
   /** Plantillas asignables del gimnasio del entrenador. */
   templates = async (

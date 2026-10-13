@@ -132,13 +132,37 @@ export interface CreateRoutineCommand {
 export interface ReviewRoutineCommand {
   confirmGoalMismatch?: boolean;
   reviewToken?: string;
+  studentId: string;
   routineId: string;
   versionId: string;
   reviewerTrainerId: string;
   result: RoutineReviewResult;
   observation: string | null;
-  /** Rutina VIGENTE del alumno que se archiva al aprobar esta. */
-  previousActiveRoutineId: string | null;
+}
+
+/**
+ * Rutina PROPUESTA en la bandeja del entrenador (HU17): lo necesario para
+ * decidir por dónde empezar sin abrir cada una.
+ */
+export interface PendingRoutineReview {
+  routineId: string;
+  studentId: string;
+  studentName: string;
+  routineType: TrainingPurpose;
+  origin: string;
+  targetWeeklyFrequency: number;
+  requestedAt: Date;
+  /** Quién la originó: el propio alumno, otro entrenador o el sistema. */
+  requestedByName: string | null;
+  requestedByStudent: boolean;
+  versionId: string;
+  versionNumber: number;
+  dayCount: number;
+  exerciseCount: number;
+  /** Objetivo vigente del alumno, para anticipar la confirmación de RN-40. */
+  currentGoal: TrainingPurpose | null;
+  /** Si al aprobarla se archivará una rutina vigente. */
+  replacesActiveRoutine: boolean;
 }
 
 /** Rutina en el listado del alumno. */
@@ -254,5 +278,15 @@ export interface PrescriptionsRepository {
    * transacción: al aprobar, la versión pasa a vigente y la rutina anterior se
    * archiva (RF-110).
    */
-  review(command: ReviewRoutineCommand): Promise<void>;
+  review(
+    command: ReviewRoutineCommand,
+  ): Promise<{ archivedRoutineId: string | null }>;
+
+  /**
+   * Bandeja de revisión (HU17): rutinas PROPUESTA de los alumnos con asignación
+   * vigente al entrenador, de la más antigua a la más reciente.
+   */
+  listPendingReviewsForTrainer(
+    trainerId: string,
+  ): Promise<PendingRoutineReview[]>;
 }

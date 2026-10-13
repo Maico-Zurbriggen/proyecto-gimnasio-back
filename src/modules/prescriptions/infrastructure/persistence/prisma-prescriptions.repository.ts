@@ -11,6 +11,8 @@ import { requiresGoalConfirmation } from '../../../goals/domain/goal-policy';
 import { resolveDominantPattern } from '../../domain/services/dominant-pattern';
 import {
   GoalMismatchConfirmationError,
+  RoutineNotFoundError,
+  RoutineNotReviewableError,
   StudentNotFoundError,
   TemplateExerciseNotApprovedError,
   TemplateExerciseNotFoundError,
@@ -20,6 +22,7 @@ import {
 } from '../../domain/errors/prescription-errors';
 import type {
   CreateRoutineCommand,
+  PendingRoutineReview,
   PrescriptionsRepository,
   ReviewRoutineCommand,
   RoutineContent,
@@ -768,10 +771,12 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
     };
   }
 
-  async review(command: ReviewRoutineCommand): Promise<void> {
+  async review(
+    command: ReviewRoutineCommand,
+  ): Promise<{ archivedRoutineId: string | null }> {
     const aprueba = command.result !== 'RECHAZADA';
 
-    await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const before = await tx.routine.findUniqueOrThrow({
         where: { id: command.routineId },
         select: {
@@ -779,6 +784,9 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           student: { select: { user: { select: { gymId: true } } } },
         },
       });
+      if (before.studentId !== command.studentId) {
+        throw new RoutineNotFoundError();
+      }
       await lockGymCatalog(tx, before.student.user.gymId);
       await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${before.studentId}::uuid FOR UPDATE`;
        const current = await tx.routine.findUniqueOrThrow({
@@ -791,11 +799,12 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           },
         },
       });
-       if (
-         current.state !== 'PROPUESTA' ||
-         current.versions[0]?.id !== command.versionId
-       )
+       if (current.state !== 'PROPUESTA') {
+         throw new RoutineNotReviewableError();
+       }
+       if (current.versions[0]?.id !== command.versionId) {
          throw new CatalogError('routine_review_conflict', 409);
+       }
        const goal = await tx.goal.findFirst({
          where: { studentId: before.studentId, endsOn: null },
        });
@@ -811,7 +820,7 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           trainerId: command.reviewerTrainerId,
           studentId: before.studentId,
           startsAt: { lte: new Date() },
-          endsAt: null,
+          OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
         },
       });
       if (!assignment) throw new CatalogError('trainer_not_assigned', 403);
@@ -839,12 +848,54 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
         },
       });
 
+      const persistDecisionSideEffects = async (
+        archivedRoutineId: string | null,
+      ) => {
+        await tx.notice.updateMany({
+          where: {
+            referenceType: 'ROUTINE',
+            referenceId: command.routineId,
+            type: 'RUTINA_PROPUESTA_PENDIENTE',
+            expired: false,
+          },
+          data: { expired: true },
+        });
+        await tx.notice.create({
+          data: {
+            recipientUserId: before.studentId,
+            type: aprueba ? 'RUTINA_EN_VIGENCIA' : 'RUTINA_RECHAZADA',
+            referenceType: 'ROUTINE',
+            referenceId: command.routineId,
+            text: aprueba
+              ? 'Tu entrenador aprobÃ³ tu nueva rutina: ya estÃ¡ vigente.'
+              : `Tu entrenador rechazÃ³ la rutina propuesta. Motivo: ${command.observation ?? ''}`,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: command.reviewerTrainerId,
+            operation: aprueba ? 'APROBACION_RUTINA' : 'RECHAZO_RUTINA',
+            entityType: 'ROUTINE',
+            entityId: command.routineId,
+            previousValue: { estado: 'PROPUESTA' },
+            newValue: {
+              estado: aprueba ? 'VIGENTE' : 'RECHAZADA',
+              resultado: command.result,
+              versionRevisada: command.versionId,
+              observacion: command.observation,
+              rutinaArchivada: archivedRoutineId,
+            },
+          },
+        });
+      };
+
       if (!aprueba) {
         await tx.routine.update({
           where: { id: command.routineId },
           data: { state: 'RECHAZADA' },
         });
-        return;
+        await persistDecisionSideEffects(null);
+        return { archivedRoutineId: null };
       }
 
       // El alumno no puede quedar con dos rutinas vigentes: la anterior se
@@ -876,6 +927,89 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
         where: { routineDay: { routineVersionId: command.versionId } },
         data: { compatibilityState: 'COMPATIBLE', compatibilityReason: null },
       });
+      const archivedRoutineId = previous[0]?.id ?? null;
+      await persistDecisionSideEffects(archivedRoutineId);
+      return { archivedRoutineId };
+    });
+  }
+
+  async listPendingReviewsForTrainer(
+    trainerId: string,
+  ): Promise<PendingRoutineReview[]> {
+    if (!isUuid(trainerId)) return [];
+    const trainer = await this.prisma.user.findUnique({
+      where: { id: trainerId },
+      select: { gymId: true },
+    });
+    if (!trainer) return [];
+
+    const now = new Date();
+    const routines = await this.prisma.routine.findMany({
+      where: {
+        state: 'PROPUESTA',
+        student: {
+          user: { gymId: trainer.gymId },
+          trainerAssignments: {
+            some: {
+              trainerId,
+              startsAt: { lte: now },
+              OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+            },
+          },
+        },
+      },
+      orderBy: { requestedAt: 'asc' },
+      include: {
+        requestedBy: { select: { displayName: true } },
+        student: {
+          select: {
+            user: { select: { displayName: true } },
+            goals: {
+              where: { endsOn: null },
+              select: { type: true },
+              take: 1,
+            },
+            routines: {
+              where: { state: 'VIGENTE' },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+        versions: {
+          ...ultimaVersion,
+          include: {
+            days: { include: { _count: { select: { exercises: true } } } },
+          },
+        },
+      },
+    });
+
+    return routines.flatMap((routine) => {
+      const version = routine.versions[0];
+      if (!version) return [];
+      return [
+        {
+          routineId: routine.id,
+          studentId: routine.studentId,
+          studentName: routine.student.user.displayName,
+          routineType: routine.routineType,
+          origin: routine.origin,
+          targetWeeklyFrequency: routine.targetWeeklyFrequency,
+          requestedAt: routine.requestedAt,
+          requestedByName: routine.requestedBy?.displayName ?? null,
+          requestedByStudent: routine.requestedByUserId === routine.studentId,
+          versionId: version.id,
+          versionNumber: version.versionNumber,
+          dayCount: version.days.length,
+          exerciseCount: version.days.reduce(
+            (total, day) => total + day._count.exercises,
+            0,
+          ),
+          currentGoal: routine.student.goals[0]?.type ?? null,
+          replacesActiveRoutine: routine.student.routines.length > 0,
+        },
+      ];
     });
   }
 }

@@ -1,4 +1,5 @@
 import {
+  RejectionReasonRequiredError,
   RoutineNotFoundError,
   RoutineNotReviewableError,
 } from '../../domain/errors/prescription-errors';
@@ -33,6 +34,10 @@ export interface ReviewRoutineOutput {
  * Al aprobar, la rutina que estaba vigente se archiva en la misma transacción:
  * el alumno nunca tiene dos rutinas vigentes, y la anterior sigue consultable
  * porque se archiva en lugar de borrarse.
+ *
+ * Rechazar exige motivo (FL-02/A2), que llega al alumno en su aviso. La
+ * transición sale de PROPUESTA de forma condicional en el repositorio: dos
+ * decisiones simultáneas sobre la misma rutina no se pisan (HU17).
  */
 export class ReviewRoutineUseCase {
   constructor(private readonly prescriptions: PrescriptionsRepository) {}
@@ -48,27 +53,28 @@ export class ReviewRoutineUseCase {
     }
 
     const aprueba = input.result !== 'RECHAZADA';
-    const vigenteAnterior = aprueba
-      ? (routines.find(
-          (item) => item.state === 'VIGENTE' && item.id !== routine.id,
-        )?.id ?? null)
+    const observation = input.observation?.trim()
+      ? input.observation.trim()
       : null;
+    if (!aprueba && !observation) {
+      throw new RejectionReasonRequiredError();
+    }
 
-    await this.prescriptions.review({
+    const { archivedRoutineId } = await this.prescriptions.review({
       ...(input.reviewToken ? { reviewToken: input.reviewToken } : {}),
+      studentId: input.studentId,
       routineId: routine.id,
       versionId: routine.versionId,
       reviewerTrainerId: input.trainerId,
       result: input.result,
-      observation: input.observation?.trim() ? input.observation.trim() : null,
-      previousActiveRoutineId: vigenteAnterior,
+      observation,
       confirmGoalMismatch: input.confirmGoalMismatch,
     });
 
     return {
       routineId: routine.id,
       state: aprueba ? 'VIGENTE' : 'RECHAZADA',
-      archivedRoutineId: vigenteAnterior,
+      archivedRoutineId,
     };
   }
 }

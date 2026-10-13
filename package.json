@@ -12,6 +12,7 @@
     "catalog:openapi": "node --require ./scripts/tsx-windows-userinfo-compat.cjs ./node_modules/tsx/dist/cli.mjs scripts/generate-catalog-openapi.ts",
     "build": "tsc -p tsconfig.json",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "db:create-superadmin": "node scripts/create-superadmin.cjs",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed:local-login": "node scripts/set-local-test-password.cjs",
