@@ -61,7 +61,7 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       day: '2-digit',
     }).format(asOf);
     const day = new Date(`${localDate}T00:00:00Z`);
-    const active = (start: Date, end: Date | null) =>
+    const activeOnDay = (start: Date, end: Date | null) =>
       start <= day && (end === null || end >= day);
     const since = new Date(day.getTime() - 27 * 86400000);
     const [equipment, sessions, records, clearance, weight] = await Promise.all(
@@ -130,13 +130,19 @@ export class PrismaGenerationContextRepository implements GenerationContextRepos
       nivelExperiencia: student.experienceLevel ?? '',
       diasSemanalesDisponibles: student.availableDaysPerWeek ?? 0,
       objetivosActivos: student.goals
-        .filter((goal) => active(goal.startsOn, goal.endsOn))
+        .filter(
+          (goal) =>
+            goal.startsOn <= asOf &&
+            (goal.endsOn === null || goal.endsOn > asOf),
+        )
         .map((goal) => goal.type)
         .sort(),
       condiciones: [],
       inventory_revision: student.user.gym.inventoryRevision,
       physical_conditions: student.physicalConditions
-        .filter((condition) => active(condition.startsOn, condition.endsOn))
+        .filter((condition) =>
+          activeOnDay(condition.startsOn, condition.endsOn),
+        )
         .map((condition) => ({
           body_zone: condition.bodyZoneCode,
           severity: condition.severity,
