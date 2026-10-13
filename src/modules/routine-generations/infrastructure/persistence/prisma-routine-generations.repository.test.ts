@@ -55,13 +55,14 @@ describe('PrismaRoutineGenerationsRepository.createOrGetRequest', () => {
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         idempotencyKey: 'request-key',
-        minimizedContext: {
+        minimizedContext: expect.objectContaining({
           experience_level: 'intermedio',
           available_days_per_week: 3,
           active_goals: ['fuerza'],
           conditions: [],
-        },
-        preferences: input.preferences,
+          schema_version: '2.0',
+        }),
+        preferences: { ...input.preferences, schema_version: '2.0' },
         contextHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         retentionUntil: input.retentionUntil,
       }),

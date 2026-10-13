@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { CatalogError } from '../../../exercise-catalog/domain/catalog';
 
 import type { AssignRoutineFromTemplateUseCase } from '../../application/use-cases/assign-routine-from-template.use-case';
 import type {
@@ -31,6 +32,10 @@ function sendPrescriptionError(
 ): void {
   if (error instanceof GoalMismatchConfirmationError) {
     res.status(409).json({ error: 'goal_mismatch_confirmation_required' });
+    return;
+  }
+  if (error instanceof CatalogError) {
+    res.status(error.status).json({ error: error.code });
     return;
   }
   if (error instanceof StudentNotFoundError) {
@@ -197,6 +202,7 @@ export class PrescriptionsController {
       }
 
       const result = await this.reviewRoutine.execute({
+        reviewToken: body.data.reviewToken,
         trainerId: req.user?.id ?? '',
         studentId: params.data.studentId,
         routineId: params.data.routineId,

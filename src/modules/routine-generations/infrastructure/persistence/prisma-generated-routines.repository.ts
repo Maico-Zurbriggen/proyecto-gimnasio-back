@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { finalizeGenerationV2 } from './finalize-generation-v2';
 
 import { adaptRoutineGenerationOutput } from '../../../../integrations/ai/routine-generation-output.mapper';
 
@@ -65,6 +66,21 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
       throw new RoutineGenerationNotCompletedError();
     }
     const replacementId = this.replacementRoutineId(request.preferences);
+    const preferences = request.preferences;
+    if (
+      preferences &&
+      typeof preferences === 'object' &&
+      !Array.isArray(preferences) &&
+      preferences.schema_version === '2.0'
+    ) {
+      return finalizeGenerationV2(
+        this.prisma,
+        request,
+        result,
+        owner,
+        replacementId,
+      );
+    }
     const proposed = await this.prisma.routine.findFirst({
       where: { studentId: owner.studentId, state: 'PROPUESTA' },
       select: { id: true },

@@ -1,4 +1,10 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import {
+  assertGymExercisesAvailable,
+  lockGymCatalog,
+} from '../../../exercise-catalog/infrastructure/persistence/prisma-catalog.repository';
+import { CatalogError } from '../../../exercise-catalog/domain/catalog';
+import { routineReviewToken } from './routine-review-token';
 
 import { isUuid } from '../../../../shared/types/uuid';
 import { requiresGoalConfirmation } from '../../../goals/domain/goal-policy';
@@ -130,6 +136,42 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
     command: CreateRoutineCommand,
   ): Promise<{ routineId: string; versionId: string }> {
     return this.prisma.$transaction(async (tx) => {
+      const student = await tx.user.findUniqueOrThrow({
+        where: { id: command.studentId },
+        select: { gymId: true },
+      });
+      await lockGymCatalog(tx, student.gymId);
+      await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${command.studentId}::uuid FOR UPDATE`;
+      const source = await tx.routineTemplate.findFirst({
+        where: {
+          id: command.sourceTemplateId,
+          gymId: student.gymId,
+          active: true,
+        },
+      });
+      if (!source) throw new CatalogError('template_not_found', 404);
+      if (
+        await tx.routine.count({
+          where: { studentId: command.studentId, state: 'PROPUESTA' },
+        })
+      )
+        throw new CatalogError('pending_proposal', 409);
+      const assignment = await tx.trainerStudentAssignment.findFirst({
+        where: {
+          trainerId: command.requestedByUserId,
+          studentId: command.studentId,
+          startsAt: { lte: new Date() },
+          endsAt: null,
+        },
+      });
+      if (!assignment) throw new CatalogError('trainer_not_assigned', 403);
+      await assertGymExercisesAvailable(
+        tx,
+        student.gymId,
+        command.days.flatMap((day) =>
+          day.exercises.map((exercise) => exercise.exerciseId),
+        ),
+      );
       const routine = await tx.routine.create({
         data: {
           studentId: command.studentId,
@@ -224,6 +266,7 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
       include: {
         sourceGenerationResult: {
           select: {
+            structuredOutput: true,
             attempt: { select: { request: { select: { preferences: true } } } },
           },
         },
@@ -238,7 +281,17 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
                   orderBy: { position: 'asc' },
                   include: {
                     exercise: {
-                      select: { name: true, movementPattern: true },
+                      select: {
+                        name: true,
+                        movementPattern: true,
+                        state: true,
+                        availability: {
+                          where: {
+                            gym: { users: { some: { id: studentId } } },
+                          },
+                          select: { enabled: true },
+                        },
+                      },
                     },
                     sets: { orderBy: { position: 'asc' } },
                   },
@@ -265,6 +318,23 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
         ? preferences.free_text
         : null;
 
+    const output = routine.sourceGenerationResult?.structuredOutput;
+    const explanation =
+      output &&
+      typeof output === 'object' &&
+      !Array.isArray(output) &&
+      typeof output.explanation === 'string'
+        ? output.explanation
+        : null;
+    const warnings =
+      output &&
+      typeof output === 'object' &&
+      !Array.isArray(output) &&
+      Array.isArray(output.warnings)
+        ? output.warnings.filter(
+            (value): value is string => typeof value === 'string',
+          )
+        : [];
     return {
       id: routine.id,
       studentId: routine.studentId,
@@ -276,6 +346,20 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
       versionId: version.id,
       versionNumber: version.versionNumber,
       generationPrompt,
+      generationExplanation: explanation,
+      generationWarnings: warnings,
+      ...(routine.state === 'PROPUESTA'
+        ? {
+            reviewToken: await routineReviewToken(
+              this.prisma,
+              studentId,
+              version.id,
+              version.days.flatMap((day) =>
+                day.exercises.map((exercise) => exercise.exerciseId),
+              ),
+            ),
+          }
+        : {}),
       days: version.days.map((day) => ({
         position: day.position,
         name: day.name,
@@ -284,6 +368,9 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           position: exercise.position,
           exerciseId: exercise.exerciseId,
           exerciseName: exercise.exercise.name,
+          available:
+            exercise.exercise.state === 'APROBADO' &&
+            (exercise.exercise.availability[0]?.enabled ?? false),
           movementPattern: exercise.exercise.movementPattern,
           note: exercise.note,
           sets: exercise.sets.map((set) => ({
@@ -303,21 +390,63 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
     const aprueba = command.result !== 'RECHAZADA';
 
     await this.prisma.$transaction(async (tx) => {
-      const routine = await tx.routine.findUniqueOrThrow({
+      const before = await tx.routine.findUniqueOrThrow({
         where: { id: command.routineId },
+        select: {
+          studentId: true,
+          student: { select: { user: { select: { gymId: true } } } },
+        },
       });
-      // Comparte el bloqueo con el cambio de objetivo: se confirma respecto del
-      // objetivo realmente vigente al persistir la revisión.
-      await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${routine.studentId}::uuid FOR UPDATE`;
-      const goal = await tx.goal.findFirst({
-        where: { studentId: routine.studentId, endsOn: null },
+      await lockGymCatalog(tx, before.student.user.gymId);
+      await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${before.studentId}::uuid FOR UPDATE`;
+       const current = await tx.routine.findUniqueOrThrow({
+        where: { id: command.routineId },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+            take: 1,
+            include: { days: { include: { exercises: true } } },
+          },
+        },
       });
-      if (
-        aprueba &&
-        requiresGoalConfirmation(routine.routineType, goal?.type ?? null) &&
-        !command.confirmGoalMismatch
-      )
-        throw new GoalMismatchConfirmationError();
+       if (
+         current.state !== 'PROPUESTA' ||
+         current.versions[0]?.id !== command.versionId
+       )
+         throw new CatalogError('routine_review_conflict', 409);
+       const goal = await tx.goal.findFirst({
+         where: { studentId: before.studentId, endsOn: null },
+       });
+       if (
+         aprueba &&
+         requiresGoalConfirmation(current.routineType, goal?.type ?? null) &&
+         !command.confirmGoalMismatch
+       ) {
+         throw new GoalMismatchConfirmationError();
+       }
+      const assignment = await tx.trainerStudentAssignment.findFirst({
+        where: {
+          trainerId: command.reviewerTrainerId,
+          studentId: before.studentId,
+          startsAt: { lte: new Date() },
+          endsAt: null,
+        },
+      });
+      if (!assignment) throw new CatalogError('trainer_not_assigned', 403);
+      if (aprueba) {
+        const ids = current.versions[0]!.days.flatMap((day) =>
+          day.exercises.map((exercise) => exercise.exerciseId),
+        );
+        await assertGymExercisesAvailable(tx, before.student.user.gymId, ids);
+        const token = await routineReviewToken(
+          tx,
+          before.studentId,
+          command.versionId,
+          ids,
+        );
+        if (!command.reviewToken || token !== command.reviewToken)
+          throw new CatalogError('routine_review_conflict', 409);
+      }
       await tx.routineReview.create({
         data: {
           routineId: command.routineId,
@@ -338,13 +467,17 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
 
       // El alumno no puede quedar con dos rutinas vigentes: la anterior se
       // archiva y su versión deja de ser la current.
-      if (command.previousActiveRoutineId) {
-        await tx.routine.update({
-          where: { id: command.previousActiveRoutineId },
+      const previous = await tx.routine.findMany({
+        where: { studentId: before.studentId, state: 'VIGENTE' },
+        select: { id: true },
+      });
+      if (previous.length) {
+        await tx.routine.updateMany({
+          where: { id: { in: previous.map((item) => item.id) } },
           data: { state: 'ARCHIVADA' },
         });
         await tx.routineVersion.updateMany({
-          where: { routineId: command.previousActiveRoutineId },
+          where: { routineId: { in: previous.map((item) => item.id) } },
           data: { current: false },
         });
       }
@@ -356,6 +489,10 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
       await tx.routineVersion.update({
         where: { id: command.versionId },
         data: { current: true },
+      });
+      await tx.routineExercise.updateMany({
+        where: { routineDay: { routineVersionId: command.versionId } },
+        data: { compatibilityState: 'COMPATIBLE', compatibilityReason: null },
       });
     });
   }

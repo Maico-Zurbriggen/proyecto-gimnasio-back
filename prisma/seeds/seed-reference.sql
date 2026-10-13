@@ -145,7 +145,7 @@ INSERT INTO app.exercises (
    'DOMINANTE_RODILLA', 'PRINCIPIANTE', true, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Lunges/0.jpg', 'CATALOGO_BASE'),
   ('e0000000-0014-4000-8000-000000000014', NULL, NULL,
    'Puente de gluteo', 'Acostado boca arriba con rodillas flexionadas, elevar la cadera hasta alinear rodillas, cadera y hombros.',
-   'DOMINANTE_CADERA', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butt_Lift_(Bridge)/0.jpg', 'CATALOGO_BASE')
+   'DOMINANTE_CADERA', 'PRINCIPIANTE', false, 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butt_Lift_Bridge/0.jpg', 'CATALOGO_BASE')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   instructions = EXCLUDED.instructions,

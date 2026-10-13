@@ -7,12 +7,15 @@
     "npm": "11.x"
   },
   "scripts": {
+    "catalog:import": "node --require ./scripts/tsx-windows-userinfo-compat.cjs ./node_modules/tsx/dist/cli.mjs scripts/import-repdb.ts",
+    "catalog:openapi": "node --require ./scripts/tsx-windows-userinfo-compat.cjs ./node_modules/tsx/dist/cli.mjs scripts/generate-catalog-openapi.ts",
     "build": "tsc -p tsconfig.json",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed:local-login": "node scripts/set-local-test-password.cjs",
     "db:seed:local-generation-catalog": "node scripts/seed-local-generation-catalog.cjs",
+    "db:seed:local-catalog-media": "node scripts/set-local-catalog-media.cjs",
     "db:migrate": "prisma migrate dev",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
@@ -31,6 +34,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.0.0",
+    "fflate": "0.8.3",
     "zod": "^4.0.0"
   },
   "devDependencies": {

@@ -13,9 +13,5 @@ export interface GenerationContextRepository {
     studentId: string,
     asOf: Date,
   ): Promise<StudentGenerationContext | null>;
-  getPrefilteredCatalog(
-    studentId: string,
-    gymId: string,
-    asOf: Date,
-  ): Promise<CatalogExerciseRef[]>;
+  getEnabledCatalog(gymId: string): Promise<CatalogExerciseRef[]>;
 }
