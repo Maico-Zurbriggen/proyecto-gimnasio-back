@@ -7,6 +7,7 @@ import { PrismaAuthRepository } from '../../src/modules/auth/infrastructure/pers
 import { PrismaGoalsRepository } from '../../src/modules/goals/infrastructure/persistence/prisma-goals.repository';
 import { PrismaGenerationContextRepository } from '../../src/modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
 import { PrismaPrescriptionsRepository } from '../../src/modules/prescriptions/infrastructure/persistence/prisma-prescriptions.repository';
+import { routineReviewToken } from '../../src/modules/prescriptions/infrastructure/persistence/routine-review-token';
 import {
   GoalMismatchConfirmationError,
   RoutineNotReviewableError,
@@ -383,7 +384,7 @@ describe.skipIf(!prisma)('HU09/HU10 PostgreSQL invariants', () => {
     const context = await new PrismaGenerationContextRepository(
       db,
     ).getStudentContext(studentId, new Date('2026-06-01T03:00:00Z'));
-    expect(context!.minimizedContext.objetivosActivos).toEqual(['hipertrofia']);
+    expect(context!.minimizedContext.objetivosActivos).toEqual(['HIPERTROFIA']);
   });
   it('enforces current trainer assignment and gym isolation, and loses access as soon as assignment ends', async () => {
     expect(await goals.read(trainer, studentId)).toBeNull();
@@ -480,6 +481,12 @@ describe.skipIf(!prisma)('HU09/HU10 PostgreSQL invariants', () => {
       studentId,
       routineId: proposed.id,
       versionId: proposed.versions[0]!.id,
+      reviewToken: await routineReviewToken(
+        db,
+        studentId,
+        proposed.versions[0]!.id,
+        [],
+      ),
       reviewerTrainerId: trainerId,
       result: 'APROBADA' as const,
       observation: null,
