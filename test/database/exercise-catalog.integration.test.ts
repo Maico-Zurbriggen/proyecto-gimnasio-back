@@ -524,7 +524,7 @@ describe.skipIf(!url)('Catalogue and generation on isolated PostgreSQL', () => {
         studentId: student.id,
         type: 'FUERZA',
         startsOn: new Date('2026-10-05'),
-        endsOn: today,
+        endsOn: new Date('2026-10-07T03:00:00Z'),
       },
     });
     await database.fitnessClearance.create({
@@ -612,6 +612,7 @@ describe.skipIf(!url)('Catalogue and generation on isolated PostgreSQL', () => {
     });
     await expect(
       prescriptions.review({
+        studentId: student.id,
         routineId: proposal.routineId,
         versionId: content!.versionId,
         reviewerTrainerId: trainer.id,
@@ -626,6 +627,7 @@ describe.skipIf(!url)('Catalogue and generation on isolated PostgreSQL', () => {
       proposal.routineId,
     );
     await prescriptions.review({
+      studentId: student.id,
       routineId: proposal.routineId,
       versionId: content!.versionId,
       reviewerTrainerId: trainer.id,
