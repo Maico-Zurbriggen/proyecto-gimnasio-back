@@ -863,6 +863,12 @@
                   },
                   "regenerar": {
                     "type": "boolean"
+                  },
+                  "cambios": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000,
+                    "description": "Cambios pedidos en lenguaje natural sobre la rutina PROPUESTA vigente. No se combina con textoLibre, parametros ni regenerar. 409 no_proposed_routine si no hay rutina propuesta. La nueva propuesta descarta la anterior al finalizar."
                   }
                 },
                 "required": []

@@ -134,6 +134,11 @@ export type RoutineGenerationTask<
       cycle: RoutineRenewalEvidence;
       trainer_feedback: string;
       previous_candidate: Structure;
+    }
+  | {
+      kind: 'CHANGE_REQUEST';
+      change_request: string;
+      previous_candidate: Structure;
     };
 
 export interface RoutineGenerationPreferences {
@@ -145,6 +150,8 @@ export interface RoutineGenerationPreferences {
   routine_renewal_structure?: RoutineRenewalStructurePreference;
   muscle_counts_per_day?: MuscleCountRequirement[];
   local_test_regeneration?: { replaces_proposed_routine_id: string | null };
+  /** Server-captured target discarded when a requested change finalizes. */
+  routine_change_replacement?: { replaces_proposed_routine_id: string };
   prescription_constraints?: ReturnType<
     typeof generationPrescriptionConstraints
   >;

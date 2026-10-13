@@ -26,6 +26,13 @@ export class MissingGenerationInputError extends Error {
   }
 }
 
+export class NoProposedRoutineError extends Error {
+  constructor(message = 'There is no proposed routine to change') {
+    super(message);
+    this.name = 'NoProposedRoutineError';
+  }
+}
+
 export class EmptyPrefilteredCatalogError extends Error {
   constructor(message = 'Prefiltered exercise catalog is empty') {
     super(message);
