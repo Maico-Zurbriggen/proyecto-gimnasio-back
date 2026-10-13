@@ -756,6 +756,8 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           available:
             exercise.exercise.state === 'APROBADO' &&
             (exercise.exercise.availability[0]?.enabled ?? false),
+          compatibilityState: exercise.compatibilityState,
+          compatibilityReason: exercise.compatibilityReason,
           movementPattern: exercise.exercise.movementPattern,
           note: exercise.note,
           sets: exercise.sets.map((set) => ({
