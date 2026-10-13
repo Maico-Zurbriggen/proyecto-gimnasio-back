@@ -6,6 +6,7 @@ import { extractMuscleCountRequirements } from '../../domain/services/generation
 import {
   EmptyPrefilteredCatalogError,
   MissingGenerationInputError,
+  NoProposedRoutineError,
   RoutineRegenerationNotAllowedError,
   StudentNotFoundError,
 } from '../../domain/errors/routine-generation-errors';
@@ -26,6 +27,8 @@ export interface RequestRoutineGenerationCommand {
   parameters?: RoutineGenerationParameters;
   idempotencyKey?: string;
   regenerate?: boolean;
+  /** Changes asked on the student's current proposed routine (HITL). */
+  changeRequest?: string;
   /** Internal renewal jobs use the current prescription as their source of truth. */
   routineRenewal?: boolean;
   routineRenewalStructure?: RoutineRenewalStructureInput;
@@ -54,11 +57,29 @@ export class RequestRoutineGenerationUseCase {
       throw new RoutineRegenerationNotAllowedError();
     }
     if (
+      command.changeRequest &&
+      (command.regenerate || command.routineRenewal)
+    ) {
+      throw new MissingGenerationInputError(
+        'A change request cannot be combined with regeneration or renewal',
+      );
+    }
+    if (
+      !command.changeRequest &&
       !command.freeText &&
       !command.parameters &&
       (!command.generationTask || command.generationTask.kind === 'INITIAL')
     ) {
       throw new MissingGenerationInputError();
+    }
+
+    const proposedRoutine = command.changeRequest
+      ? await this.routineGenerationsRepository.findProposedRoutine(
+          command.studentId,
+        )
+      : null;
+    if (command.changeRequest && !proposedRoutine) {
+      throw new NoProposedRoutineError();
     }
 
     const asOf = this.clock.now();
@@ -145,9 +166,20 @@ export class RequestRoutineGenerationUseCase {
       : undefined;
     const task = command.generationTask;
     const generationTask: RoutineGenerationTask | undefined =
-      task?.kind === 'TRAINER_REGENERATION'
-        ? { ...task, previous_candidate: mapStructure(task.previous_candidate) }
-        : (task ?? (command.routineRenewal ? undefined : { kind: 'INITIAL' }));
+      command.changeRequest && proposedRoutine
+        ? {
+            kind: 'CHANGE_REQUEST',
+            change_request: command.changeRequest,
+            previous_candidate: mapStructure(proposedRoutine.structure),
+          }
+        : task?.kind === 'TRAINER_REGENERATION' ||
+            task?.kind === 'CHANGE_REQUEST'
+          ? {
+              ...task,
+              previous_candidate: mapStructure(task.previous_candidate),
+            }
+          : (task ??
+            (command.routineRenewal ? undefined : { kind: 'INITIAL' }));
 
     const replacement = command.regenerate
       ? {
@@ -177,6 +209,13 @@ export class RequestRoutineGenerationUseCase {
           ? { routine_renewal_structure: routineRenewalStructure }
           : {}),
         ...replacement,
+        ...(proposedRoutine
+          ? {
+              routine_change_replacement: {
+                replaces_proposed_routine_id: proposedRoutine.id,
+              },
+            }
+          : {}),
         prescription_constraints: generationPrescriptionConstraints(),
         free_text: command.freeText ?? null,
         parameters: command.parameters
