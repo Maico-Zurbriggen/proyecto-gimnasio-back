@@ -249,7 +249,9 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
           await tx.auditLog.create({
             data: {
               actorUserId: owner.requestedByUserId,
-              operation: 'LOCAL_ROUTINE_REGENERATION',
+              operation: this.changeReplacementRoutineId(request.preferences)
+                ? 'ROUTINE_CHANGE_REQUEST'
+                : 'LOCAL_ROUTINE_REGENERATION',
               entityType: 'ROUTINE',
               entityId: pending.id,
               previousValue: { state: 'PROPUESTA' },
@@ -348,6 +350,8 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
   }
 
   private replacementRoutineId(preferences: unknown): string | null {
+    const changeTarget = this.changeReplacementRoutineId(preferences);
+    if (changeTarget) return changeTarget;
     if (
       !this.allowLocalRegeneration ||
       !preferences ||
@@ -365,6 +369,24 @@ export class PrismaGeneratedRoutinesRepository implements GeneratedRoutinesRepos
       return null;
     }
     return typeof replacement.replaces_proposed_routine_id === 'string'
+      ? replacement.replaces_proposed_routine_id
+      : null;
+  }
+
+  /** A requested change always replaces the proposal it was made on. */
+  private changeReplacementRoutineId(preferences: unknown): string | null {
+    if (
+      !preferences ||
+      typeof preferences !== 'object' ||
+      !('routine_change_replacement' in preferences)
+    ) {
+      return null;
+    }
+    const replacement = preferences.routine_change_replacement;
+    return replacement &&
+      typeof replacement === 'object' &&
+      'replaces_proposed_routine_id' in replacement &&
+      typeof replacement.replaces_proposed_routine_id === 'string'
       ? replacement.replaces_proposed_routine_id
       : null;
   }

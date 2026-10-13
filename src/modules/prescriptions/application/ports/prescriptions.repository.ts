@@ -194,6 +194,13 @@ export interface RoutineContent extends RoutineSummary {
       exerciseId: string;
       exerciseName: string;
       available?: boolean;
+      /**
+       * HU11 - criterio 13: ADVERTIDO por condición leve, INCOMPATIBLE por
+       * condición moderada/severa o por inventario (RN-44a, RN-44b, RN-117).
+       */
+      compatibilityState?:
+        'COMPATIBLE' | 'ADVERTIDO' | 'INCOMPATIBLE' | 'EJERCICIO_DESACTIVADO';
+      compatibilityReason?: string | null;
       movementPattern: MovementPattern;
       note: string | null;
       sets: PrescribedSetContent[];

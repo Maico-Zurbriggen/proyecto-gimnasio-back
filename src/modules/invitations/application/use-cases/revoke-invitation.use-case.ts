@@ -5,6 +5,8 @@ import {
   InvitationNotFoundError,
   InvitationNotRevocableError,
 } from '../../domain/errors/invitation-errors';
+import { estadoEfectivo } from '../../domain/services/invitation-issuing';
+import { motivoNoUsable } from '../../domain/services/invitation-validity';
 import type { InvitationsRepository } from '../ports/invitations.repository';
 
 export class RevokeInvitationUseCase {
@@ -26,8 +28,23 @@ export class RevokeInvitationUseCase {
     if (!canRevoke) throw new ForbiddenRevocationError();
 
     const now = this.clock.now();
-    if (invitation.status !== 'VIGENTE' || invitation.expiresAt <= now) {
-      throw new InvitationNotRevocableError();
+    const estado = estadoEfectivo(
+      motivoNoUsable(
+        invitation.status,
+        invitation.issuedAt,
+        invitation.expiresAt,
+        now,
+      ),
+    );
+    if (estado !== 'VIGENTE') {
+      throw new InvitationNotRevocableError(
+        estado === 'USADA'
+          ? 'La invitación ya se usó: la cuenta está creada'
+          : estado === 'REVOCADA'
+            ? 'La invitación ya estaba revocada'
+            : 'La invitación ya venció',
+        estado,
+      );
     }
     const revoked = await this.invitations.revoke({
       invitationId,

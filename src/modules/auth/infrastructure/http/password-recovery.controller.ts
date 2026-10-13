@@ -80,7 +80,12 @@ export class PasswordRecoveryController {
   };
   private error(error: unknown, res: Response, next: NextFunction): void {
     if (error instanceof WeakPasswordError) {
-      res.status(400).json({ error: 'weak_password' });
+      // Frontend HU09 - criterio 7: qué regla incumple, junto al campo.
+      res.status(400).json({
+        error: 'weak_password',
+        details: error.rules,
+        fields: { password: error.rules },
+      });
       return;
     }
     if (error instanceof InvalidRecoveryTokenError) {

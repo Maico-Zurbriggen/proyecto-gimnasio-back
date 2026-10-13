@@ -95,6 +95,7 @@ import { CompleteAccountUseCase } from './modules/invitations/application/use-ca
 import {
   IssueInvitationUseCase,
   ListInvitationsUseCase,
+  ResendInvitationUseCase,
 } from './modules/invitations/application/use-cases/issue-invitation.use-case';
 import { RevokeInvitationUseCase } from './modules/invitations/application/use-cases/revoke-invitation.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
@@ -110,6 +111,7 @@ import { DeclareConditionUseCase } from './modules/physical-conditions/applicati
 import { ListConditionsUseCase } from './modules/physical-conditions/application/use-cases/list-conditions.use-case';
 import { PhysicalConditionsController } from './modules/physical-conditions/infrastructure/http/physical-conditions.controller';
 import { createPhysicalConditionsRouter } from './modules/physical-conditions/infrastructure/http/physical-conditions.routes';
+import { ConditionsDeclarationUseCases } from './modules/physical-conditions/application/use-cases/conditions-declaration.use-cases';
 import { PrismaPhysicalConditionsRepository } from './modules/physical-conditions/infrastructure/persistence/prisma-physical-conditions.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
@@ -389,6 +391,11 @@ export function createApp({
         ),
         new ListInvitationsUseCase(resolvedInvitationsRepo, resolvedClock),
         new RevokeInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
+        new ResendInvitationUseCase(
+          resolvedInvitationsRepo,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
       ),
       createAttemptLimit(
         invitationAttemptLimiter ??
@@ -458,7 +465,7 @@ export function createApp({
     ),
   );
 
-  // HU11: declaraciÃ³n, historial y cierre de condiciones fÃ­sicas.
+  // HU11: declaración, historial y cierre de condiciones físicas.
   const resolvedConditionsRepo =
     physicalConditionsRepository ??
     new PrismaPhysicalConditionsRepository(prisma);
@@ -468,6 +475,16 @@ export function createApp({
         new DeclareConditionUseCase(resolvedConditionsRepo, resolvedClock),
         new ListConditionsUseCase(resolvedConditionsRepo, resolvedClock),
         new CloseConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new ConditionsDeclarationUseCases(
+          resolvedConditionsRepo,
+          resolvedClock,
+        ),
+      ),
+      // HU11 - criterios 17 y 18: sin excepción para el administrador.
+      requireTrainerAssignment(
+        trainerAssignments ?? new PrismaTrainerAssignments(prisma),
+        'studentId',
+        false,
       ),
     ),
   );

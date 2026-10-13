@@ -23,6 +23,12 @@ export function createInvitationsRouter(
   router.post('/invitations', ...emisores, controller.issue);
   router.get('/invitations', ...emisores, controller.list);
   router.delete('/invitations/:invitationId', ...emisores, controller.revoke);
+  // HU08 - T4: reenvío con un token nuevo (criterio 19).
+  router.post(
+    '/invitations/:invitationId/resend',
+    ...emisores,
+    controller.resend,
+  );
 
   // Las dos rutas son públicas por definición: quien las usa todavía no tiene
   // cuenta. La invitación misma es la credencial (RF-116), y por eso los

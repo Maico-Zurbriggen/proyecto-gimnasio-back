@@ -8,6 +8,7 @@ import {
   GenerationUnableError,
   GeneratedRoutineInvalidError,
   MissingGenerationInputError,
+  NoProposedRoutineError,
   ProposedRoutineAlreadyExistsError,
   RoutineGenerationNotCompletedError,
   RoutineGenerationNotFoundError,
@@ -69,6 +70,7 @@ export class RoutineGenerationsController {
         parameters: parsedBody.data.parametros ?? undefined,
         idempotencyKey: parsedBody.data.idempotencyKey,
         regenerate: parsedBody.data.regenerar,
+        changeRequest: parsedBody.data.cambios,
       });
 
       res.status(result.alreadyExisted ? 200 : 202).json({
@@ -92,6 +94,10 @@ export class RoutineGenerationsController {
       }
       if (error instanceof RoutineRegenerationNotAllowedError) {
         res.status(403).json({ error: 'routine_regeneration_not_allowed' });
+        return;
+      }
+      if (error instanceof NoProposedRoutineError) {
+        res.status(409).json({ error: 'no_proposed_routine' });
         return;
       }
       if (error instanceof MissingGenerationInputError) {

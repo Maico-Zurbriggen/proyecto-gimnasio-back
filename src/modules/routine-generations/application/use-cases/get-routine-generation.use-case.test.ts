@@ -15,6 +15,7 @@ describe('GetRoutineGenerationUseCase', () => {
     };
     const repository: RoutineGenerationsRepository = {
       findProposedRoutineId: vi.fn(),
+      findProposedRoutine: vi.fn(),
       createOrGetRequest: vi.fn(),
       registerOwnership: vi.fn(),
       findById: vi.fn().mockResolvedValue(snapshot),
@@ -34,6 +35,7 @@ describe('GetRoutineGenerationUseCase', () => {
   it('throws RoutineGenerationNotFoundError when the request does not exist', async () => {
     const repository: RoutineGenerationsRepository = {
       findProposedRoutineId: vi.fn(),
+      findProposedRoutine: vi.fn(),
       createOrGetRequest: vi.fn(),
       registerOwnership: vi.fn(),
       findById: vi.fn().mockResolvedValue(null),

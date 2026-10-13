@@ -3,7 +3,7 @@
   "info": {
     "title": "Proyecto Gimnasio - API",
     "version": "1.0.0",
-    "description": "Contrato backend de recuperación de credenciales, objetivos, alta por invitación (HU06), aprovisionamiento de gimnasios (HU13), bandeja de revisión de rutinas (HU17) y operaciones existentes afectadas."
+    "description": "Contrato backend de recuperación de credenciales, objetivos, alta por invitación (HU06), gestión de invitaciones (HU08), condiciones físicas (HU11), aprovisionamiento de gimnasios (HU13), bandeja de revisión de rutinas (HU17) y operaciones existentes afectadas."
   },
   "components": {
     "securitySchemes": {
@@ -295,6 +295,126 @@
             "type": "boolean"
           }
         }
+      },
+      "InvitationStatus": {
+        "type": "string",
+        "enum": ["VIGENTE", "USADA", "REVOCADA", "CADUCADA"],
+        "description": "Estado efectivo de una invitación emitida (HU08 - criterio 15)."
+      },
+      "InvitationNotRevocable": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "const": "invitation_not_revocable"
+          },
+          "message": {
+            "type": "string"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/InvitationStatus"
+          }
+        },
+        "required": ["error", "message"]
+      },
+      "PhysicalCondition": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "studentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bodyZoneCode": {
+            "type": "string",
+            "enum": [
+              "PECTORAL",
+              "DELTOIDES_ANTERIOR",
+              "DELTOIDES_LATERAL",
+              "DELTOIDES_POSTERIOR",
+              "BICEPS",
+              "TRICEPS",
+              "ANTEBRAZO",
+              "ABDOMINALES",
+              "OBLICUOS",
+              "DORSAL",
+              "TRAPECIO",
+              "ERECTORES_LUMBARES",
+              "GLUTEO",
+              "CUADRICEPS",
+              "ISQUIOTIBIALES",
+              "ADUCTORES",
+              "GEMELOS",
+              "HOMBRO",
+              "CODO",
+              "MUNECA",
+              "COLUMNA_CERVICAL",
+              "COLUMNA_LUMBAR",
+              "CADERA",
+              "RODILLA",
+              "TOBILLO"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["LEVE", "MODERADA", "SEVERA"]
+          },
+          "description": {
+            "type": ["string", "null"]
+          },
+          "startsOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "endsOn": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "null mientras siga abierta."
+          },
+          "vigente": {
+            "type": "boolean",
+            "description": "Rige hoy. El día de cierre todavía cuenta (RN-10)."
+          }
+        },
+        "required": [
+          "id",
+          "studentId",
+          "bodyZoneCode",
+          "severity",
+          "description",
+          "startsOn",
+          "endsOn",
+          "vigente"
+        ]
+      },
+      "ConditionsStatus": {
+        "type": "object",
+        "properties": {
+          "healthDataConsent": {
+            "type": "boolean",
+            "description": "RN-104: sin consentimiento no se declaran ni se leen condiciones."
+          },
+          "declaredNone": {
+            "type": "boolean",
+            "description": "Declaró expresamente no tener ninguna (distinto de no haber respondido)."
+          },
+          "declaredNoneAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "activeCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "healthDataConsent",
+          "declaredNone",
+          "declaredNoneAt",
+          "activeCount"
+        ]
       }
     }
   },
@@ -302,8 +422,8 @@
     "/auth/password-recovery": {
       "post": {
         "operationId": "requestPasswordRecovery",
-        "summary": "Solicitar enlace de recuperaci?n",
-        "description": "M?ximo dos solicitudes por IP y d?a UTC, persistido en PostgreSQL. Correo inexistente, cuenta suspendida o gimnasio inactivo reciben el mismo 202 y payload. La respuesta usa una ventana uniforme de 3500 ms con operaciones internas acotadas. Token SHA-256 en base, enlace v?lido por dos horas. Un enlace nuevo invalida el anterior. No devuelve tokens.",
+        "summary": "Solicitar enlace de recuperación",
+        "description": "Máximo dos solicitudes por IP y día UTC, persistido en PostgreSQL. Correo inexistente, cuenta suspendida o gimnasio inactivo reciben el mismo 202 y payload. La respuesta usa una ventana uniforme de 3500 ms con operaciones internas acotadas. Token SHA-256 en base, enlace válido por dos horas. Un enlace nuevo invalida el anterior. No devuelve tokens.",
         "requestBody": {
           "required": true,
           "content": {
@@ -334,7 +454,7 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "const": "Si la cuenta est? habilitada, recibir?s un enlace de recuperaci?n."
+                      "const": "Si la cuenta está habilitada, recibirás un enlace de recuperación."
                     }
                   },
                   "required": ["message"]
@@ -343,7 +463,7 @@
             }
           },
           "400": {
-            "description": "Solicitud inv?lida.",
+            "description": "Solicitud inválida.",
             "content": {
               "application/json": {
                 "schema": {
@@ -353,7 +473,7 @@
             }
           },
           "429": {
-            "description": "Tercera solicitud del origen durante el mismo d?a UTC.",
+            "description": "Tercera solicitud del origen durante el mismo día UTC.",
             "content": {
               "application/json": {
                 "schema": {
@@ -368,8 +488,8 @@
     "/auth/password-reset": {
       "post": {
         "operationId": "resetPassword",
-        "summary": "Restablecer contrase?a con token",
-        "description": "Consume el token una sola vez, verifica vencimiento en el servidor y revoca todas las sesiones y enlaces previos dentro de la transacci?n. No cambia roles ni gimnasio.",
+        "summary": "Restablecer contraseña con token",
+        "description": "Consume el token una sola vez, verifica vencimiento en el servidor y revoca todas las sesiones y enlaces previos dentro de la transacción. No cambia roles ni gimnasio.",
         "requestBody": {
           "required": true,
           "content": {
@@ -389,7 +509,7 @@
                     "minLength": 8,
                     "maxLength": 72,
                     "writeOnly": true,
-                    "description": "Misma pol?tica HU06: may?scula, min?scula y n?mero. M?ximo 72 bytes UTF-8 por bcrypt."
+                    "description": "Misma política HU06: mayúscula, minúscula y número. Máximo 72 bytes UTF-8 por bcrypt."
                   }
                 },
                 "required": ["token", "password"]
@@ -399,14 +519,14 @@
         },
         "responses": {
           "204": {
-            "description": "Contrase?a actualizada; todas las sesiones previas revocadas."
+            "description": "Contraseña actualizada; todas las sesiones previas revocadas."
           },
           "400": {
-            "description": "weak_password o invalid_recovery_token gen?rico para token vencido, usado, reemplazado o inexistente.",
+            "description": "weak_password con details y fields.password (reglas incumplidas), o invalid_recovery_token genérico para token vencido, usado, reemplazado o inexistente.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/DetailedError"
                 }
               }
             }
@@ -422,8 +542,8 @@
             "session": []
           }
         ],
-        "summary": "Cambiar contrase?a propia",
-        "description": "La identidad y la sesi?n actual provienen de la cookie; no admite ID de usuario. Revoca las otras sesiones y todos los enlaces de recuperaci?n, preserva la sesi?n actual.",
+        "summary": "Cambiar contraseña propia",
+        "description": "La identidad y la sesión actual provienen de la cookie; no admite ID de usuario. Revoca las otras sesiones y todos los enlaces de recuperación, preserva la sesión actual.",
         "requestBody": {
           "required": true,
           "content": {
@@ -437,7 +557,7 @@
                     "minLength": 8,
                     "maxLength": 72,
                     "writeOnly": true,
-                    "description": "Misma pol?tica HU06: may?scula, min?scula y n?mero. M?ximo 72 bytes UTF-8 por bcrypt."
+                    "description": "Misma política HU06: mayúscula, minúscula y número. Máximo 72 bytes UTF-8 por bcrypt."
                   }
                 },
                 "required": ["password"]
@@ -447,20 +567,20 @@
         },
         "responses": {
           "204": {
-            "description": "Contrase?a actualizada."
+            "description": "Contraseña actualizada."
           },
           "400": {
-            "description": "Solicitud o contrase?a inv?lida.",
+            "description": "invalid_request o weak_password con details y fields.password (reglas incumplidas).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/DetailedError"
                 }
               }
             }
           },
           "401": {
-            "description": "Sesi?n ausente, inv?lida, vencida o revocada.",
+            "description": "Sesión ausente, inválida, vencida o revocada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -492,7 +612,7 @@
           }
         ],
         "summary": "Objetivo vigente e historial del alumno",
-        "description": "Historial cronol?gico ascendente e intervalos [inicio, fin). current es null antes de declarar un objetivo. Alumno: s?lo sus propios datos. Entrenador: s?lo con asignaci?n vigente y mismo gimnasio, comprobados en cada lectura. Administrador sin otro rol autorizado: 403. atDate es null si no hay at o no hab?a objetivo vigente. Un at YYYY-MM-DD representa medianoche en la zona del gimnasio; un datetime exige offset.",
+        "description": "Historial cronológico ascendente e intervalos [inicio, fin). current es null antes de declarar un objetivo. Alumno: sólo sus propios datos. Entrenador: sólo con asignación vigente y mismo gimnasio, comprobados en cada lectura. Administrador sin otro rol autorizado: 403. atDate es null si no hay at o no había objetivo vigente. Un at YYYY-MM-DD representa medianoche en la zona del gimnasio; un datetime exige offset.",
         "parameters": [
           {
             "name": "at",
@@ -523,7 +643,7 @@
             }
           },
           "400": {
-            "description": "Fecha o par?metros inv?lidos.",
+            "description": "Fecha o parámetros inválidos.",
             "content": {
               "application/json": {
                 "schema": {
@@ -533,7 +653,7 @@
             }
           },
           "401": {
-            "description": "Sesi?n ausente, vencida o revocada.",
+            "description": "Sesión ausente, vencida o revocada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -543,7 +663,7 @@
             }
           },
           "403": {
-            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "description": "Rol, propiedad, gimnasio o asignación no autorizados.",
             "content": {
               "application/json": {
                 "schema": {
@@ -562,7 +682,7 @@
           }
         ],
         "summary": "Declarar o modificar objetivo propio",
-        "description": "S?lo alumno sobre s? mismo. Cambio transaccional, cierre e inicio en el mismo instante. Igual objetivo vigente es idempotente. ?ndice ?nico parcial garantiza un objetivo abierto. Reevaluaci?n y propuesta de cambio de tipo y esquemas para la rutina vigente, sin aplicar cambios sin revisi?n.",
+        "description": "Sólo alumno sobre sí mismo. Cambio transaccional, cierre e inicio en el mismo instante. Igual objetivo vigente es idempotente. Índice único parcial garantiza un objetivo abierto. Reevaluación y propuesta de cambio de tipo y esquemas para la rutina vigente, sin aplicar cambios sin revisi?n.",
         "requestBody": {
           "required": true,
           "content": {
@@ -582,7 +702,7 @@
         },
         "responses": {
           "201": {
-            "description": "Nuevo per?odo registrado.",
+            "description": "Nuevo período registrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -602,7 +722,7 @@
             }
           },
           "400": {
-            "description": "Enum o par?metros inv?lidos.",
+            "description": "Enum o parámetros inválidos.",
             "content": {
               "application/json": {
                 "schema": {
@@ -612,7 +732,7 @@
             }
           },
           "401": {
-            "description": "Sesi?n ausente, vencida o revocada.",
+            "description": "Sesión ausente, vencida o revocada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -622,7 +742,7 @@
             }
           },
           "403": {
-            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "description": "Rol, propiedad, gimnasio o asignación no autorizados.",
             "content": {
               "application/json": {
                 "schema": {
@@ -663,7 +783,7 @@
           }
         ],
         "summary": "Revisar rutina propuesta",
-        "description": "Contrato existente extendido con confirmGoalMismatch. RN-40 exige confirmaci?n si tipo y objetivo difieren, salvo rutina ACONDICIONAMIENTO_GENERAL. Comprobaci?n transaccional con el objetivo vigente al persistir. S?lo entrenador asignado. HU17: rechazar exige observation (motivo, 422 rejection_reason_required); la transición sale de PROPUESTA de forma condicional, así que una segunda decisión simultánea recibe 409 routine_not_reviewable. Se avisa al alumno y se registra en auditoría.",
+        "description": "Contrato existente extendido con confirmGoalMismatch. RN-40 exige confirmación si tipo y objetivo difieren, salvo rutina ACONDICIONAMIENTO_GENERAL. Comprobación transaccional con el objetivo vigente al persistir. Sólo entrenador asignado. HU17: rechazar exige observation (motivo, 422 rejection_reason_required); la transición sale de PROPUESTA de forma condicional, así que una segunda decisión simultánea recibe 409 routine_not_reviewable. Se avisa al alumno y se registra en auditoría.",
         "requestBody": {
           "required": true,
           "content": {
@@ -692,7 +812,7 @@
         },
         "responses": {
           "200": {
-            "description": "Revisi?n registrada.",
+            "description": "Revisión registrada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -718,7 +838,7 @@
             }
           },
           "400": {
-            "description": "Par?metros inv?lidos.",
+            "description": "Parámetros inválidos.",
             "content": {
               "application/json": {
                 "schema": {
@@ -748,7 +868,7 @@
             }
           },
           "401": {
-            "description": "Sesi?n ausente, vencida o revocada.",
+            "description": "Sesión ausente, vencida o revocada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -758,7 +878,7 @@
             }
           },
           "403": {
-            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "description": "Rol, propiedad, gimnasio o asignación no autorizados.",
             "content": {
               "application/json": {
                 "schema": {
@@ -799,8 +919,8 @@
             "session": []
           }
         ],
-        "summary": "Solicitar generaci?n de rutina",
-        "description": "Contrato existente. HU10 impide despachar la generaci?n sin objetivo vigente y devuelve los campos de contexto que faltan.",
+        "summary": "Solicitar generación de rutina",
+        "description": "Contrato existente. HU10 impide despachar la generación sin objetivo vigente y devuelve los campos de contexto que faltan.",
         "requestBody": {
           "required": true,
           "content": {
@@ -863,6 +983,12 @@
                   },
                   "regenerar": {
                     "type": "boolean"
+                  },
+                  "cambios": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000,
+                    "description": "Cambios pedidos en lenguaje natural sobre la rutina PROPUESTA vigente. No se combina con textoLibre, parametros ni regenerar. 409 no_proposed_routine si no hay rutina propuesta. La nueva propuesta descarta la anterior al finalizar."
                   }
                 },
                 "required": []
@@ -878,7 +1004,7 @@
             "description": "Solicitud enviada."
           },
           "400": {
-            "description": "Solicitud inv?lida.",
+            "description": "Solicitud inválida.",
             "content": {
               "application/json": {
                 "schema": {
@@ -921,7 +1047,7 @@
             }
           },
           "401": {
-            "description": "Sesi?n ausente, vencida o revocada.",
+            "description": "Sesión ausente, vencida o revocada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -931,7 +1057,7 @@
             }
           },
           "403": {
-            "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "description": "Rol, propiedad, gimnasio o asignación no autorizados.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1045,6 +1171,61 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "revokeInvitation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Revocar una invitación vigente (HU08 - T2)",
+        "description": "En esta operación el parámetro es el id (uuid) de la invitación, no el token. El administrador revoca cualquiera del gimnasio; el entrenador, sólo las que emitió.",
+        "responses": {
+          "204": {
+            "description": "Revocada: el enlace deja de funcionar."
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden_invitation_revocation: no la emitió quien intenta revocarla.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "invitation_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "invitation_not_revocable: ya se usó, se revocó o caducó (estado).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationNotRevocable"
                 }
               }
             }
@@ -1842,7 +2023,7 @@
           }
         ],
         "summary": "Emitir una invitación (FL-19)",
-        "description": "ADMINISTRADOR invita con cualquier rol del gimnasio; ENTRENADOR sólo ALUMNO, que queda asignado a él al completar la cuenta. El token sólo viaja en el correo (se guarda su hash); si el envío falla no se guarda nada.",
+        "description": "ADMINISTRADOR invita con cualquier rol del gimnasio; ENTRENADOR sólo ALUMNO, que queda asignado a él al completar la cuenta. El token sólo viaja en el correo (se guarda su hash). Si el envío falla la invitación queda VIGENTE y la respuesta trae emailFailed=true para reenviarla (HU08 - criterio 18).",
         "requestBody": {
           "required": true,
           "content": {
@@ -1870,7 +2051,7 @@
         },
         "responses": {
           "201": {
-            "description": "Invitación emitida y enviada.",
+            "description": "Invitación emitida.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1890,14 +2071,34 @@
                         "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR"]
                       }
                     },
+                    "status": {
+                      "$ref": "#/components/schemas/InvitationStatus"
+                    },
+                    "issuedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "expiresAt": {
                       "type": "string",
                       "format": "date-time"
                     },
                     "trainerName": {
                       "type": ["string", "null"]
+                    },
+                    "emailFailed": {
+                      "type": "boolean"
                     }
-                  }
+                  },
+                  "required": [
+                    "id",
+                    "email",
+                    "roles",
+                    "status",
+                    "issuedAt",
+                    "expiresAt",
+                    "trainerName",
+                    "emailFailed"
+                  ]
                 }
               }
             }
@@ -1914,16 +2115,6 @@
           },
           "409": {
             "description": "email_already_registered o pending_invitation_exists (fields.email).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DetailedError"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "invitation_delivery_failed: no se guardó nada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1988,8 +2179,7 @@
                         }
                       },
                       "status": {
-                        "type": "string",
-                        "enum": ["PENDIENTE", "USADA", "VENCIDA", "REVOCADA"]
+                        "$ref": "#/components/schemas/InvitationStatus"
                       },
                       "issuedAt": {
                         "type": "string",
@@ -2002,7 +2192,16 @@
                       "issuedByName": {
                         "type": ["string", "null"]
                       }
-                    }
+                    },
+                    "required": [
+                      "id",
+                      "email",
+                      "roles",
+                      "status",
+                      "issuedAt",
+                      "expiresAt",
+                      "issuedByName"
+                    ]
                   }
                 }
               }
@@ -2720,6 +2919,539 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{invitationId}/resend": {
+      "parameters": [
+        {
+          "name": "invitationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "resendInvitation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Reenviar una invitación vigente (HU08 - T4)",
+        "description": "Rota el token (el enlace anterior deja de servir), conserva el vencimiento y vuelve a enviar el correo. Mismas reglas de autoría que la revocación. Audita REENVIO_INVITACION.",
+        "responses": {
+          "200": {
+            "description": "Reenviada; emailFailed=true si el correo no salió.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emailFailed": {
+                      "type": "boolean"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["emailFailed", "expiresAt"]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden_invitation_revocation: no la emitió quien intenta reenviarla.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "invitation_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "invitation_not_revocable: ya no está vigente (estado).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationNotRevocable"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/conditions": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listPhysicalConditions",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Historial de condiciones físicas (HU11 - T2)",
+        "description": "Leen el propio alumno y su entrenador con asignación vigente; el administrador no accede a datos de salud. `?vigentesEn=YYYY-MM-DD` responde las que regían ese día.",
+        "parameters": [
+          {
+            "name": "vigentesEn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "De la más reciente a la más antigua.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PhysicalCondition"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol o alumno no autorizado, entrenador sin asignación vigente, o health_data_consent_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "student_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "declarePhysicalCondition",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Declarar una condición física (HU11 - T1)",
+        "description": "Sólo el propio alumno (RN-104: requiere consentimiento de datos de salud). Anula una declaración previa de \"ninguna\".",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bodyZoneCode": {
+                    "type": "string",
+                    "enum": [
+                      "PECTORAL",
+                      "DELTOIDES_ANTERIOR",
+                      "DELTOIDES_LATERAL",
+                      "DELTOIDES_POSTERIOR",
+                      "BICEPS",
+                      "TRICEPS",
+                      "ANTEBRAZO",
+                      "ABDOMINALES",
+                      "OBLICUOS",
+                      "DORSAL",
+                      "TRAPECIO",
+                      "ERECTORES_LUMBARES",
+                      "GLUTEO",
+                      "CUADRICEPS",
+                      "ISQUIOTIBIALES",
+                      "ADUCTORES",
+                      "GEMELOS",
+                      "HOMBRO",
+                      "CODO",
+                      "MUNECA",
+                      "COLUMNA_CERVICAL",
+                      "COLUMNA_LUMBAR",
+                      "CADERA",
+                      "RODILLA",
+                      "TOBILLO"
+                    ]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": ["LEVE", "MODERADA", "SEVERA"]
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "startsOn": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Por defecto, hoy. No puede ser futura."
+                  }
+                },
+                "required": ["bodyZoneCode", "severity"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Condición declarada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhysicalCondition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request_body, invalid_body_zone o future_start_date.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol o alumno no autorizado, entrenador sin asignación vigente, o health_data_consent_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "student_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/conditions/status": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getPhysicalConditionsStatus",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Estado de la declaración de condiciones (HU11 - T3)",
+        "description": "Leen el propio alumno y su entrenador con asignación vigente; el administrador no accede a datos de salud. Distingue \"no respondió\" de \"declaró ninguna\" e informa si hay consentimiento.",
+        "responses": {
+          "200": {
+            "description": "Estado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConditionsStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol o alumno no autorizado, o entrenador sin asignación vigente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "student_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/conditions/none": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "declareNoPhysicalConditions",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Declarar que no tiene ninguna condición física (HU11 - criterio 8)",
+        "description": "Sólo el propio alumno (RN-104: requiere consentimiento de datos de salud). Falla si queda alguna condición abierta.",
+        "responses": {
+          "200": {
+            "description": "Estado actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConditionsStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol o alumno no autorizado, entrenador sin asignación vigente, o health_data_consent_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "active_conditions_exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "student_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/conditions/{conditionId}/close": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "conditionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "closePhysicalCondition",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Cerrar una condición física (HU11 - T2)",
+        "description": "Sólo el propio alumno (RN-104: requiere consentimiento de datos de salud). No borra: queda en el historial y deja de restringir desde su fecha de fin.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "endsOn": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Por defecto, hoy."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Condición cerrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhysicalCondition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request_body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol o alumno no autorizado, entrenador sin asignación vigente, o health_data_consent_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "condition_not_found o student_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "condition_not_closable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
                 }
               }
             }

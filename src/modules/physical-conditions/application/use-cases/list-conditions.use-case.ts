@@ -1,4 +1,5 @@
 import type { Clock } from '../../../routines/application/ports/clock';
+import { HealthConsentRequiredError } from '../../domain/errors/condition-errors';
 import {
   toConditionDto,
   type PhysicalConditionDto,
@@ -25,6 +26,10 @@ export class ListConditionsUseCase {
   ) {}
 
   async execute(input: ListConditionsInput): Promise<PhysicalConditionDto[]> {
+    // RNF-21: tampoco se leen sin consentimiento, ni siquiera el entrenador.
+    if (!(await this.conditions.hasHealthConsent(input.studentId))) {
+      throw new HealthConsentRequiredError();
+    }
     const records = await this.conditions.listByStudent(input.studentId);
     const now = this.clock.now();
 

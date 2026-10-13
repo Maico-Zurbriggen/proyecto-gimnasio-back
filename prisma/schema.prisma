@@ -478,6 +478,7 @@ model StudentProfile {
   heightUpdatedAt        DateTime                       @default(now()) @map("height_updated_at") @db.Timestamptz(6)
   experienceLevel        ExperienceLevel?               @map("experience_level")
   availableDaysPerWeek   Int?                           @map("available_days_per_week")
+  noConditionsDeclaredAt DateTime?                      @map("no_conditions_declared_at") @db.Timestamptz(6)
   user                   User                           @relation(fields: [userId], references: [id], onDelete: Restrict)
   goals                  Goal[]
   physicalConditions     PhysicalCondition[]

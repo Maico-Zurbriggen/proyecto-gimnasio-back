@@ -8,6 +8,7 @@ import type {
 import {
   EmptyPrefilteredCatalogError,
   MissingGenerationInputError,
+  NoProposedRoutineError,
   StudentNotFoundError,
 } from '../../domain/errors/routine-generation-errors';
 import type { GenerationContextRepository } from '../ports/generation-context.repository';
@@ -191,6 +192,7 @@ describe('RequestRoutineGenerationUseCase', () => {
   ) {
     const generationsRepository: RoutineGenerationsRepository = {
       findProposedRoutineId: vi.fn().mockResolvedValue('old-routine'),
+      findProposedRoutine: vi.fn().mockResolvedValue(null),
       createOrGetRequest: vi.fn().mockResolvedValue(request),
       registerOwnership: vi.fn().mockResolvedValue(undefined),
       findById: vi.fn(),
@@ -405,6 +407,72 @@ describe('RequestRoutineGenerationUseCase', () => {
         }),
       }),
     );
+  });
+
+  it('builds a CHANGE_REQUEST task from the proposed routine and marks it for replacement', async () => {
+    const contextRepository: GenerationContextRepository = {
+      getStudentContext: vi
+        .fn()
+        .mockResolvedValue({ gymId: 'gym-1', minimizedContext }),
+      getEnabledCatalog: vi.fn().mockResolvedValue(catalog),
+    };
+    const generationsRepository = repositories();
+    vi.mocked(generationsRepository.findProposedRoutine).mockResolvedValue({
+      id: 'proposed-1',
+      structure: {
+        routineType: 'HIPERTROFIA',
+        targetWeeklyFrequency: 3,
+        days: [
+          {
+            name: 'Dia 1',
+            dominantPattern: 'EMPUJE_HORIZONTAL',
+            exercises: [{ exerciseId: catalog[0]!.id, note: null, sets: [] }],
+          },
+        ],
+      },
+    });
+    const gateway = { dispatchGeneration: vi.fn() };
+    const useCase = new RequestRoutineGenerationUseCase(
+      contextRepository,
+      gateway,
+      idGenerator,
+      clock,
+      generationsRepository,
+    );
+    await useCase.execute({
+      studentId,
+      requestedByUserId,
+      changeRequest: 'Sumá un día de piernas',
+    });
+    const preferences = vi.mocked(generationsRepository.createOrGetRequest).mock
+      .calls[0]![0].preferences as RoutineGenerationPreferences;
+    expect(preferences.generation_task).toMatchObject({
+      kind: 'CHANGE_REQUEST',
+      change_request: 'Sumá un día de piernas',
+      previous_candidate: { days: [{ exercises: [{ catalog_index: 0 }] }] },
+    });
+    expect(preferences.routine_change_replacement).toEqual({
+      replaces_proposed_routine_id: 'proposed-1',
+    });
+    expect(gateway.dispatchGeneration).toHaveBeenCalledWith('req-1');
+  });
+
+  it('rejects a change request when there is no proposed routine', async () => {
+    const contextRepository: GenerationContextRepository = {
+      getStudentContext: vi.fn(),
+      getEnabledCatalog: vi.fn(),
+    };
+    const useCase = new RequestRoutineGenerationUseCase(
+      contextRepository,
+      { dispatchGeneration: vi.fn() },
+      idGenerator,
+      clock,
+      repositories(),
+    );
+    await expect(
+      useCase.execute({ studentId, requestedByUserId, changeRequest: 'más' }),
+    ).rejects.toBeInstanceOf(NoProposedRoutineError);
+    expect(contextRepository.getStudentContext).not.toHaveBeenCalled();
   });
 
   it('rejects a test regeneration before loading context when it is disabled', async () => {
