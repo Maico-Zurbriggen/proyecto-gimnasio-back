@@ -37,3 +37,23 @@ export class StudentNotFoundError extends Error {
     this.name = 'StudentNotFoundError';
   }
 }
+
+/** RN-104, RNF-21: sin consentimiento no se declaran, modifican ni leen. */
+export class HealthConsentRequiredError extends Error {
+  constructor(
+    message = 'Hace falta el consentimiento para datos de salud del alumno',
+  ) {
+    super(message);
+    this.name = 'HealthConsentRequiredError';
+  }
+}
+
+/** No se puede declarar "ninguna condición" con condiciones vigentes. */
+export class ActiveConditionsExistError extends Error {
+  constructor(
+    message = 'Tenés condiciones vigentes: cerralas antes de declarar que no tenés ninguna',
+  ) {
+    super(message);
+    this.name = 'ActiveConditionsExistError';
+  }
+}

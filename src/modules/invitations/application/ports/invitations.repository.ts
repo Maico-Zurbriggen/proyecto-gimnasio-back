@@ -97,7 +97,7 @@ export interface InvitationsRepository {
     gymId: string,
   ): Promise<IssuedInvitationRecord | null>;
 
-  /** Revoca y audita atÃ³micamente una invitaciÃ³n que sigue vigente. */
+  /** Revoca y audita atómicamente una invitación que sigue vigente. */
   revoke(command: {
     invitationId: string;
     actorUserId: string;

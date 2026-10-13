@@ -2,6 +2,7 @@ import type { Clock } from '../../../routines/application/ports/clock';
 import {
   ConditionNotClosableError,
   ConditionNotFoundError,
+  HealthConsentRequiredError,
 } from '../../domain/errors/condition-errors';
 import { puedeCerrarse } from '../../domain/services/condition-validity';
 import {
@@ -32,6 +33,9 @@ export class CloseConditionUseCase {
   ) {}
 
   async execute(input: CloseConditionInput): Promise<PhysicalConditionDto> {
+    if (!(await this.conditions.hasHealthConsent(input.studentId))) {
+      throw new HealthConsentRequiredError();
+    }
     const record = await this.conditions.findById(
       input.conditionId,
       input.studentId,

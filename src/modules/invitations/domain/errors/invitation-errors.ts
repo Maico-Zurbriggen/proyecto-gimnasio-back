@@ -103,14 +103,14 @@ export class InvitationDeliveryError extends Error {
 }
 
 export class ForbiddenRevocationError extends Error {
-  constructor(message = 'No podÃ©s revocar esta invitaciÃ³n') {
+  constructor(message = 'No podés revocar esta invitación') {
     super(message);
     this.name = 'ForbiddenRevocationError';
   }
 }
 
 export class InvitationNotRevocableError extends Error {
-  constructor(message = 'La invitaciÃ³n ya no estÃ¡ vigente') {
+  constructor(message = 'La invitación ya no está vigente') {
     super(message);
     this.name = 'InvitationNotRevocableError';
   }

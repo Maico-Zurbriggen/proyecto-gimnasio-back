@@ -867,8 +867,8 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
             referenceType: 'ROUTINE',
             referenceId: command.routineId,
             text: aprueba
-              ? 'Tu entrenador aprobÃ³ tu nueva rutina: ya estÃ¡ vigente.'
-              : `Tu entrenador rechazÃ³ la rutina propuesta. Motivo: ${command.observation ?? ''}`,
+              ? 'Tu entrenador aprobó tu nueva rutina: ya está vigente.'
+              : `Tu entrenador rechazó la rutina propuesta. Motivo: ${command.observation ?? ''}`,
           },
         });
         await tx.auditLog.create({

@@ -48,15 +48,22 @@ export class PrismaPhysicalConditionsRepository implements PhysicalConditionsRep
       return null;
     }
 
-    const created = await this.prisma.physicalCondition.create({
-      data: {
-        studentId: command.studentId,
-        bodyZoneCode: command.bodyZoneCode,
-        severity: command.severity,
-        description: command.description,
-        startsOn: command.startsOn,
-      },
-    });
+    // FL-01/A1: declarar una condición anula la declaración de "ninguna".
+    const [created] = await this.prisma.$transaction([
+      this.prisma.physicalCondition.create({
+        data: {
+          studentId: command.studentId,
+          bodyZoneCode: command.bodyZoneCode,
+          severity: command.severity,
+          description: command.description,
+          startsOn: command.startsOn,
+        },
+      }),
+      this.prisma.studentProfile.update({
+        where: { userId: command.studentId },
+        data: { noConditionsDeclaredAt: null },
+      }),
+    ]);
 
     return toRecord(created);
   }
@@ -101,5 +108,33 @@ export class PrismaPhysicalConditionsRepository implements PhysicalConditionsRep
     });
 
     return toRecord(updated);
+  }
+
+  async hasHealthConsent(studentId: string): Promise<boolean> {
+    if (!isUuid(studentId)) return false;
+    const consent = await this.prisma.consent.findFirst({
+      where: { userId: studentId, type: 'DATOS_SALUD' },
+      orderBy: { recordedAt: 'desc' },
+      select: { granted: true },
+    });
+    return consent?.granted ?? false;
+  }
+
+  async findNoConditionsDeclaration(
+    studentId: string,
+  ): Promise<Date | null | undefined> {
+    if (!isUuid(studentId)) return undefined;
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { userId: studentId },
+      select: { noConditionsDeclaredAt: true },
+    });
+    return profile ? profile.noConditionsDeclaredAt : undefined;
+  }
+
+  async declareNoConditions(studentId: string, at: Date): Promise<void> {
+    await this.prisma.studentProfile.update({
+      where: { userId: studentId },
+      data: { noConditionsDeclaredAt: at },
+    });
   }
 }
