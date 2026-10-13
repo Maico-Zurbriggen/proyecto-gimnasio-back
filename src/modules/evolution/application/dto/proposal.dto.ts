@@ -25,6 +25,7 @@ export interface ProposalSummaryDto {
 }
 
 export interface ProposalReviewDto {
+  regeneration?: { candidateRequestId: string };
   id: string;
   state: string;
   createdAt: string;
@@ -63,9 +64,13 @@ const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
 export function evaluarAdvertencia(
   record: ProposalRecord,
 ): AdvertenciaDatosDesactualizadosDto {
-  const mediciones = record.measurementDates.map((measuredOn) => ({
-    measuredOn,
-  }));
+  if (record.renewal)
+    return construirAdvertenciaDatos(record.renewal.evaluation);
+  const mediciones = record.measurementDates
+    .filter((date) => date <= record.createdAt)
+    .map((measuredOn) => ({
+      measuredOn,
+    }));
   const previas = record.previousProposalDates.map((createdAt) => ({
     createdAt,
     sinDatosActualizados: !hayMedicionEnElCiclo(
@@ -98,6 +103,9 @@ export function toProposalSummaryDto(
 
 export function toProposalReviewDto(record: ProposalRecord): ProposalReviewDto {
   return {
+    ...(record.renewal
+      ? { regeneration: { candidateRequestId: record.renewal.requestId } }
+      : {}),
     id: record.id,
     state: record.state,
     createdAt: record.createdAt.toISOString(),

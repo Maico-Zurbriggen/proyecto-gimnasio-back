@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Proyecto Gimnasio - HU09 y HU10",
+    "title": "Proyecto Gimnasio - API",
     "version": "1.0.0",
-    "description": "Contrato backend de recuperaci?n de credenciales, objetivos y operaciones existentes afectadas."
+    "description": "Contrato backend de recuperación de credenciales, objetivos, alta por invitación (HU06), aprovisionamiento de gimnasios (HU13), bandeja de revisión de rutinas (HU17) y operaciones existentes afectadas."
   },
   "components": {
     "securitySchemes": {
@@ -142,6 +142,159 @@
           }
         },
         "required": ["error", "missing"]
+      },
+      "DetailedError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Motivo distinguible: INVALIDA, VENCIDA, REVOCADA, USADA, CUENTA_EXISTENTE."
+          },
+          "message": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Errores por campo."
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "retryAfterSeconds": {
+            "type": "integer"
+          }
+        },
+        "required": ["error"]
+      },
+      "AuthenticatedUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "gymId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR", "SUPERADMIN"]
+            }
+          }
+        },
+        "required": ["id", "gymId", "roles"]
+      },
+      "GymSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVO", "INACTIVO"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "administratorCount": {
+            "type": "integer"
+          },
+          "bootstrapInvitation": {
+            "type": ["object", "null"],
+            "properties": {
+              "email": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["PENDIENTE", "USADA", "VENCIDA", "REVOCADA"]
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "timezone",
+          "status",
+          "createdAt",
+          "administratorCount",
+          "bootstrapInvitation"
+        ]
+      },
+      "Inventory": {
+        "type": "object",
+        "properties": {
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "present": {
+                  "type": "boolean"
+                },
+                "alwaysPresent": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "prescribableExercises": {
+            "type": "integer"
+          },
+          "totalExercises": {
+            "type": "integer"
+          },
+          "missingPatterns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "EMPUJE_HORIZONTAL",
+                "TRACCION",
+                "DOMINANTE_RODILLA",
+                "DOMINANTE_CADERA"
+              ]
+            }
+          },
+          "onlyBodyweight": {
+            "type": "boolean"
+          }
+        }
       }
     }
   },
@@ -510,7 +663,7 @@
           }
         ],
         "summary": "Revisar rutina propuesta",
-        "description": "Contrato existente extendido con confirmGoalMismatch. RN-40 exige confirmaci?n si tipo y objetivo difieren, salvo rutina ACONDICIONAMIENTO_GENERAL. Comprobaci?n transaccional con el objetivo vigente al persistir. S?lo entrenador asignado.",
+        "description": "Contrato existente extendido con confirmGoalMismatch. RN-40 exige confirmaci?n si tipo y objetivo difieren, salvo rutina ACONDICIONAMIENTO_GENERAL. Comprobaci?n transaccional con el objetivo vigente al persistir. S?lo entrenador asignado. HU17: rechazar exige observation (motivo, 422 rejection_reason_required); la transición sale de PROPUESTA de forma condicional, así que una segunda decisión simultánea recibe 409 routine_not_reviewable. Se avisa al alumno y se registra en auditoría.",
         "requestBody": {
           "required": true,
           "content": {
@@ -610,6 +763,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "rejection_reason_required con fields.observation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
                 }
               }
             }
@@ -769,6 +932,1790 @@
           },
           "403": {
             "description": "Rol, propiedad, gimnasio o asignaci?n no autorizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{token}": {
+      "parameters": [
+        {
+          "name": "token",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      ],
+      "get": {
+        "operationId": "validateInvitation",
+        "summary": "Validar invitación (HU06 - T1, T6)",
+        "description": "Público. Busca por el hash SHA-256 del token. El vencimiento (14 días desde la emisión) se evalúa con el reloj del servidor. Limitado a 5 intentos por minuto y origen.",
+        "responses": {
+          "200": {
+            "description": "Invitación vigente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gymName": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "ALUMNO",
+                          "ENTRENADOR",
+                          "ADMINISTRADOR",
+                          "SUPERADMIN"
+                        ]
+                      }
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "trainerName": {
+                      "type": ["string", "null"],
+                      "description": "Profesor que va a tener el alumno, si lo invitó un entrenador."
+                    },
+                    "healthConsentText": {
+                      "type": ["string", "null"],
+                      "description": "Texto del consentimiento para datos de salud (sólo alumnos)."
+                    }
+                  },
+                  "required": [
+                    "gymName",
+                    "email",
+                    "roles",
+                    "expiresAt",
+                    "trainerName"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Token inexistente o alterado: respuesta genérica (code INVALIDA).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invitación ya usada (code USADA).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Invitación vencida (VENCIDA) o revocada (REVOCADA).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados intentos desde el mismo origen. Header Retry-After.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{token}/complete": {
+      "parameters": [
+        {
+          "name": "token",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      ],
+      "post": {
+        "operationId": "completeInvitationAccount",
+        "summary": "Completar la cuenta (HU06 - T2, T3, T4)",
+        "description": "Crea el usuario ACTIVO con los roles de la invitación (los del body se ignoran) y la consume en la misma transacción. Si la emitió un entrenador, el alumno queda asignado a él. La sesión se entrega sólo por cookie httpOnly.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 64,
+                    "description": "Al menos una mayúscula, una minúscula y un número."
+                  },
+                  "healthDataConsent": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "FL-19/3: separado y opcional; se guarda con el texto aceptado."
+                  }
+                },
+                "required": ["displayName", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cuenta creada y sesión abierta (cookie gym_session).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/AuthenticatedUser"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": ["user", "expiresAt"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campos faltantes: fields.displayName / fields.password.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Token inválido (INVALIDA).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invitación ya usada (USADA) o el correo ya tiene cuenta en el gimnasio (user_already_exists, CUENTA_EXISTENTE).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Invitación vencida o revocada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "weak_password con fields.password, o invalid_display_name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados intentos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/platform/timezones": {
+      "get": {
+        "operationId": "listTimezones",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Zonas horarias IANA reconocidas por la base (HU13)",
+        "description": "Sólo SUPERADMIN: sin sesión 401, cualquier otro rol 403.",
+        "responses": {
+          "200": {
+            "description": "Identificadores ordenados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/platform/gyms": {
+      "get": {
+        "operationId": "listGyms",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Listar gimnasios afiliados (HU13 - T2)",
+        "description": "Sólo SUPERADMIN: sin sesión 401, cualquier otro rol 403.",
+        "responses": {
+          "200": {
+            "description": "Gimnasios del más reciente al más viejo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GymSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "provisionGym",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Alta atómica de gimnasio (HU13 - T1)",
+        "description": "Sólo SUPERADMIN: sin sesión 401, cualquier otro rol 403. Crea gimnasio, invitación de arranque ADMINISTRADOR (14 días, emitida por el aprovisionamiento), auditoría y envía el correo en una sola transacción: si el envío falla no queda nada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "zonaHoraria": {
+                    "type": "string",
+                    "examples": ["America/Argentina/Cordoba"]
+                  },
+                  "correoAdministrador": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "required": ["nombre", "zonaHoraria", "correoAdministrador"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gimnasio creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "invitationSentTo": {
+                      "type": "string"
+                    },
+                    "invitationExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Errores por campo; zona no reconocida en fields.zonaHoraria.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "gym_name_taken.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "invitation_delivery_failed: no se creó nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/platform/gyms/{gymId}/bootstrap-invitation": {
+      "parameters": [
+        {
+          "name": "gymId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reissueBootstrapInvitation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Reemitir invitación del primer administrador (HU13)",
+        "description": "Sólo SUPERADMIN: sin sesión 401, cualquier otro rol 403. Revoca la pendiente y emite otra al mismo correo.",
+        "responses": {
+          "201": {
+            "description": "Reenviada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitationSentTo": {
+                      "type": "string"
+                    },
+                    "invitationExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "gym_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "bootstrap_invitation_already_used.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "invitation_delivery_failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trainers/me/routine-reviews": {
+      "get": {
+        "operationId": "listPendingRoutineReviews",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Bandeja de aceptación/rechazo de rutinas (HU17)",
+        "description": "Sólo ENTRENADOR. Rutinas PROPUESTA de alumnos con asignación vigente, de la más antigua a la más reciente.",
+        "responses": {
+          "200": {
+            "description": "Pendientes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "routineId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "studentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "studentName": {
+                        "type": "string"
+                      },
+                      "routineType": {
+                        "type": "string"
+                      },
+                      "origin": {
+                        "type": "string"
+                      },
+                      "targetWeeklyFrequency": {
+                        "type": "integer"
+                      },
+                      "requestedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "requestedByName": {
+                        "type": ["string", "null"]
+                      },
+                      "requestedByStudent": {
+                        "type": "boolean"
+                      },
+                      "versionId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "versionNumber": {
+                        "type": "integer"
+                      },
+                      "dayCount": {
+                        "type": "integer"
+                      },
+                      "exerciseCount": {
+                        "type": "integer"
+                      },
+                      "currentGoal": {
+                        "type": ["string", "null"]
+                      },
+                      "replacesActiveRoutine": {
+                        "type": "boolean"
+                      },
+                      "goalMismatch": {
+                        "type": "boolean",
+                        "description": "Aprobarla exigirá confirmGoalMismatch (RN-40)."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/me/context": {
+      "get": {
+        "operationId": "getOwnStudentContext",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Contexto propio del alumno (FL-01)",
+        "responses": {
+          "200": {
+            "description": "Contexto; campos null hasta completarlo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "experienceLevel": {
+                      "type": ["string", "null"],
+                      "enum": ["PRINCIPIANTE", "INTERMEDIO", "AVANZADO", null]
+                    },
+                    "availableDaysPerWeek": {
+                      "type": ["integer", "null"]
+                    },
+                    "birthDate": {
+                      "type": ["string", "null"],
+                      "format": "date"
+                    },
+                    "sex": {
+                      "type": ["string", "null"],
+                      "enum": ["MASCULINO", "FEMENINO", null]
+                    },
+                    "heightCm": {
+                      "type": ["number", "null"]
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "weightKg": {
+                      "type": ["number", "null"],
+                      "description": "Último peso registrado."
+                    },
+                    "trainer": {
+                      "type": ["object", "null"],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Profesor asignado (asignación vigente)."
+                    },
+                    "healthDataConsent": {
+                      "type": "boolean"
+                    },
+                    "healthConsentText": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sin perfil de alumno.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveOwnStudentContext",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Declarar contexto del alumno (FL-01)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "experienceLevel": {
+                    "type": "string",
+                    "enum": ["PRINCIPIANTE", "INTERMEDIO", "AVANZADO"]
+                  },
+                  "availableDaysPerWeek": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "birthDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "sex": {
+                    "type": "string",
+                    "enum": ["MASCULINO", "FEMENINO"]
+                  },
+                  "heightCm": {
+                    "type": "number",
+                    "minimum": 100,
+                    "maximum": 250
+                  },
+                  "weightKg": {
+                    "type": "number",
+                    "minimum": 20,
+                    "maximum": 250,
+                    "description": "Se guarda como medición PESO_CORPORAL del día."
+                  }
+                },
+                "required": [
+                  "experienceLevel",
+                  "availableDaysPerWeek",
+                  "birthDate",
+                  "sex",
+                  "heightCm",
+                  "weightKg"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contexto guardado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "experienceLevel": {
+                      "type": ["string", "null"],
+                      "enum": ["PRINCIPIANTE", "INTERMEDIO", "AVANZADO", null]
+                    },
+                    "availableDaysPerWeek": {
+                      "type": ["integer", "null"]
+                    },
+                    "birthDate": {
+                      "type": ["string", "null"],
+                      "format": "date"
+                    },
+                    "sex": {
+                      "type": ["string", "null"],
+                      "enum": ["MASCULINO", "FEMENINO", null]
+                    },
+                    "heightCm": {
+                      "type": ["number", "null"]
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campos faltantes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Valores fuera de rango, por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "health_data_consent_required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requiere consentimiento para datos de salud (409 health_data_consent_required, RN-104)."
+      }
+    },
+    "/invitations": {
+      "post": {
+        "operationId": "issueInvitation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Emitir una invitación (FL-19)",
+        "description": "ADMINISTRADOR invita con cualquier rol del gimnasio; ENTRENADOR sólo ALUMNO, que queda asignado a él al completar la cuenta. El token sólo viaja en el correo (se guarda su hash); si el envío falla no se guarda nada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR"]
+                    },
+                    "default": ["ALUMNO"]
+                  }
+                },
+                "required": ["email"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitación emitida y enviada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR"]
+                      }
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "trainerName": {
+                      "type": ["string", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "fields.email / fields.roles.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "email_already_registered o pending_invitation_exists (fields.email).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "invitation_delivery_failed: no se guardó nada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado o rol que el emisor no puede otorgar (forbidden_role).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listInvitations",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Invitaciones emitidas",
+        "description": "El administrador ve las del gimnasio; el entrenador, sólo las suyas.",
+        "responses": {
+          "200": {
+            "description": "Invitaciones, de la más reciente a la más vieja.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "roles": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": ["ALUMNO", "ENTRENADOR", "ADMINISTRADOR"]
+                        }
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["PENDIENTE", "USADA", "VENCIDA", "REVOCADA"]
+                      },
+                      "issuedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "expiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "issuedByName": {
+                        "type": ["string", "null"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol no autorizado o rol que el emisor no puede otorgar (forbidden_role).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/assignments": {
+      "get": {
+        "operationId": "listAssignments",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Alumnos con su entrenador y entrenadores del gimnasio (RF-066)",
+        "responses": {
+          "200": {
+            "description": "Panel de asignaciones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "students": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "trainer": {
+                            "type": ["object", "null"],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "assignedAt": {
+                            "type": ["string", "null"],
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "trainers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "studentCount": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/students/{studentId}/trainer": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "assignTrainer",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Asignar o cambiar el entrenador de un alumno (RF-066)",
+        "description": "Cierra la asignación vigente y abre otra; las rutinas BLOQUEADAS pasan a PROPUESTA y las propuestas de adaptación BLOQUEADAS a PENDIENTE (RF-109, RF-112). Queda en auditoría.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "trainerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": ["trainerId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Asignado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "studentId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "trainer": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "previousTrainerId": {
+                      "type": ["string", "null"]
+                    },
+                    "unblockedRoutines": {
+                      "type": "integer"
+                    },
+                    "unblockedProposals": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "fields.trainerId.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "student_not_found (incluye alumnos de otro gimnasio).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid_trainer: no es entrenador del gimnasio o es el mismo alumno.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/inventory": {
+      "get": {
+        "operationId": "getInventory",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Inventario y catálogo prescribible (FL-20, RN-115 a RN-118)",
+        "description": "PESO_CORPORAL se considera siempre presente. missingPatterns lista los grupos de patrones mínimos que el catálogo prescribible no cubre.",
+        "responses": {
+          "200": {
+            "description": "Inventario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inventory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveInventory",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Declarar el inventario del gimnasio (RF-114)",
+        "description": "Ejercicios de rutinas vigentes que pierden su equipamiento pasan a INCOMPATIBLE y los que lo recuperan vuelven a COMPATIBLE (RN-117). Queda en auditoría.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "present": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["present"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inventario guardado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Inventory"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "markedIncompatible": {
+                          "type": "integer"
+                        },
+                        "restored": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "unknown_equipment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/setup": {
+      "get": {
+        "operationId": "getGymSetup",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Primeros pasos del gimnasio (CB-59)",
+        "responses": {
+          "200": {
+            "description": "Lo que falta para que alguien pueda entrenar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hasTrainer": {
+                      "type": "boolean"
+                    },
+                    "hasInventory": {
+                      "type": "boolean"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/platform/gyms/{gymId}": {
+      "parameters": [
+        {
+          "name": "gymId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateGym",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Editar un gimnasio (HU13 criterios 22 y 23)",
+        "description": "No borra datos. Cambiar la zona horaria de un gimnasio con sesiones registradas exige confirmarCambioDeZona.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string"
+                  },
+                  "zonaHoraria": {
+                    "type": "string"
+                  },
+                  "confirmarCambioDeZona": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Gimnasio actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GymSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Errores por campo (zona no reconocida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "gym_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "gym_name_taken o timezone_change_requires_confirmation (con sessionCount).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo SUPERADMIN.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/platform/gyms/{gymId}/status": {
+      "parameters": [
+        {
+          "name": "gymId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "setGymStatus",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Suspender o reactivar un gimnasio",
+        "description": "No borra datos. Mientras está suspendido, sus usuarios no pueden ingresar y sus sesiones abiertas dejan de valer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "activo": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["activo"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estado actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GymSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "gym_not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo SUPERADMIN.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/me/health-consent": {
+      "post": {
+        "operationId": "grantHealthConsent",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Otorgar el consentimiento para datos de salud (FL-19/A2)",
+        "responses": {
+          "201": {
+            "description": "Contexto actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "experienceLevel": {
+                      "type": ["string", "null"],
+                      "enum": ["PRINCIPIANTE", "INTERMEDIO", "AVANZADO", null]
+                    },
+                    "availableDaysPerWeek": {
+                      "type": ["integer", "null"]
+                    },
+                    "birthDate": {
+                      "type": ["string", "null"],
+                      "format": "date"
+                    },
+                    "sex": {
+                      "type": ["string", "null"],
+                      "enum": ["MASCULINO", "FEMENINO", null]
+                    },
+                    "heightCm": {
+                      "type": ["number", "null"]
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "weightKg": {
+                      "type": ["number", "null"],
+                      "description": "Último peso registrado."
+                    },
+                    "trainer": {
+                      "type": ["object", "null"],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Profesor asignado (asignación vigente)."
+                    },
+                    "healthDataConsent": {
+                      "type": "boolean"
+                    },
+                    "healthConsentText": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sin perfil de alumno.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sólo ALUMNO.",
             "content": {
               "application/json": {
                 "schema": {

@@ -3,8 +3,6 @@ const { createHash } = require('node:crypto');
 // Original Spanish descriptions for local development fixtures. Movement and
 // anatomy references: ACE Exercise Library and NASM Exercise Library.
 // The project's 17-group taxonomy and difficulty levels still require trainer review.
-const SOURCE =
-  'https://www.acefitness.org/resources/everyone/exercise-library/';
 const e = (name, equipment, instructions, extra = {}) => ({
   name,
   equipment,
@@ -1007,7 +1005,8 @@ const catalog = groups.flatMap((group) =>
     movementPattern: entry.pattern ?? group.pattern,
     difficultyLevel: entry.level ?? 'PRINCIPIANTE',
     unilateral: entry.unilateral ?? false,
-    visualResourceUrl: SOURCE,
+    // Fixtures may lack media. A library HTML page is not an exercise image.
+    visualResourceUrl: '',
     primaryMuscle: group.muscle,
     secondaryMuscles: entry.secondary ?? group.secondary,
     equipment: entry.equipment,

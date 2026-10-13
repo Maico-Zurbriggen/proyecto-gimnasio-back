@@ -20,7 +20,8 @@ export interface StudentStatusDto {
   faltasConsecutivas: number;
   blockedAt: string | null;
   submittedAt: string | null;
-  alturaCm: number;
+  /** `null` mientras el alumno no completó su puesta en contexto (FL-01). */
+  alturaCm: number | null;
 }
 
 export interface TrainerStudentDto extends StudentStatusDto {

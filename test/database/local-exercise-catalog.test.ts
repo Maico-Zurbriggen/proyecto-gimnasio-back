@@ -119,7 +119,7 @@ describe('expanded local exercise catalog', () => {
         exercise.difficultyLevel,
       );
       expect(typeof exercise.unilateral).toBe('boolean');
-      expect(new URL(exercise.visualResourceUrl).protocol).toBe('https:');
+      expect(exercise.visualResourceUrl).toBe('');
       expect(exercise.joints.length).toBeGreaterThan(0);
       expect(new Set(exercise.equipment).size).toBe(exercise.equipment.length);
       expect(new Set(exercise.joints).size).toBe(exercise.joints.length);

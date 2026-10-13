@@ -4,6 +4,8 @@ import { ContextInsufficientError } from '../../domain/errors/context-insufficie
 
 import {
   EmptyPrefilteredCatalogError,
+  GenerationContextChangedError,
+  GenerationUnableError,
   GeneratedRoutineInvalidError,
   MissingGenerationInputError,
   ProposedRoutineAlreadyExistsError,
@@ -103,7 +105,7 @@ export class RoutineGenerationsController {
       }
 
       if (error instanceof EmptyPrefilteredCatalogError) {
-        res.status(422).json({ error: 'empty_prefiltered_catalog' });
+        res.status(422).json({ error: 'empty_gym_catalog' });
         return;
       }
 
@@ -192,6 +194,16 @@ export class RoutineGenerationsController {
       });
       res.status(201).json(result);
     } catch (error) {
+      if (error instanceof GenerationContextChangedError) {
+        res.status(409).json({ error: 'generation_context_changed' });
+        return;
+      }
+      if (error instanceof GenerationUnableError) {
+        res
+          .status(422)
+          .json({ error: 'generation_unable', reason: error.reason });
+        return;
+      }
       if (error instanceof RoutineGenerationNotFoundError) {
         res.status(404).json({ error: 'routine_generation_not_found' });
         return;

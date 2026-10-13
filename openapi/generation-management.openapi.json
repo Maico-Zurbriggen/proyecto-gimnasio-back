@@ -1,0 +1,452 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Gym generation parameters and trainer regeneration",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/gyms/me/generation-settings": {
+      "get": {
+        "operationId": "getGenerationSettings",
+        "summary": "Current session gym settings; administrator or trainer",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Captured gym policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationSettingsSnapshot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session"
+          },
+          "403": {
+            "description": "Role or current assignment is not authorized"
+          },
+          "409": {
+            "description": "Pending regeneration, changed candidate, resolved proposal or stale configuration revision"
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveGenerationSettings",
+        "summary": "Administrator configures its own gym; optimistic revision required",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "description": "Null settings leaves training choices to AI. Explicit ranges apply to all series; warmupSetsPerExercise is additional to work sets. Limits and total 500-set transport capacity are validated. Every save increments revision and is audited.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationSettingsSnapshot"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationSettingsSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ranges or capacity exceeded"
+          },
+          "401": {
+            "description": "Missing session"
+          },
+          "403": {
+            "description": "Role or current assignment is not authorized"
+          },
+          "409": {
+            "description": "Pending regeneration, changed candidate, resolved proposal or stale configuration revision"
+          }
+        }
+      }
+    },
+    "/proposals/{proposalId}/regeneration": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "proposalId",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "regenerateProposal",
+        "summary": "Assigned trainer regenerates a pending automatic ESTRUCTURA proposal",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "description": "Asynchronous and idempotent. Retains the old candidate until a different, valid result replaces it. Never changes the active version. Full gym catalog and current parameter revision are captured in the request. Approval is blocked while pending.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateProposalInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durable regeneration request (possibly terminal on dispatch failure)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalRegeneration"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing session"
+          },
+          "403": {
+            "description": "Role or current assignment is not authorized"
+          },
+          "404": {
+            "description": "Unknown proposal"
+          },
+          "409": {
+            "description": "Pending regeneration, changed candidate, resolved proposal or stale configuration revision"
+          }
+        }
+      },
+      "get": {
+        "operationId": "getProposalRegeneration",
+        "summary": "Assigned trainer polls and finalizes the last regeneration",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "description": "Returns null if there was no regeneration. Reloading resumes a reserved request. Validates current profile, assignment, source version, enabled catalog and gym configuration before replacing the pending candidate. Failure keeps the old candidate and creates one alert.",
+        "responses": {
+          "200": {
+            "description": "Latest regeneration, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProposalRegeneration"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing session"
+          },
+          "403": {
+            "description": "Role or current assignment is not authorized"
+          },
+          "404": {
+            "description": "Unknown proposal"
+          },
+          "409": {
+            "description": "Pending regeneration, changed candidate, resolved proposal or stale configuration revision"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "gym_session"
+      }
+    },
+    "schemas": {
+      "GenerationSettings": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "minExercisesPerDay": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxExercisesPerDay": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "minWorkSetsPerExercise": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxWorkSetsPerExercise": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "minRepetitions": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxRepetitions": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "minRestSeconds": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxRestSeconds": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "warmupSetsPerExercise": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "minExercisesPerDay",
+          "maxExercisesPerDay",
+          "minWorkSetsPerExercise",
+          "maxWorkSetsPerExercise",
+          "minRepetitions",
+          "maxRepetitions",
+          "minRestSeconds",
+          "maxRestSeconds",
+          "warmupSetsPerExercise"
+        ],
+        "additionalProperties": false
+      },
+      "GenerationSettingsSnapshot": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "settings": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "minExercisesPerDay": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "maxExercisesPerDay": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "minWorkSetsPerExercise": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "maxWorkSetsPerExercise": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "minRepetitions": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "maxRepetitions": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "minRestSeconds": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "maxRestSeconds": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "warmupSetsPerExercise": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "minExercisesPerDay",
+                  "maxExercisesPerDay",
+                  "minWorkSetsPerExercise",
+                  "maxWorkSetsPerExercise",
+                  "minRepetitions",
+                  "maxRepetitions",
+                  "minRestSeconds",
+                  "maxRestSeconds",
+                  "warmupSetsPerExercise"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["settings", "revision"],
+        "additionalProperties": false
+      },
+      "RegenerateProposalInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "feedback": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "candidateRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["feedback", "idempotencyKey", "candidateRequestId"],
+        "additionalProperties": false
+      },
+      "ProposalRegeneration": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "proposalId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "trainerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "feedback": {
+            "type": "string"
+          },
+          "candidateRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "requestId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": ["PENDIENTE", "COMPLETADA", "NO_DISPONIBLE"]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "proposalId",
+          "trainerId",
+          "feedback",
+          "candidateRequestId",
+          "requestId",
+          "state",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "ProposalRegenerationReference": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "candidateRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["candidateRequestId"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "x-proposal-review-extension": {
+    "endpoint": "GET /proposals/{proposalId}",
+    "optionalProperty": "regeneration",
+    "schema": {
+      "$ref": "#/components/schemas/ProposalRegenerationReference"
+    },
+    "description": "Present for automatically generated structure proposals. Send candidateRequestId when resolving to prevent approving a stale candidate."
+  }
+}

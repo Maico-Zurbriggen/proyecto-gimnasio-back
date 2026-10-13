@@ -7,7 +7,11 @@ import { PrismaAuthRepository } from '../../src/modules/auth/infrastructure/pers
 import { PrismaGoalsRepository } from '../../src/modules/goals/infrastructure/persistence/prisma-goals.repository';
 import { PrismaGenerationContextRepository } from '../../src/modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
 import { PrismaPrescriptionsRepository } from '../../src/modules/prescriptions/infrastructure/persistence/prisma-prescriptions.repository';
-import { GoalMismatchConfirmationError } from '../../src/modules/prescriptions/domain/errors/prescription-errors';
+import { routineReviewToken } from '../../src/modules/prescriptions/infrastructure/persistence/routine-review-token';
+import {
+  GoalMismatchConfirmationError,
+  RoutineNotReviewableError,
+} from '../../src/modules/prescriptions/domain/errors/prescription-errors';
 import { hashearToken } from '../../src/modules/auth/domain/services/session-token';
 
 // Exclusivamente base efímera local: nunca usa DATABASE_URL ni Neon por defecto.
@@ -48,7 +52,9 @@ describe.skipIf(!prisma)('HU09/HU10 PostgreSQL invariants', () => {
     await db.gym.create({
       data: {
         id: gymId,
-        name: 'HU09/HU10 test',
+        // El nombre de gimnasio es único (HU13) y los fixtures con auditoría
+        // se conservan: cada prueba usa el suyo.
+        name: `HU09/HU10 test ${gymId}`,
         timezone: 'America/Argentina/Buenos_Aires',
       },
     });
@@ -378,7 +384,7 @@ describe.skipIf(!prisma)('HU09/HU10 PostgreSQL invariants', () => {
     const context = await new PrismaGenerationContextRepository(
       db,
     ).getStudentContext(studentId, new Date('2026-06-01T03:00:00Z'));
-    expect(context!.minimizedContext.objetivosActivos).toEqual(['hipertrofia']);
+    expect(context!.minimizedContext.objetivosActivos).toEqual(['HIPERTROFIA']);
   });
   it('enforces current trainer assignment and gym isolation, and loses access as soon as assignment ends', async () => {
     expect(await goals.read(trainer, studentId)).toBeNull();
@@ -472,21 +478,43 @@ describe.skipIf(!prisma)('HU09/HU10 PostgreSQL invariants', () => {
     const proposed = await routine('PROPUESTA');
     const prescriptions = new PrismaPrescriptionsRepository(db);
     const review = {
+      studentId,
       routineId: proposed.id,
       versionId: proposed.versions[0]!.id,
+      reviewToken: await routineReviewToken(
+        db,
+        studentId,
+        proposed.versions[0]!.id,
+        [],
+      ),
       reviewerTrainerId: trainerId,
       result: 'APROBADA' as const,
       observation: null,
-      previousActiveRoutineId: active.id,
     };
     await expect(prescriptions.review(review)).rejects.toBeInstanceOf(
       GoalMismatchConfirmationError,
     );
-    await prescriptions.review({ ...review, confirmGoalMismatch: true });
+    // HU17: la vigente anterior se archiva dentro de la misma transacción,
+    // antes de que la nueva ocupe su lugar (una sola VIGENTE por alumno).
+    await expect(
+      prescriptions.review({ ...review, confirmGoalMismatch: true }),
+    ).resolves.toEqual({ archivedRoutineId: active.id });
     expect(
       (await db.routine.findUniqueOrThrow({ where: { id: proposed.id } }))
         .state,
     ).toBe('VIGENTE');
+    expect(
+      (await db.routine.findUniqueOrThrow({ where: { id: active.id } })).state,
+    ).toBe('ARCHIVADA');
+    // Una segunda decisión sobre la misma rutina ya no procede.
+    await expect(
+      prescriptions.review({ ...review, confirmGoalMismatch: true }),
+    ).rejects.toBeInstanceOf(RoutineNotReviewableError);
+    expect(
+      await db.notice.count({
+        where: { recipientUserId: studentId, type: 'RUTINA_EN_VIGENCIA' },
+      }),
+    ).toBe(1);
     await goals.declare(actor, 'RESISTENCIA_MUSCULAR');
     expect(
       (

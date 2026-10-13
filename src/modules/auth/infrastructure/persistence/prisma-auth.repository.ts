@@ -24,6 +24,7 @@ export class PrismaAuthRepository implements AuthRepository {
         gymId: true,
         passwordHash: true,
         state: true,
+        gym: { select: { active: true } },
         roles: { select: { role: true } },
       },
     });
@@ -36,7 +37,8 @@ export class PrismaAuthRepository implements AuthRepository {
       id: user.id,
       gymId: user.gymId,
       passwordHash: user.passwordHash,
-      state: user.state,
+      // HU13: un gimnasio suspendido deja a sus usuarios sin acceso.
+      state: user.gym.active ? user.state : 'SUSPENDIDO',
       roles: user.roles.map((assignment) => assignment.role as UserRole),
     };
   }
@@ -77,6 +79,7 @@ export class PrismaAuthRepository implements AuthRepository {
           select: {
             gymId: true,
             state: true,
+            gym: { select: { active: true } },
             roles: { select: { role: true } },
           },
         },
@@ -95,7 +98,8 @@ export class PrismaAuthRepository implements AuthRepository {
       lastActivityAt: session.lastActivityAt,
       expiresAt: session.expiresAt,
       revokedAt: session.revokedAt,
-      userState: session.user.state,
+      // HU13: suspender el gimnasio corta también las sesiones abiertas.
+      userState: session.user.gym.active ? session.user.state : 'SUSPENDIDO',
     };
   }
 

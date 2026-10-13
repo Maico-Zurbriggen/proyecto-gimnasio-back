@@ -1,20 +1,46 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 
+import {
+  requireAuth,
+  requireRoles,
+} from '../../../../shared/middleware/auth.middleware';
+
+import {
+  CONSULTAS_DE_ENLACE_POR_VENTANA,
+  INTENTOS_DE_ALTA_POR_VENTANA,
+} from '../../application/ports/attempt-limiter';
 import type { InvitationsController } from './invitations.controller';
 
 export function createInvitationsRouter(
   controller: InvitationsController,
+  limitAttempts: (scope: string, limit: number) => RequestHandler,
 ): Router {
   const router = Router();
 
+  // FL-19: emitir y listar exige sesión de administrador o entrenador. Qué
+  // roles puede otorgar cada uno lo decide el dominio, no la ruta.
+  const emisores = [requireAuth, requireRoles('ADMINISTRADOR', 'ENTRENADOR')];
+  router.post('/invitations', ...emisores, controller.issue);
+  router.get('/invitations', ...emisores, controller.list);
+  router.delete('/invitations/:invitationId', ...emisores, controller.revoke);
+
   // Las dos rutas son públicas por definición: quien las usa todavía no tiene
-  // cuenta. La invitación misma es la credencial (RF-116).
+  // cuenta. La invitación misma es la credencial (RF-116), y por eso los
+  // intentos desde un mismo origen están limitados (RNF-17).
 
   // HU06 - T1 y T6: estado de la invitación.
-  router.get('/invitations/:token', controller.validate);
+  router.get(
+    '/invitations/:token',
+    limitAttempts('invitation-validate', CONSULTAS_DE_ENLACE_POR_VENTANA),
+    controller.validate,
+  );
 
   // HU06 - T2, T3 y T4: completar la cuenta con nombre y contraseña.
-  router.post('/invitations/:token/complete', controller.complete);
+  router.post(
+    '/invitations/:token/complete',
+    limitAttempts('invitation-complete', INTENTOS_DE_ALTA_POR_VENTANA),
+    controller.complete,
+  );
 
   return router;
 }

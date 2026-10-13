@@ -1,8 +1,14 @@
-import { RoutineNotFoundError } from '../../domain/errors/prescription-errors';
+import { requiresGoalConfirmation } from '../../../goals/domain/goal-policy';
+import {
+  RoutineNotFoundError,
+  TemplateNotFoundError,
+} from '../../domain/errors/prescription-errors';
 import type {
+  PendingRoutineReview,
   PrescriptionsRepository,
   RoutineContent,
   RoutineSummary,
+  RoutineTemplateDetail,
   RoutineTemplateSummary,
 } from '../ports/prescriptions.repository';
 
@@ -12,6 +18,28 @@ export class ListRoutineTemplatesUseCase {
 
   execute(trainerId: string): Promise<RoutineTemplateSummary[]> {
     return this.prescriptions.listTemplatesForTrainer(trainerId);
+  }
+}
+
+/**
+ * Detalle editable de una plantilla del gimnasio del entrenador, con sus
+ * días, ejercicios y series ordenados.
+ */
+export class GetRoutineTemplateUseCase {
+  constructor(private readonly prescriptions: PrescriptionsRepository) {}
+
+  async execute(input: {
+    trainerId: string;
+    templateId: string;
+  }): Promise<RoutineTemplateDetail> {
+    const detail = await this.prescriptions.findTemplateDetail(
+      input.trainerId,
+      input.templateId,
+    );
+    if (!detail) {
+      throw new TemplateNotFoundError();
+    }
+    return detail;
   }
 }
 
@@ -45,5 +73,30 @@ export class GetRoutineContentUseCase {
       throw new RoutineNotFoundError();
     }
     return content;
+  }
+}
+
+/**
+ * Bandeja de aceptación y rechazo de rutinas del entrenador (HU17).
+ *
+ * El alcance lo pone la asignación vigente: un entrenador nunca ve propuestas
+ * de alumnos que no están en su cartera (RF-066).
+ */
+export class ListPendingRoutineReviewsUseCase {
+  constructor(private readonly prescriptions: PrescriptionsRepository) {}
+
+  async execute(
+    trainerId: string,
+  ): Promise<(PendingRoutineReview & { goalMismatch: boolean })[]> {
+    const pending =
+      await this.prescriptions.listPendingReviewsForTrainer(trainerId);
+    // RN-40: se anticipa en la bandeja que aprobarla exigirá confirmación.
+    return pending.map((item) => ({
+      ...item,
+      goalMismatch: requiresGoalConfirmation(
+        item.routineType,
+        item.currentGoal,
+      ),
+    }));
   }
 }

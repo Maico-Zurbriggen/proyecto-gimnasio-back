@@ -1,4 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
+import { CatalogError } from '../../../exercise-catalog/domain/catalog';
+import { GenerationContextChangedError } from '../../../routine-generations/domain/errors/routine-generation-errors';
 
 import { TrainerNotAssignedError } from '../../../students/domain/errors/student-errors';
 import type { GetProposalReviewUseCase } from '../../application/use-cases/get-proposal-review.use-case';
@@ -21,6 +23,14 @@ function sendProposalError(
   res: Response,
   next: NextFunction,
 ): void {
+  if (error instanceof GenerationContextChangedError) {
+    res.status(409).json({ error: 'generation_context_changed' });
+    return;
+  }
+  if (error instanceof CatalogError) {
+    res.status(error.status).json({ error: error.code });
+    return;
+  }
   if (error instanceof TrainerNotAssignedError) {
     res.status(403).json({ error: 'forbidden_not_assigned' });
     return;

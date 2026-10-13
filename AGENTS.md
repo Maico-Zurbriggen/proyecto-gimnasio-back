@@ -92,8 +92,10 @@ test/
 - Encapsular el servicio IA detrás de un cliente generado o validado desde su OpenAPI.
 - Frontend nunca conoce la URL de IA; backend es el único consumidor.
 - Crear una solicitud idempotente, minimizar el contexto y aceptar el flujo asíncrono con `202`.
-  - Persistir en `ai_integration.ai_generation_requests` el contexto minimizado y el catálogo prefiltrado completos junto con la solicitud: el servicio IA no tiene acceso a las tablas de dominio, así que no puede resolverlos a partir de un identificador. En la llamada HTTP enviar sólo el UUID ya persistido para que IA lo despache a la cola.
-- Leer estados y resultados de estructuras de integración; validar catálogo, compatibilidad, rangos y permisos antes de crear directamente una rutina `PROPUESTA`.
+  - Persistir en `ai_integration.ai_generation_requests` el contexto minimizado y TODOS los ejercicios aprobados y habilitados del gimnasio, incluidos los propios. En la llamada HTTP enviar sólo el UUID para despacho a la cola; IA no accede al dominio.
+- Las solicitudes nuevas usan contrato `2.0` según ADR 0013. IA decide selección, adecuación y prescripción; backend valida schema, referencias, permisos, revisiones y disponibilidad, sin filtros ni tablas de entrenamiento. Conservar `1.0` sólo para solicitudes anteriores durante la transición.
+- No truncar el catálogo ni generar fallback. Capacidad insuficiente e imposibilidad explicada por IA no crean una rutina.
+- Habilitación explícita por administrador; no derivarla del inventario ni habilitar automáticamente. Conservar historial y exigir revisión del contexto vigente al finalizar/aprobar.
 - Cada intento vence inicialmente a los 120 segundos y admite un único reintento.
 - Tras el segundo fallo declarar generación no disponible; no implementar fallback determinístico.
 - Mantener operativas las plantillas y la creación manual cuando falle generación. Los presets son alcance opcional y, si se implementan, siguen sujetos a aprobación del entrenador.
