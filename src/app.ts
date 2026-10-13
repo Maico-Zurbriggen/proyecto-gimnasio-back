@@ -96,6 +96,7 @@ import {
   IssueInvitationUseCase,
   ListInvitationsUseCase,
 } from './modules/invitations/application/use-cases/issue-invitation.use-case';
+import { RevokeInvitationUseCase } from './modules/invitations/application/use-cases/revoke-invitation.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
 import { InvitationsController } from './modules/invitations/infrastructure/http/invitations.controller';
 import { createAttemptLimit } from './modules/invitations/infrastructure/http/attempt-limit.middleware';
@@ -103,6 +104,13 @@ import { createInvitationsRouter } from './modules/invitations/infrastructure/ht
 import { InMemoryAttemptLimiter } from './modules/invitations/infrastructure/persistence/in-memory-attempt-limiter';
 import { PrismaAttemptLimiter } from './modules/invitations/infrastructure/persistence/prisma-attempt-limiter';
 import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
+import type { PhysicalConditionsRepository } from './modules/physical-conditions/application/ports/physical-conditions.repository';
+import { CloseConditionUseCase } from './modules/physical-conditions/application/use-cases/close-condition.use-case';
+import { DeclareConditionUseCase } from './modules/physical-conditions/application/use-cases/declare-condition.use-case';
+import { ListConditionsUseCase } from './modules/physical-conditions/application/use-cases/list-conditions.use-case';
+import { PhysicalConditionsController } from './modules/physical-conditions/infrastructure/http/physical-conditions.controller';
+import { createPhysicalConditionsRouter } from './modules/physical-conditions/infrastructure/http/physical-conditions.routes';
+import { PrismaPhysicalConditionsRepository } from './modules/physical-conditions/infrastructure/persistence/prisma-physical-conditions.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
 import { CreateManualRoutineUseCase } from './modules/prescriptions/application/use-cases/create-manual-routine.use-case';
@@ -207,6 +215,7 @@ interface AppDependencies {
   proposalsRepository?: ProposalsRepository;
   routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
+  physicalConditionsRepository?: PhysicalConditionsRepository;
   invitationAttemptLimiter?: AttemptLimiter;
   gymsRepository?: GymsRepository;
   timezoneCatalog?: TimezoneCatalog;
@@ -269,6 +278,7 @@ export function createApp({
   proposalsRepository,
   routineRenewalsRepository,
   invitationsRepository,
+  physicalConditionsRepository,
   invitationAttemptLimiter,
   gymsRepository,
   timezoneCatalog,
@@ -378,6 +388,7 @@ export function createApp({
           resolvedClock,
         ),
         new ListInvitationsUseCase(resolvedInvitationsRepo, resolvedClock),
+        new RevokeInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
       ),
       createAttemptLimit(
         invitationAttemptLimiter ??
@@ -446,6 +457,21 @@ export function createApp({
       ),
     ),
   );
+
+  // HU11: declaraciÃ³n, historial y cierre de condiciones fÃ­sicas.
+  const resolvedConditionsRepo =
+    physicalConditionsRepository ??
+    new PrismaPhysicalConditionsRepository(prisma);
+  app.use(
+    createPhysicalConditionsRouter(
+      new PhysicalConditionsController(
+        new DeclareConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new ListConditionsUseCase(resolvedConditionsRepo, resolvedClock),
+        new CloseConditionUseCase(resolvedConditionsRepo, resolvedClock),
+      ),
+    ),
+  );
+
   const blockUserOnInactivityUseCase = new BlockUserOnInactivityUseCase(
     resolvedUsersRepository,
     resolvedClock,

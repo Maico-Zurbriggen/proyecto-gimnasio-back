@@ -6,15 +6,18 @@ import type {
   IssueInvitationUseCase,
   ListInvitationsUseCase,
 } from '../../application/use-cases/issue-invitation.use-case';
+import type { RevokeInvitationUseCase } from '../../application/use-cases/revoke-invitation.use-case';
 import type { ValidateInvitationUseCase } from '../../application/use-cases/validate-invitation.use-case';
 import {
   EmailAlreadyRegisteredError,
+  ForbiddenRevocationError,
   ForbiddenRoleError,
   InvalidDisplayNameError,
   InvitationDeliveryError,
   InvitationAlreadyUsedError,
   InvitationExpiredError,
   InvitationNotFoundError,
+  InvitationNotRevocableError,
   InvitationRevokedError,
   PendingInvitationExistsError,
   UserAlreadyExistsError,
@@ -22,6 +25,7 @@ import {
 } from '../../domain/errors/invitation-errors';
 import {
   completeAccountBodySchema,
+  invitationIdParamSchema,
   invitationTokenParamSchema,
   issueInvitationBodySchema,
 } from './invitations.schemas';
@@ -118,6 +122,14 @@ function sendInvitationError(
     });
     return;
   }
+  if (error instanceof ForbiddenRevocationError) {
+    res.status(403).json({ error: 'forbidden_invitation_revocation' });
+    return;
+  }
+  if (error instanceof InvitationNotRevocableError) {
+    res.status(409).json({ error: 'invitation_not_revocable' });
+    return;
+  }
   if (error instanceof UserAlreadyExistsError) {
     res.status(409).json({
       error: 'user_already_exists',
@@ -135,6 +147,7 @@ export class InvitationsController {
     private readonly completeAccount: CompleteAccountUseCase,
     private readonly issueInvitation: IssueInvitationUseCase,
     private readonly listInvitations: ListInvitationsUseCase,
+    private readonly revokeInvitation: RevokeInvitationUseCase,
   ) {}
 
   /** FL-19/1-2: emisión de una invitación y envío del enlace por correo. */
@@ -171,6 +184,21 @@ export class InvitationsController {
   ): Promise<void> => {
     try {
       res.status(200).json(await this.listInvitations.execute(req.user!));
+    } catch (error) {
+      sendInvitationError(error, res, next);
+    }
+  };
+
+  revoke = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = invitationIdParamSchema.safeParse(req.params);
+      if (!params.success) throw new InvitationNotFoundError();
+      await this.revokeInvitation.execute(req.user!, params.data.invitationId);
+      res.status(204).send();
     } catch (error) {
       sendInvitationError(error, res, next);
     }

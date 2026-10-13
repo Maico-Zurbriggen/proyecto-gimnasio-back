@@ -4,6 +4,10 @@ export const invitationTokenParamSchema = z.object({
   token: z.string().min(1, 'El token de invitación es requerido').max(256),
 });
 
+export const invitationIdParamSchema = z.object({
+  invitationId: z.string().uuid(),
+});
+
 /**
  * El cuerpo sólo exige que los campos estén y tengan un largo razonable; cada
  * falta se informa en su propio campo (criterio 13). La fortaleza de la

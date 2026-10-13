@@ -45,6 +45,7 @@ export interface IssuedInvitation {
 /** Invitación en el listado de quien la emitió. */
 export interface IssuedInvitationRecord {
   id: string;
+  issuedByUserId: string | null;
   emailNormalized: string;
   roles: UserRole[];
   status: InvitationStatus;
@@ -90,6 +91,18 @@ export interface InvitationsRepository {
     gymId: string;
     issuedByUserId?: string;
   }): Promise<IssuedInvitationRecord[]>;
+
+  findIssuedById(
+    invitationId: string,
+    gymId: string,
+  ): Promise<IssuedInvitationRecord | null>;
+
+  /** Revoca y audita atÃ³micamente una invitaciÃ³n que sigue vigente. */
+  revoke(command: {
+    invitationId: string;
+    actorUserId: string;
+    now: Date;
+  }): Promise<boolean>;
 
   /** Busca la invitación por el hash de su token. `null` si no existe. */
   findByTokenHash(tokenHash: string): Promise<InvitationRecord | null>;

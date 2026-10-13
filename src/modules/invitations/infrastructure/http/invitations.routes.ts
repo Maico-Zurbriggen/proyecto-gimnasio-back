@@ -22,6 +22,7 @@ export function createInvitationsRouter(
   const emisores = [requireAuth, requireRoles('ADMINISTRADOR', 'ENTRENADOR')];
   router.post('/invitations', ...emisores, controller.issue);
   router.get('/invitations', ...emisores, controller.list);
+  router.delete('/invitations/:invitationId', ...emisores, controller.revoke);
 
   // Las dos rutas son públicas por definición: quien las usa todavía no tiene
   // cuenta. La invitación misma es la credencial (RF-116), y por eso los

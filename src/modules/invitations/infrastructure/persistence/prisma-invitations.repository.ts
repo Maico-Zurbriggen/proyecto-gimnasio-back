@@ -187,6 +187,7 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
       take: 200,
       select: {
         id: true,
+        issuedByUserId: true,
         emailNormalized: true,
         status: true,
         issuedAt: true,
@@ -197,6 +198,7 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
     });
     return invitations.map((invitation) => ({
       id: invitation.id,
+      issuedByUserId: invitation.issuedByUserId,
       emailNormalized: invitation.emailNormalized,
       roles: invitation.roles.map((r) => r.role as UserRole),
       status: invitation.status,
@@ -204,6 +206,65 @@ export class PrismaInvitationsRepository implements InvitationsRepository {
       expiresAt: invitation.expiresAt,
       issuedByName: invitation.issuedBy?.displayName ?? null,
     }));
+  }
+
+  async findIssuedById(
+    invitationId: string,
+    gymId: string,
+  ): Promise<IssuedInvitationRecord | null> {
+    const invitation = await this.prisma.invitation.findFirst({
+      where: { id: invitationId, gymId, issuedByProvisioning: false },
+      select: {
+        id: true,
+        issuedByUserId: true,
+        emailNormalized: true,
+        status: true,
+        issuedAt: true,
+        expiresAt: true,
+        roles: { select: { role: true } },
+        issuedBy: { select: { displayName: true } },
+      },
+    });
+    return invitation
+      ? {
+          id: invitation.id,
+          issuedByUserId: invitation.issuedByUserId,
+          emailNormalized: invitation.emailNormalized,
+          roles: invitation.roles.map((item) => item.role as UserRole),
+          status: invitation.status,
+          issuedAt: invitation.issuedAt,
+          expiresAt: invitation.expiresAt,
+          issuedByName: invitation.issuedBy?.displayName ?? null,
+        }
+      : null;
+  }
+
+  async revoke(command: {
+    invitationId: string;
+    actorUserId: string;
+    now: Date;
+  }): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const revoked = await tx.invitation.updateMany({
+        where: {
+          id: command.invitationId,
+          status: 'VIGENTE',
+          expiresAt: { gt: command.now },
+        },
+        data: { status: 'REVOCADA' },
+      });
+      if (revoked.count === 0) return false;
+      await tx.auditLog.create({
+        data: {
+          actorUserId: command.actorUserId,
+          operation: 'REVOCACION_INVITACION',
+          entityType: 'INVITATION',
+          entityId: command.invitationId,
+          newValue: { estado: 'REVOCADA' },
+        },
+      });
+      return true;
+    });
   }
 
   async completeAccount(
