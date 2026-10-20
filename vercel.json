@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  },
   "regions": ["gru1"],
   "crons": [
     {
@@ -8,7 +11,7 @@
     },
     {
       "path": "/internal/jobs/routine-renewals",
-      "schedule": "0 * * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }
