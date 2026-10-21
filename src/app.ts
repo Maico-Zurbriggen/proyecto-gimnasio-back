@@ -166,6 +166,20 @@ import {
   StudentContextUseCases,
   type StudentContextRepository,
 } from './modules/student-context/application/student-context.use-cases';
+import {
+  GetAdherenceUseCase,
+  GetSessionComplianceUseCase,
+  GetSignalsUseCase,
+  type IndicatorsRepository,
+} from './modules/indicators/application/indicators.use-cases';
+import { createIndicatorsRouter } from './modules/indicators/infrastructure/indicators.http';
+import { PrismaIndicatorsRepository } from './modules/indicators/infrastructure/prisma-indicators.repository';
+import {
+  GetSetPreloadUseCase,
+  type SetPreloadRepository,
+} from './modules/training-sessions/application/set-preload.use-cases';
+import { PrismaSetPreloadRepository } from './modules/training-sessions/infrastructure/prisma-set-preload.repository';
+import { createTrainingSessionsRouter } from './modules/training-sessions/infrastructure/training-sessions.http';
 import { PrismaStudentContextRepository } from './modules/student-context/infrastructure/prisma-student-context.repository';
 import { createStudentContextRouter } from './modules/student-context/infrastructure/student-context.http';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
@@ -237,6 +251,8 @@ interface AppDependencies {
   timezoneCatalog?: TimezoneCatalog;
   invitationMailer?: InvitationMailer;
   studentContextRepository?: StudentContextRepository;
+  indicatorsRepository?: IndicatorsRepository;
+  setPreloadRepository?: SetPreloadRepository;
   assignmentsRepository?: AssignmentsRepository;
   inventoryRepository?: InventoryRepository;
   prescriptionsRepository?: PrescriptionsRepository;
@@ -301,6 +317,8 @@ export function createApp({
   timezoneCatalog,
   invitationMailer,
   studentContextRepository,
+  indicatorsRepository,
+  setPreloadRepository,
   assignmentsRepository,
   inventoryRepository,
   prescriptionsRepository,
@@ -476,6 +494,27 @@ export function createApp({
     createStudentContextRouter(
       new StudentContextUseCases(
         studentContextRepository ?? new PrismaStudentContextRepository(prisma),
+        resolvedClock,
+      ),
+    ),
+  );
+
+  // HU23: adherencia y cumplimiento derivados de lo registrado.
+  const resolvedIndicatorsRepo =
+    indicatorsRepository ?? new PrismaIndicatorsRepository(prisma);
+  app.use(
+    createIndicatorsRouter(
+      new GetAdherenceUseCase(resolvedIndicatorsRepo, resolvedClock),
+      new GetSessionComplianceUseCase(resolvedIndicatorsRepo, resolvedClock),
+      new GetSignalsUseCase(resolvedIndicatorsRepo, resolvedClock),
+    ),
+  );
+
+  // HU22 - T2: precarga de las series con la última ejecución del alumno.
+  app.use(
+    createTrainingSessionsRouter(
+      new GetSetPreloadUseCase(
+        setPreloadRepository ?? new PrismaSetPreloadRepository(prisma),
         resolvedClock,
       ),
     ),
