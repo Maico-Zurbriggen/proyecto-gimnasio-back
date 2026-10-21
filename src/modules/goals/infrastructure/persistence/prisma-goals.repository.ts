@@ -1,6 +1,10 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
 import type { AuthUser } from '../../../../shared/types/auth';
 import type { TrainingPurpose } from '../../../prescriptions/application/ports/prescriptions.repository';
+import {
+  buildGoalChangeCriterion,
+  buildGoalChangeSupportingData,
+} from '../../../evolution/domain/services/adjustment-evidence';
 import type {
   GoalsRepository,
   GoalRecord,
@@ -206,6 +210,24 @@ export class PrismaGoalsRepository implements GoalsRepository {
       },
     });
     const scheme = purposeSchemes[goal.type];
+    // T1 (RN-84, RF-090): cada ajuste persiste su criterio legible y el dato
+    // que lo sustenta. El criterio es la frase que el entrenador lee en la
+    // bandeja; el dato incluye anterior/nuevo, esquema y alcance.
+    const structureCriterion = buildGoalChangeCriterion(previous, goal.type);
+    const structureEvidence = buildGoalChangeSupportingData({
+      goalId: goal.id,
+      previousGoal: previous,
+      newGoal: goal.type,
+      routineTypeBefore: routine.routineType,
+      exerciseCount: version.days.flatMap((day) => day.exercises).length,
+      scheme: {
+        minSets: scheme.minSets,
+        maxSets: scheme.maxSets,
+        minRepetitions: scheme.minRepetitions,
+        maxRepetitions: scheme.maxRepetitions,
+        restSeconds: scheme.restSeconds,
+      },
+    });
     const proposal = await tx.adaptationProposal.create({
       data: {
         diagnosticId: diagnostic.id,
@@ -219,8 +241,9 @@ export class PrismaGoalsRepository implements GoalsRepository {
               type: 'ESTRUCTURA',
               previousValue: { routine_type: routine.routineType },
               proposedValue: { routine_type: goal.type, scheme },
-              criterion: 'CAMBIO_OBJETIVO',
-              supportingData: { goalId: goal.id, requiresTrainerReview: true },
+              criterion: structureCriterion,
+              supportingData:
+                structureEvidence as unknown as Prisma.InputJsonValue,
             },
             ...version.days.flatMap((day) =>
               day.exercises.map((exercise) => ({
@@ -242,8 +265,21 @@ export class PrismaGoalsRepository implements GoalsRepository {
                   min_working_sets: scheme.minSets,
                   max_working_sets: scheme.maxSets,
                 },
-                criterion: 'CAMBIO_OBJETIVO',
-                supportingData: { goalId: goal.id, requiresTypeChange: true },
+                criterion: structureCriterion,
+                supportingData: buildGoalChangeSupportingData({
+                  goalId: goal.id,
+                  previousGoal: previous,
+                  newGoal: goal.type,
+                  routineTypeBefore: routine.routineType,
+                  exerciseCount: 1,
+                  scheme: {
+                    minSets: scheme.minSets,
+                    maxSets: scheme.maxSets,
+                    minRepetitions: scheme.minRepetitions,
+                    maxRepetitions: scheme.maxRepetitions,
+                    restSeconds: scheme.restSeconds,
+                  },
+                }) as unknown as Prisma.InputJsonValue,
               })),
             ),
           ],
