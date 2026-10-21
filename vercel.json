@@ -12,6 +12,10 @@
     {
       "path": "/internal/jobs/routine-renewals",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/internal/jobs/training-sessions/expire",
+      "schedule": "30 * * * *"
     }
   ]
 }

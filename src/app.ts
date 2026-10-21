@@ -190,6 +190,20 @@ import { BlockUserOnInactivityUseCase } from './modules/users/application/use-ca
 import { UsersController } from './modules/users/infrastructure/http/users.controller';
 import { createUsersRouter } from './modules/users/infrastructure/http/users.routes';
 import { PrismaUsersRepository } from './modules/users/infrastructure/persistence/prisma-users.repository';
+import type { TrainingSessionsRepository } from './modules/training-sessions/application/ports/training-sessions.repository';
+import {
+  AbandonTrainingSessionUseCase,
+  ExpireTrainingSessionsUseCase,
+  FinishTrainingSessionUseCase,
+  GetActiveTrainingSessionUseCase,
+  GetTrainingSessionUseCase,
+  ListTrainingSessionsUseCase,
+  StartTrainingSessionUseCase,
+  UpdateSeriesUseCase,
+} from './modules/training-sessions/application/use-cases/training-sessions.use-cases';
+import { TrainingSessionsController } from './modules/training-sessions/infrastructure/http/training-sessions.controller';
+import { createTrainingSessionsRouter } from './modules/training-sessions/infrastructure/http/training-sessions.routes';
+import { PrismaTrainingSessionsRepository } from './modules/training-sessions/infrastructure/persistence/prisma-training-sessions.repository';
 import { createAuthenticate } from './shared/middleware/auth.middleware';
 import { requireTrainerAssignment } from './shared/middleware/assignment.middleware';
 import { requireStudentMeasurementAccess } from './shared/middleware/student-measurement-access.middleware';
@@ -232,6 +246,7 @@ interface AppDependencies {
   routineGenerationGateway?: RoutineGenerationGateway;
   routineGenerationsRepository?: RoutineGenerationsRepository;
   generatedRoutinesRepository?: GeneratedRoutinesRepository;
+  trainingSessionsRepository?: TrainingSessionsRepository;
   idGenerator?: IdGenerator;
 }
 
@@ -295,6 +310,7 @@ export function createApp({
   routineGenerationGateway,
   routineGenerationsRepository,
   generatedRoutinesRepository,
+  trainingSessionsRepository,
   idGenerator,
 }: AppDependencies = {}) {
   const app = express();
@@ -662,6 +678,45 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+  // RF-027 — Ciclo de vida de la sesión (FL-05, FL-07, RN-50 a RN-61).
+  // Pausar no es una transición: es estado local del cliente (CB-25, FL-07).
+  const resolvedTrainingSessionsRepo =
+    trainingSessionsRepository ?? new PrismaTrainingSessionsRepository(prisma);
+  const trainingSessionsController = new TrainingSessionsController(
+    new StartTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new GetActiveTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new UpdateSeriesUseCase(resolvedTrainingSessionsRepo, resolvedClock),
+    new FinishTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new AbandonTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new ExpireTrainingSessionsUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new ListTrainingSessionsUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new GetTrainingSessionUseCase(resolvedTrainingSessionsRepo, resolvedClock),
+  );
+  app.use(
+    createTrainingSessionsRouter(
+      trainingSessionsController,
+      requireMeasurementAccess,
+      requireTrainerAssignment(resolvedAssignments),
+    ),
+  );
   app.use(
     createGenerationSettingsRouter(
       new GenerationSettingsService(
@@ -698,7 +753,7 @@ export function createApp({
     }
 
     // Un error de infraestructura puede incluir argumentos Prisma con secretos.
-    console.error('Unhandled request error');
+    console.error('Unhandled request error', error);
     response.status(500).json({ error: 'internal_server_error' });
   };
 
