@@ -954,6 +954,7 @@ model TrainingSession {
   startedAt        DateTime             @default(now()) @map("started_at") @db.Timestamptz(6)
   completedAt      DateTime?            @map("completed_at") @db.Timestamptz(6)
   occurredOn       DateTime             @map("occurred_on") @db.Date
+  lastActivityAt   DateTime             @default(now()) @map("last_activity_at") @db.Timestamptz(6)
   simulated        Boolean              @default(false)
   student          StudentProfile       @relation(fields: [studentId], references: [userId], onDelete: Restrict)
   routine          Routine              @relation(fields: [routineId], references: [id], onDelete: Restrict)
@@ -965,6 +966,7 @@ model TrainingSession {
   @@index([studentId, occurredOn])
   @@index([routineId])
   @@index([routineVersionId])
+  @@index([state, lastActivityAt])
   @@map("training_sessions")
   @@schema("app")
 }
