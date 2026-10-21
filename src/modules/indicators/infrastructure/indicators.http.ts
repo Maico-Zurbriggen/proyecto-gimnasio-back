@@ -14,6 +14,7 @@ import {
   SessionNotFoundError,
   type GetAdherenceUseCase,
   type GetSessionComplianceUseCase,
+  type GetSignalsUseCase,
 } from '../application/indicators.use-cases';
 
 const studentParams = z.object({
@@ -35,6 +36,7 @@ function sendError(error: unknown, res: Response, next: NextFunction): void {
 export function createIndicatorsRouter(
   getAdherence: GetAdherenceUseCase,
   getSessionCompliance: GetSessionComplianceUseCase,
+  getSignals: GetSignalsUseCase,
 ): Router {
   const router = Router();
 
@@ -88,6 +90,28 @@ export function createIndicatorsRouter(
               params.data.studentId,
             ),
           );
+      } catch (error) {
+        sendError(error, res, next);
+      }
+    },
+  );
+
+  // HU26 - T1: estancamiento, caída de adherencia y desbalance.
+  router.get(
+    '/students/:studentId/indicators/signals',
+    ...propiosOAsignados,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const params = studentParams.safeParse(req.params);
+        if (!params.success) {
+          res.status(400).json({
+            error: 'invalid_request_parameters',
+            details: params.error.flatten(),
+          });
+          return;
+        }
+
+        res.status(200).json(await getSignals.execute(params.data.studentId));
       } catch (error) {
         sendError(error, res, next);
       }

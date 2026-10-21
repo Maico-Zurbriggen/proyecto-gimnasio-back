@@ -7,6 +7,8 @@ import type {
   SesionDeAdherencia,
 } from '../domain/adherence';
 import type { RegistroDeSerie } from '../domain/compliance';
+import type { SesionDelPeriodo } from '../domain/signals';
+import type { Participacion } from '../domain/volume';
 
 export class PrismaIndicatorsRepository implements IndicatorsRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -107,5 +109,66 @@ export class PrismaIndicatorsRepository implements IndicatorsRepository {
     }
 
     return session.setRecords;
+  }
+
+  async findSessionsWithSeriesSince(
+    studentId: string,
+    desde: Date,
+  ): Promise<SesionDelPeriodo[]> {
+    if (!isUuid(studentId)) {
+      return [];
+    }
+
+    const rows = await this.prisma.trainingSession.findMany({
+      where: { studentId, occurredOn: { gte: desde } },
+      select: {
+        occurredOn: true,
+        state: true,
+        setRecords: {
+          select: {
+            warmup: true,
+            completed: true,
+            performedLoad: true,
+            performedRepetitions: true,
+            prescribedExerciseId: true,
+            performedExerciseId: true,
+            // El volumen se imputa al ejercicio EJECUTADO, no al prescripto
+            // (RN-56): si hubo sustitución, el trabajo fue del sustituto.
+            performedExercise: {
+              select: {
+                muscles: { select: { muscleCode: true, participation: true } },
+              },
+            },
+            prescribedExercise: {
+              select: {
+                muscles: { select: { muscleCode: true, participation: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { occurredOn: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      occurredOn: row.occurredOn,
+      completada: row.state === 'COMPLETADA' || row.state === 'BLOQUEADA',
+      series: row.setRecords.map((record) => {
+        const ejercicio = record.performedExercise ?? record.prescribedExercise;
+
+        return {
+          exerciseId: record.performedExerciseId ?? record.prescribedExerciseId,
+          warmup: record.warmup,
+          completed: record.completed,
+          performedLoad:
+            record.performedLoad === null ? null : Number(record.performedLoad),
+          performedRepetitions: record.performedRepetitions,
+          musculos: ejercicio.muscles.map((muscle) => ({
+            grupo: muscle.muscleCode,
+            participacion: muscle.participation as Participacion,
+          })),
+        };
+      }),
+    }));
   }
 }

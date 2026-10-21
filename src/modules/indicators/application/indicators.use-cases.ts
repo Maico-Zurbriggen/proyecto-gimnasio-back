@@ -11,6 +11,16 @@ import {
   type Cumplimiento,
   type RegistroDeSerie,
 } from '../domain/compliance';
+import {
+  detectarCaidaDeAdherencia,
+  detectarDesbalance,
+  detectarEstancamiento,
+  type CaidaAdherenciaDetalle,
+  type DesbalanceDetalle,
+  type EstancamientoDetalle,
+  type Senal,
+  type SesionDelPeriodo,
+} from '../domain/signals';
 
 /** Lo que el módulo necesita leer para calcular los indicadores. */
 export interface IndicatorsRepository {
@@ -33,6 +43,15 @@ export interface IndicatorsRepository {
     sessionId: string,
     studentId: string,
   ): Promise<RegistroDeSerie[] | null>;
+
+  /**
+   * Sesiones del período con sus series, carga ejecutada y clasificación
+   * muscular del ejercicio: es lo que las señales de HU26 necesitan leer.
+   */
+  findSessionsWithSeriesSince(
+    studentId: string,
+    desde: Date,
+  ): Promise<SesionDelPeriodo[]>;
 }
 
 /** Indicadores de adherencia de un alumno (HU23 - T1). */
@@ -119,6 +138,63 @@ export class GetSessionComplianceUseCase {
       cumplimientoDeSeries: cumplimientoDeSeries(registros),
       cumplimientoDeRepeticiones: cumplimientoDeRepeticiones(registros),
       calculadoEl: this.clock.now().toISOString(),
+    };
+  }
+}
+
+/** Señales de seguimiento de un alumno (HU26 - T1). */
+export interface SignalsDto {
+  studentId: string;
+  /** Una entrada por ejercicio con actividad en el período. */
+  estancamiento: Senal<EstancamientoDetalle>[];
+  caidaDeAdherencia: Senal<CaidaAdherenciaDetalle>;
+  desbalance: Senal<DesbalanceDetalle[]>;
+  calculadoEl: string;
+}
+
+/**
+ * Señales de seguimiento (HU26 - T1, RN-74 a RN-77).
+ *
+ * Responden qué alumnos requieren atención. Cada señal informa su estado por
+ * separado —detectada, sin señal, o datos insuficientes—, porque RN-77 exige
+ * distinguir la ausencia por falta de datos de la ausencia por normalidad.
+ */
+export class GetSignalsUseCase {
+  constructor(
+    private readonly indicators: IndicatorsRepository,
+    private readonly clock: Clock,
+  ) {}
+
+  async execute(studentId: string): Promise<SignalsDto> {
+    const now = this.clock.now();
+    // Seis semanas: el período de diagnóstico de D2/§3, que es el más largo
+    // que necesita alguna de las tres señales.
+    const desde = new Date(now.getTime() - 6 * 7 * 24 * 60 * 60 * 1000);
+
+    const [sesionesConSeries, sesiones, frecuencias] = await Promise.all([
+      this.indicators.findSessionsWithSeriesSince(studentId, desde),
+      this.indicators.findSessionsSince(studentId, desde),
+      this.indicators.findTargetFrequencies(studentId),
+    ]);
+
+    // El estancamiento se evalúa por ejercicio: un alumno puede progresar en
+    // uno y estar trabado en otro.
+    const ejercicios = [
+      ...new Set(
+        sesionesConSeries.flatMap((sesion) =>
+          sesion.series.map((serie) => serie.exerciseId),
+        ),
+      ),
+    ];
+
+    return {
+      studentId,
+      estancamiento: ejercicios.map((exerciseId) =>
+        detectarEstancamiento(sesionesConSeries, exerciseId, now),
+      ),
+      caidaDeAdherencia: detectarCaidaDeAdherencia(sesiones, frecuencias, now),
+      desbalance: detectarDesbalance(sesionesConSeries, now),
+      calculadoEl: now.toISOString(),
     };
   }
 }

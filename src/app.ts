@@ -169,6 +169,7 @@ import {
 import {
   GetAdherenceUseCase,
   GetSessionComplianceUseCase,
+  GetSignalsUseCase,
   type IndicatorsRepository,
 } from './modules/indicators/application/indicators.use-cases';
 import { createIndicatorsRouter } from './modules/indicators/infrastructure/indicators.http';
@@ -481,6 +482,7 @@ export function createApp({
     createIndicatorsRouter(
       new GetAdherenceUseCase(resolvedIndicatorsRepo, resolvedClock),
       new GetSessionComplianceUseCase(resolvedIndicatorsRepo, resolvedClock),
+      new GetSignalsUseCase(resolvedIndicatorsRepo, resolvedClock),
     ),
   );
 
