@@ -166,6 +166,13 @@ import {
   StudentContextUseCases,
   type StudentContextRepository,
 } from './modules/student-context/application/student-context.use-cases';
+import {
+  GetAdherenceUseCase,
+  GetSessionComplianceUseCase,
+  type IndicatorsRepository,
+} from './modules/indicators/application/indicators.use-cases';
+import { createIndicatorsRouter } from './modules/indicators/infrastructure/indicators.http';
+import { PrismaIndicatorsRepository } from './modules/indicators/infrastructure/prisma-indicators.repository';
 import { PrismaStudentContextRepository } from './modules/student-context/infrastructure/prisma-student-context.repository';
 import { createStudentContextRouter } from './modules/student-context/infrastructure/student-context.http';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
@@ -223,6 +230,7 @@ interface AppDependencies {
   timezoneCatalog?: TimezoneCatalog;
   invitationMailer?: InvitationMailer;
   studentContextRepository?: StudentContextRepository;
+  indicatorsRepository?: IndicatorsRepository;
   assignmentsRepository?: AssignmentsRepository;
   inventoryRepository?: InventoryRepository;
   prescriptionsRepository?: PrescriptionsRepository;
@@ -286,6 +294,7 @@ export function createApp({
   timezoneCatalog,
   invitationMailer,
   studentContextRepository,
+  indicatorsRepository,
   assignmentsRepository,
   inventoryRepository,
   prescriptionsRepository,
@@ -462,6 +471,16 @@ export function createApp({
         studentContextRepository ?? new PrismaStudentContextRepository(prisma),
         resolvedClock,
       ),
+    ),
+  );
+
+  // HU23: adherencia y cumplimiento derivados de lo registrado.
+  const resolvedIndicatorsRepo =
+    indicatorsRepository ?? new PrismaIndicatorsRepository(prisma);
+  app.use(
+    createIndicatorsRouter(
+      new GetAdherenceUseCase(resolvedIndicatorsRepo, resolvedClock),
+      new GetSessionComplianceUseCase(resolvedIndicatorsRepo, resolvedClock),
     ),
   );
 
