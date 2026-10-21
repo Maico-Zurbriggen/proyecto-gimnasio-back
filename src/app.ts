@@ -179,7 +179,7 @@ import {
   type SetPreloadRepository,
 } from './modules/training-sessions/application/set-preload.use-cases';
 import { PrismaSetPreloadRepository } from './modules/training-sessions/infrastructure/prisma-set-preload.repository';
-import { createTrainingSessionsRouter } from './modules/training-sessions/infrastructure/training-sessions.http';
+import { createTrainingSessionsRouter as createSetPreloadRouter } from './modules/training-sessions/infrastructure/training-sessions.http';
 import { PrismaStudentContextRepository } from './modules/student-context/infrastructure/prisma-student-context.repository';
 import { createStudentContextRouter } from './modules/student-context/infrastructure/student-context.http';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
@@ -512,7 +512,7 @@ export function createApp({
 
   // HU22 - T2: precarga de las series con la última ejecución del alumno.
   app.use(
-    createTrainingSessionsRouter(
+    createSetPreloadRouter(
       new GetSetPreloadUseCase(
         setPreloadRepository ?? new PrismaSetPreloadRepository(prisma),
         resolvedClock,
