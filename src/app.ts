@@ -507,6 +507,7 @@ export function createApp({
       new GetAdherenceUseCase(resolvedIndicatorsRepo, resolvedClock),
       new GetSessionComplianceUseCase(resolvedIndicatorsRepo, resolvedClock),
       new GetSignalsUseCase(resolvedIndicatorsRepo, resolvedClock),
+      trainerAssignments ?? new PrismaTrainerAssignments(prisma),
     ),
   );
 

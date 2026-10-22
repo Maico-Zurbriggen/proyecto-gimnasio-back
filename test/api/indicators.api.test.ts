@@ -13,6 +13,7 @@ import type { SesionDelPeriodo } from '../../src/modules/indicators/domain/signa
 const ALUMNO = '20000000-0000-4000-8000-000000000004';
 const OTRO_ALUMNO = '20000000-0000-4000-8000-000000000005';
 const ENTRENADOR = '20000000-0000-4000-8000-000000000002';
+const ADMINISTRADOR = '20000000-0000-4000-8000-000000000009';
 const SESION = '50000000-0000-4000-8000-000000000001';
 const PRESS = 'ejercicio-press';
 
@@ -28,6 +29,8 @@ interface RepoOptions {
   frecuencias?: FrecuenciaVigente[];
   registros?: RegistroDeSerie[] | null;
   sesionesConSeries?: SesionDelPeriodo[];
+  /** Zona del gimnasio (RN-110). UTC en los tests para que `hace(n)` sea exacto. */
+  zona?: string;
 }
 
 function createRepo(options: RepoOptions = {}) {
@@ -45,8 +48,25 @@ function createRepo(options: RepoOptions = {}) {
     findSessionsWithSeriesSince: vi.fn(
       async () => options.sesionesConSeries ?? [],
     ),
+    findGymTimeZone: vi.fn(async () => options.zona ?? 'UTC'),
   };
   return repo;
+}
+
+/**
+ * `createApp` con la asignación entrenador-alumno vigente.
+ *
+ * Los indicadores exigen el doble filtro completo (HU23, criterio 14): rol y
+ * asignación vigente. Los casos que prueban el rechazo pasan su propio doble.
+ */
+function crearApp(opciones: Parameters<typeof createApp>[0] = {}) {
+  return createApp({
+    trainerAssignments: {
+      isActive: async (trainerId: string, studentId: string) =>
+        trainerId === ENTRENADOR && studentId === ALUMNO,
+    },
+    ...opciones,
+  });
 }
 
 function como(
@@ -91,14 +111,16 @@ describe('Indicators API - HU23', () => {
   describe('GET /students/:id/indicators/adherence (T1)', () => {
     it('devuelve la adherencia sobre la ventana móvil', async () => {
       const repo = createRepo({
+        // RN-110: la ventana son las cuatro semanas completas anteriores a la
+        // semana en curso, así que las sesiones van de 3 a 30 días atrás.
         sesiones: [
-          { occurredOn: hace(2), completada: true },
+          { occurredOn: hace(4), completada: true },
           { occurredOn: hace(5), completada: true },
           { occurredOn: hace(9), completada: true },
           { occurredOn: hace(12), completada: true },
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -117,7 +139,7 @@ describe('Indicators API - HU23', () => {
       const repo = createRepo({
         frecuencias: [{ desde: hace(5), hasta: null, sesionesPorSemana: 4 }],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -138,7 +160,7 @@ describe('Indicators API - HU23', () => {
           { desde: hace(14), hasta: null, sesionesPorSemana: 5 },
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -147,12 +169,13 @@ describe('Indicators API - HU23', () => {
         'ALUMNO',
       ).expect(200);
 
-      // Dos semanas con 5 y dos con 2, no 5 × 4.
-      expect(response.body.adherencia.sesionesEsperadas).toBe(14);
+      // La ventana cierra el lunes anterior, así que el cambio de frecuencia
+      // de hace 14 días reparte las cuatro semanas 1 con 5 y 3 con 2, no 5 × 4.
+      expect(response.body.adherencia.sesionesEsperadas).toBe(11);
     });
 
     it('el entrenador consulta la adherencia de su alumno', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await como(
         app,
@@ -163,7 +186,7 @@ describe('Indicators API - HU23', () => {
     });
 
     it('RNF-14: un alumno no consulta la de otro', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await como(
         app,
@@ -174,7 +197,7 @@ describe('Indicators API - HU23', () => {
     });
 
     it('sin sesión responde 401', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await request(app)
         .get(`/students/${ALUMNO}/indicators/adherence`)
@@ -202,7 +225,7 @@ describe('Indicators API - HU23', () => {
           serie({ completed: false, performedRepetitions: null }),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -226,7 +249,7 @@ describe('Indicators API - HU23', () => {
           serie(),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -241,7 +264,7 @@ describe('Indicators API - HU23', () => {
 
     it('RN-73: declara la ausencia cuando no hay series de trabajo', async () => {
       const repo = createRepo({ registros: [] });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -258,7 +281,7 @@ describe('Indicators API - HU23', () => {
 
     it('RNF-14: una sesión ajena responde 404 genérico', async () => {
       const repo = createRepo({ registros: null });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -271,7 +294,7 @@ describe('Indicators API - HU23', () => {
     });
 
     it('RNF-14: un alumno no consulta la sesión de otro', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await como(
         app,
@@ -282,7 +305,7 @@ describe('Indicators API - HU23', () => {
     });
 
     it('sin sesión responde 401', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await request(app)
         .get(`/students/${ALUMNO}/sessions/${SESION}/compliance`)
@@ -308,7 +331,7 @@ describe('Indicators API - HU26', () => {
           sesionDelPeriodo(10),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -337,7 +360,7 @@ describe('Indicators API - HU26', () => {
           sesionDelPeriodo(10, [serieDelPeriodo({ performedLoad: 110 })]),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -353,7 +376,7 @@ describe('Indicators API - HU26', () => {
       const repo = createRepo({
         sesionesConSeries: [sesionDelPeriodo(20), sesionDelPeriodo(10)],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -388,7 +411,7 @@ describe('Indicators API - HU26', () => {
           sesionDelPeriodo(10, ambos(120)),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -419,7 +442,7 @@ describe('Indicators API - HU26', () => {
         ],
         frecuencias: [{ desde: hace(60), hasta: null, sesionesPorSemana: 2 }],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -444,7 +467,7 @@ describe('Indicators API - HU26', () => {
         ],
         frecuencias: [{ desde: hace(60), hasta: null, sesionesPorSemana: 2 }],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -464,7 +487,7 @@ describe('Indicators API - HU26', () => {
         sesiones: [],
         frecuencias: [{ desde: hace(60), hasta: null, sesionesPorSemana: 3 }],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -481,7 +504,7 @@ describe('Indicators API - HU26', () => {
 
     it('RN-77: sin frecuencia objetivo la caída no se evalúa', async () => {
       const repo = createRepo({ frecuencias: [] });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -506,7 +529,7 @@ describe('Indicators API - HU26', () => {
           sesionDelPeriodo(3),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -531,7 +554,7 @@ describe('Indicators API - HU26', () => {
           sesionDelPeriodo(3, ochoSeries),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -550,7 +573,7 @@ describe('Indicators API - HU26', () => {
           sesionDelPeriodo(10, [serieDelPeriodo({ musculos: [] })]),
         ],
       });
-      const app = createApp({ indicatorsRepository: repo, clock });
+      const app = crearApp({ indicatorsRepository: repo, clock });
 
       const response = await como(
         app,
@@ -566,7 +589,7 @@ describe('Indicators API - HU26', () => {
     });
 
     it('DD-04: informa el instante de cálculo porque el indicador no se persiste', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       const response = await como(
         app,
@@ -581,7 +604,7 @@ describe('Indicators API - HU26', () => {
     });
 
     it('el entrenador consulta las señales de su alumno', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await como(
         app,
@@ -592,7 +615,7 @@ describe('Indicators API - HU26', () => {
     });
 
     it('RNF-14: un alumno no consulta las señales de otro', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await como(
         app,
@@ -603,11 +626,54 @@ describe('Indicators API - HU26', () => {
     });
 
     it('sin sesión responde 401', async () => {
-      const app = createApp({ indicatorsRepository: createRepo(), clock });
+      const app = crearApp({ indicatorsRepository: createRepo(), clock });
 
       await request(app)
         .get(`/students/${ALUMNO}/indicators/signals`)
         .expect(401);
     });
+  });
+
+  describe('acceso a los indicadores (HU23, criterio 14)', () => {
+    const rutas = [
+      `/students/${ALUMNO}/indicators/adherence`,
+      `/students/${ALUMNO}/sessions/${SESION}/compliance`,
+      `/students/${ALUMNO}/indicators/signals`,
+    ];
+
+    it.each(rutas)(
+      'el administrador recibe 403 en %s',
+      async (ruta: string) => {
+        // Son datos de seguimiento personal del alumno, no de operación del
+        // gimnasio: el administrador no los consulta aunque sea staff.
+        const app = crearApp({ indicatorsRepository: createRepo(), clock });
+
+        await como(app, ruta, ADMINISTRADOR, 'ADMINISTRADOR').expect(403);
+      },
+    );
+
+    it.each(rutas)(
+      'un entrenador sin asignación vigente recibe 403 en %s',
+      async (ruta: string) => {
+        // Haber sido su entrenador alguna vez no alcanza: el segundo paso del
+        // doble filtro exige la asignación vigente.
+        const app = crearApp({
+          indicatorsRepository: createRepo(),
+          clock,
+          trainerAssignments: { isActive: async () => false },
+        });
+
+        await como(app, ruta, ENTRENADOR, 'ENTRENADOR').expect(403);
+      },
+    );
+
+    it.each(rutas)(
+      'el entrenador con asignación vigente accede a %s',
+      async (ruta: string) => {
+        const app = crearApp({ indicatorsRepository: createRepo(), clock });
+
+        await como(app, ruta, ENTRENADOR, 'ENTRENADOR').expect(200);
+      },
+    );
   });
 });

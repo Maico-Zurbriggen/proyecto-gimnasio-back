@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   calcularAdherencia,
+  fechaLocal,
+  finDeUltimaSemanaCompleta,
+  inicioDeSemana,
   SEMANAS_MINIMAS_PARA_CALCULAR,
   SEMANAS_VENTANA_ADHERENCIA,
   semanasConRutinaVigente,
@@ -10,6 +13,9 @@ import {
   type SesionDeAdherencia,
 } from './adherence';
 
+// Miércoles. La ventana de RN-110 termina el lunes 2026-10-19 (inicio de la
+// semana en curso, que no está completa) y cubre las cuatro semanas previas:
+// del lunes 2026-09-21 al domingo 2026-10-18. Son los días 3 a 30 hacia atrás.
 const HOY = new Date('2026-10-21T12:00:00Z');
 
 function hace(dias: number): Date {
@@ -84,7 +90,7 @@ describe('adherence (HU23 - T1)', () => {
     const frecuencia = [rutina(60, 4)];
 
     it('calcula el porcentaje sobre la ventana', () => {
-      const sesiones = [sesion(2), sesion(5), sesion(9), sesion(12)];
+      const sesiones = [sesion(4), sesion(5), sesion(9), sesion(12)];
       const resultado = calcularAdherencia(sesiones, frecuencia, HOY);
 
       expect(resultado.disponible).toBe(true);
@@ -112,7 +118,7 @@ describe('adherence (HU23 - T1)', () => {
     });
 
     it('sólo cuenta las sesiones completadas (D6/§4)', () => {
-      const sesiones = [sesion(2), sesion(3, false), sesion(4, false)];
+      const sesiones = [sesion(5), sesion(6, false), sesion(7, false)];
       const resultado = calcularAdherencia(sesiones, frecuencia, HOY);
 
       if (resultado.disponible) {
@@ -121,7 +127,7 @@ describe('adherence (HU23 - T1)', () => {
     });
 
     it('ignora las sesiones anteriores a la ventana', () => {
-      const sesiones = [sesion(2), sesion(40), sesion(50)];
+      const sesiones = [sesion(5), sesion(40), sesion(50)];
       const resultado = calcularAdherencia(sesiones, frecuencia, HOY);
 
       if (resultado.disponible) {
@@ -149,14 +155,27 @@ describe('adherence (HU23 - T1)', () => {
       }
     });
 
+    it('el ejemplo del criterio: objetivo 3 por semana, 9 sesiones = 75%', () => {
+      // 3 por semana durante 4 semanas = 12 esperadas; 9 completadas.
+      const sesiones = Array.from({ length: 9 }, (_, i) => sesion(4 + i * 2));
+      const resultado = calcularAdherencia(sesiones, [rutina(60, 3)], HOY);
+
+      expect(resultado.disponible).toBe(true);
+      if (resultado.disponible) {
+        expect(resultado.sesionesEsperadas).toBe(12);
+        expect(resultado.sesionesCompletadas).toBe(9);
+        expect(resultado.porcentaje).toBe(75);
+      }
+    });
+
     it('calcula correctamente tras un cambio de frecuencia', () => {
       const frecuencias: FrecuenciaVigente[] = [
         { desde: hace(60), hasta: hace(14), sesionesPorSemana: 2 },
         rutina(14, 5),
       ];
       const sesiones = [
-        sesion(1),
-        sesion(3),
+        sesion(4),
+        sesion(5),
         sesion(6),
         sesion(10),
         sesion(20),
@@ -164,11 +183,93 @@ describe('adherence (HU23 - T1)', () => {
       const resultado = calcularAdherencia(sesiones, frecuencias, HOY);
 
       if (resultado.disponible) {
-        // Las cinco sesiones caen dentro de la ventana de 28 días; el
-        // denominador son 14 porque la frecuencia cambió a mitad de ventana.
-        expect(resultado.sesionesEsperadas).toBe(14);
+        // Las cinco sesiones caen dentro de las cuatro semanas completas; el
+        // denominador mezcla las dos frecuencias porque el cambio ocurrió a
+        // mitad de ventana.
+        expect(resultado.sesionesEsperadas).toBe(11);
         expect(resultado.sesionesCompletadas).toBe(5);
-        expect(resultado.porcentaje).toBeCloseTo(35.71, 1);
+        expect(resultado.porcentaje).toBeCloseTo(45.45, 1);
+      }
+    });
+  });
+
+  describe('RN-110 · semanas de lunes a domingo en la zona del gimnasio', () => {
+    it('el inicio de semana de un miércoles es el lunes anterior', () => {
+      // Miércoles 2026-10-21.
+      const lunes = inicioDeSemana(new Date(Date.UTC(2026, 9, 21)));
+
+      expect(lunes.toISOString().slice(0, 10)).toBe('2026-10-19');
+    });
+
+    it('el domingo pertenece a la semana que empezó el lunes anterior', () => {
+      // Domingo 2026-10-18: en JavaScript es el día 0, y tratarlo como primer
+      // día de la semana lo mandaría a la semana siguiente.
+      const lunes = inicioDeSemana(new Date(Date.UTC(2026, 9, 18)));
+
+      expect(lunes.toISOString().slice(0, 10)).toBe('2026-10-12');
+    });
+
+    it('el lunes es su propio inicio de semana', () => {
+      const lunes = inicioDeSemana(new Date(Date.UTC(2026, 9, 19)));
+
+      expect(lunes.toISOString().slice(0, 10)).toBe('2026-10-19');
+    });
+
+    it('la ventana termina donde empieza la semana en curso', () => {
+      const corte = finDeUltimaSemanaCompleta(
+        HOY,
+        'America/Argentina/Buenos_Aires',
+      );
+
+      // La semana en curso no está completa, así que no entra: medir un
+      // miércoles contra una frecuencia semanal entera mostraría al alumno
+      // peor de lo que está.
+      expect(corte.toISOString().slice(0, 10)).toBe('2026-10-19');
+    });
+
+    it('la fecha civil depende de la zona horaria del gimnasio', () => {
+      // 2026-10-19T02:00Z es todavía domingo 18 en Buenos Aires (UTC-3).
+      const instante = new Date('2026-10-19T02:00:00Z');
+
+      expect(
+        fechaLocal(instante, 'America/Argentina/Buenos_Aires')
+          .toISOString()
+          .slice(0, 10),
+      ).toBe('2026-10-18');
+      expect(fechaLocal(instante, 'UTC').toISOString().slice(0, 10)).toBe(
+        '2026-10-19',
+      );
+    });
+
+    it('una sesión del domingo a la noche cuenta en su semana, no en la siguiente', () => {
+      // Domingo 2026-10-18 a las 22:00 de Buenos Aires = lunes 01:00 UTC.
+      // Comparando instantes UTC caería fuera de la ventana; con la fecha
+      // civil del gimnasio queda dentro, que es lo que vivió el alumno.
+      const sesionDominical: SesionDeAdherencia = {
+        occurredOn: new Date('2026-10-19T01:00:00Z'),
+        completada: true,
+      };
+      const resultado = calcularAdherencia(
+        [sesionDominical],
+        [rutina(60, 1)],
+        HOY,
+        SEMANAS_VENTANA_ADHERENCIA,
+        'America/Argentina/Buenos_Aires',
+      );
+
+      expect(resultado.disponible).toBe(true);
+      if (resultado.disponible) {
+        expect(resultado.sesionesCompletadas).toBe(1);
+      }
+    });
+
+    it('la semana en curso no cuenta como semana completa', () => {
+      // Sesión del martes de esta semana: todavía no cerró.
+      const resultado = calcularAdherencia([sesion(1)], [rutina(60, 1)], HOY);
+
+      expect(resultado.disponible).toBe(true);
+      if (resultado.disponible) {
+        expect(resultado.sesionesCompletadas).toBe(0);
       }
     });
   });
