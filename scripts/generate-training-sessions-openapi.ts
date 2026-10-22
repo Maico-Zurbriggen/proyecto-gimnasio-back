@@ -1,5 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
+import { sessionResponseSchemas } from '../src/modules/training-sessions/infrastructure/http/session-response.schemas';
+import { GRUPOS_MUSCULARES } from '../src/modules/indicators/domain/muscle-activity';
 import {
   listSessionsQuerySchema,
   startSessionBodySchema,
@@ -25,96 +27,10 @@ const schemas = {
     'ABANDONADA',
     'BLOQUEADA',
   ]),
-  SessionSetRecord: z.object({
-    position: z.number().int().min(1),
-    prescribedExerciseId: z.uuid(),
-    prescribedExerciseName: z.string(),
-    performedExerciseId: z.uuid().nullable(),
-    performedExerciseName: z.string().nullable(),
-    prescribedMinRepetitions: z.number().int(),
-    prescribedMaxRepetitions: z.number().int(),
-    prescribedLoad: z.number().nullable(),
-    warmup: z.boolean(),
-    performedLoad: z.number().nullable(),
-    performedRepetitions: z.number().int().nullable(),
-    perceivedEffort: z.number().int().nullable(),
-    completed: z.boolean(),
-    additional: z.boolean(),
-    omissionReason: z.string().nullable(),
-    atypicalConfirmed: z.boolean(),
-  }),
-  TrainingSession: z.object({
-    id: z.uuid(),
-    studentId: z.uuid(),
-    routineId: z.uuid(),
-    routineVersionId: z.uuid(),
-    routineDayId: z.uuid(),
-    routineDayName: z.string(),
-    routineDayPosition: z.number().int(),
-    state: z.enum(['EN_CURSO', 'COMPLETADA', 'ABANDONADA', 'BLOQUEADA']),
-    startedAt: z.iso.datetime(),
-    completedAt: z.iso.datetime().nullable(),
-    occurredOn: z.string(),
-    lastActivityAt: z.iso.datetime(),
-    aptitudeWarning: z.enum(['AUSENTE', 'VENCIDA']).nullable(),
-    compatibilityWarnings: z.array(
-      z.object({ exerciseId: z.uuid(), state: z.string() }),
-    ),
-    setRecords: z.array(
-      z.object({
-        position: z.number().int().min(1),
-        prescribedExerciseId: z.uuid(),
-        prescribedExerciseName: z.string(),
-        performedExerciseId: z.uuid().nullable(),
-        performedExerciseName: z.string().nullable(),
-        prescribedMinRepetitions: z.number().int(),
-        prescribedMaxRepetitions: z.number().int(),
-        prescribedLoad: z.number().nullable(),
-        warmup: z.boolean(),
-        performedLoad: z.number().nullable(),
-        performedRepetitions: z.number().int().nullable(),
-        perceivedEffort: z.number().int().nullable(),
-        completed: z.boolean(),
-        additional: z.boolean(),
-        omissionReason: z.string().nullable(),
-        atypicalConfirmed: z.boolean(),
-      }),
-    ),
-  }),
+  ...sessionResponseSchemas,
   ExpireResult: z.object({
     abandoned: z.number().int().nonnegative(),
     blocked: z.number().int().nonnegative(),
-  }),
-  TrainingSessionSummary: z.object({
-    id: z.uuid(),
-    studentId: z.uuid(),
-    routineDayName: z.string(),
-    routineDayPosition: z.number().int(),
-    state: z.enum(['EN_CURSO', 'COMPLETADA', 'ABANDONADA', 'BLOQUEADA']),
-    startedAt: z.iso.datetime(),
-    completedAt: z.iso.datetime().nullable(),
-    occurredOn: z.string(),
-    totalSeries: z.number().int().nonnegative(),
-    completedSeries: z.number().int().nonnegative(),
-  }),
-  TrainingSessionPage: z.object({
-    items: z.array(
-      z.object({
-        id: z.uuid(),
-        studentId: z.uuid(),
-        routineDayName: z.string(),
-        routineDayPosition: z.number().int(),
-        state: z.enum(['EN_CURSO', 'COMPLETADA', 'ABANDONADA', 'BLOQUEADA']),
-        startedAt: z.iso.datetime(),
-        completedAt: z.iso.datetime().nullable(),
-        occurredOn: z.string(),
-        totalSeries: z.number().int().nonnegative(),
-        completedSeries: z.number().int().nonnegative(),
-      }),
-    ),
-    total: z.number().int().nonnegative(),
-    page: z.number().int().min(1),
-    pageSize: z.number().int().min(1),
   }),
   Error: z.object({ error: z.string(), details: z.unknown().optional() }),
 };
@@ -147,9 +63,39 @@ const document = {
   openapi: '3.1.0',
   info: {
     title: 'Training sessions lifecycle',
-    version: '1.0.0',
+    version: '1.1.0',
   },
   paths: {
+    '/students/{studentId}/indicators/muscle-activity': {
+      get: {
+        operationId: 'getMuscleActivity',
+        summary:
+          'Volumen en series efectivas y frecuencia por grupo muscular (HU25)',
+        description:
+          'Alumno propietario o entrenador con asignación vigente del mismo gimnasio. Excluye simuladas, EN_CURSO, ABANDONADA, calentamiento, omisiones e incompletas. Usa el ejercicio ejecutado y cuenta series adicionales. Fechas de ocurrencia locales, límites inclusivos. No permite futuro en el gimnasio. SIN_DATOS devuelve null; CALCULADO puede devolver cero. El resultado se deriva en cada consulta.',
+        security,
+        parameters: [
+          studentIdParam,
+          ...['from', 'to'].map((name) => ({
+            in: 'query',
+            name,
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          })),
+        ],
+        responses: {
+          '200': {
+            description: 'Actividad muscular calculada',
+            content: json({ $ref: '#/components/schemas/MuscleActivity' }),
+          },
+          '400': { description: 'Período inválido' },
+          '401': { description: 'Sin sesión' },
+          '403': {
+            description: 'Acceso no autorizado, sin revelar existencia',
+          },
+        },
+      },
+    },
     '/students/{studentId}/training-sessions': {
       post: {
         operationId: 'startTrainingSession',
@@ -181,7 +127,7 @@ const document = {
         operationId: 'listTrainingSessions',
         summary: 'Historial paginado de sesiones del alumno (RF-035)',
         description:
-          'De la más reciente a la más vieja, con conteo de series completadas. Filtros opcionales por estado y rango de ocurrencia (fecha local del gimnasio).',
+          'Orden estable por occurredOn, startedAt e id descendentes. Continuar con nextCursor; omitir cursor para la primera ventana. page sigue disponible por compatibilidad. Incluye ABANDONADA y simuladas identificadas. Usa sólo snapshot; los campos históricos no recuperables son null y snapshotComplete=false. Alumno propietario o entrenador con asignación vigente; administrador sin otro rol autorizado recibe 403. Instantes UTC acompañados por timezone y fecha local occurredOn.',
         security,
         parameters: [
           studentIdParam,
@@ -189,7 +135,7 @@ const document = {
             in: 'query',
             name: 'state',
             required: false,
-            schema: { type: 'string', enum: ref('TrainingSessionState') },
+            schema: ref('TrainingSessionState'),
           },
           {
             in: 'query',
@@ -214,6 +160,18 @@ const document = {
             name: 'pageSize',
             required: false,
             schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+          },
+          {
+            in: 'query',
+            name: 'cursor',
+            required: false,
+            schema: { type: 'string', maxLength: 512 },
+          },
+          {
+            in: 'query',
+            name: 'simulated',
+            required: false,
+            schema: { type: 'string', enum: ['true', 'false'] },
           },
         ],
         responses: {
@@ -288,7 +246,7 @@ const document = {
         operationId: 'updateSeriesRecord',
         summary: 'Registrar una serie (RF-029)',
         description:
-          'Actualiza sólo valores ejecutados; la prescripción congelada es inmutable (RN-61). Valida rangos RN-55, exige confirmación ante atípico RN-55a y es idempotente por (sesión, orden) RN-60. Cada escritura renueva lastActivityAt.',
+          'Sólo campos ejecutados, en EN_CURSO o corrección de COMPLETADA dentro de 48 h. Campos prescriptos desconocidos se rechazan con 400. additional es inmutable: additional=true en la siguiente posición global crea una serie sin prescripción, exige performedExerciseId y admite performedWarmup al crear. El reenvío de posición es idempotente. Carga atípica requiere confirmación. Una serie completada no admite motivo de omisión.',
         security,
         parameters: [studentIdParam, sessionIdParam, positionParam],
         requestBody: {
@@ -351,7 +309,7 @@ const document = {
       },
     },
     '/internal/jobs/training-sessions/expire': {
-      post: {
+      get: {
         operationId: 'expireTrainingSessions',
         summary: 'Cierre automático por inactividad (RN-53, RN-58)',
         description:
@@ -377,9 +335,38 @@ const document = {
       },
     },
     schemas: Object.fromEntries(
-      Object.entries(schemas).map(([name, schema]) => [
+      Object.entries({
+        ...schemas,
+        MuscleActivity: z.object({
+          studentId: z.uuid(),
+          from: z.iso.date(),
+          to: z.iso.date(),
+          timezone: z.string(),
+          sessionCount: z.number().int(),
+          calculatedAt: z.iso.datetime(),
+          unit: z.literal('SERIES_EFECTIVAS'),
+          groups: z
+            .array(
+              z.object({
+                group: z.enum(GRUPOS_MUSCULARES),
+                status: z.enum(['SIN_DATOS', 'CALCULADO']),
+                volume: z.number().nullable(),
+                frequency: z.number().int().nullable(),
+              }),
+            )
+            .length(17),
+          exerciseVolumes: z.array(
+            z.object({
+              exerciseId: z.uuid().nullable(),
+              completedWorkSets: z.number().int(),
+              unit: z.literal('SERIES_DE_TRABAJO'),
+              classification: z.enum(['CLASIFICADO', 'NO_CLASIFICADO']),
+            }),
+          ),
+        }),
+      }).map(([name, schema]) => [
         name,
-        z.toJSONSchema(schema),
+        z.toJSONSchema(schema, { io: 'input' }),
       ]),
     ),
   },

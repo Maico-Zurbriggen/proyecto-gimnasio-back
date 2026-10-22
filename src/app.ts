@@ -175,6 +175,11 @@ import {
 import { createIndicatorsRouter } from './modules/indicators/infrastructure/indicators.http';
 import { PrismaIndicatorsRepository } from './modules/indicators/infrastructure/prisma-indicators.repository';
 import {
+  GetMuscleActivityUseCase,
+  type MuscleActivityRepository,
+} from './modules/indicators/application/muscle-activity.use-case';
+import { PrismaMuscleActivityRepository } from './modules/indicators/infrastructure/prisma-muscle-activity.repository';
+import {
   GetSetPreloadUseCase,
   type SetPreloadRepository,
 } from './modules/training-sessions/application/set-preload.use-cases';
@@ -252,6 +257,7 @@ interface AppDependencies {
   invitationMailer?: InvitationMailer;
   studentContextRepository?: StudentContextRepository;
   indicatorsRepository?: IndicatorsRepository;
+  muscleActivityRepository?: MuscleActivityRepository;
   setPreloadRepository?: SetPreloadRepository;
   assignmentsRepository?: AssignmentsRepository;
   inventoryRepository?: InventoryRepository;
@@ -318,6 +324,7 @@ export function createApp({
   invitationMailer,
   studentContextRepository,
   indicatorsRepository,
+  muscleActivityRepository,
   setPreloadRepository,
   assignmentsRepository,
   inventoryRepository,
@@ -502,12 +509,19 @@ export function createApp({
   // HU23: adherencia y cumplimiento derivados de lo registrado.
   const resolvedIndicatorsRepo =
     indicatorsRepository ?? new PrismaIndicatorsRepository(prisma);
+  const resolvedAssignments =
+    trainerAssignments ?? new PrismaTrainerAssignments(prisma);
   app.use(
     createIndicatorsRouter(
       new GetAdherenceUseCase(resolvedIndicatorsRepo, resolvedClock),
       new GetSessionComplianceUseCase(resolvedIndicatorsRepo, resolvedClock),
       new GetSignalsUseCase(resolvedIndicatorsRepo, resolvedClock),
-      trainerAssignments ?? new PrismaTrainerAssignments(prisma),
+      new GetMuscleActivityUseCase(
+        muscleActivityRepository ?? new PrismaMuscleActivityRepository(prisma),
+        resolvedAssignments,
+        resolvedClock,
+      ),
+      resolvedAssignments,
     ),
   );
 
@@ -554,8 +568,6 @@ export function createApp({
 
   app.use(usersRouter);
 
-  const resolvedAssignments =
-    trainerAssignments ?? new PrismaTrainerAssignments(prisma);
   const resolvedStudentMeasurementAccess =
     studentMeasurementAccess ??
     (process.env.NODE_ENV === 'test'

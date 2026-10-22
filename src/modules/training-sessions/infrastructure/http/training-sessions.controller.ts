@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { z } from 'zod';
 
 import {
   AtypicalSeriesError,
@@ -224,6 +225,15 @@ export class TrainingSessionsController {
 
   finish = async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (
+        !z
+          .object({})
+          .strict()
+          .safeParse(req.body ?? {}).success
+      ) {
+        res.status(400).json({ error: 'invalid_request_body' });
+        return;
+      }
       const params = sessionParamsSchema.safeParse(req.params);
       if (!params.success) {
         res.status(400).json({
@@ -245,6 +255,15 @@ export class TrainingSessionsController {
 
   abandon = async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (
+        !z
+          .object({})
+          .strict()
+          .safeParse(req.body ?? {}).success
+      ) {
+        res.status(400).json({ error: 'invalid_request_body' });
+        return;
+      }
       const params = sessionParamsSchema.safeParse(req.params);
       if (!params.success) {
         res.status(400).json({
