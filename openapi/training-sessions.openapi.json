@@ -2,9 +2,71 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Training sessions lifecycle",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "paths": {
+    "/students/{studentId}/indicators/muscle-activity": {
+      "get": {
+        "operationId": "getMuscleActivity",
+        "summary": "Volumen en series efectivas y frecuencia por grupo muscular (HU25)",
+        "description": "Alumno propietario o entrenador con asignación vigente del mismo gimnasio. Excluye simuladas, EN_CURSO, ABANDONADA, calentamiento, omisiones e incompletas. Usa el ejercicio ejecutado y cuenta series adicionales. Fechas de ocurrencia locales, límites inclusivos. No permite futuro en el gimnasio. SIN_DATOS devuelve null; CALCULADO puede devolver cero. El resultado se deriva en cada consulta.",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "studentId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actividad muscular calculada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MuscleActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Período inválido"
+          },
+          "401": {
+            "description": "Sin sesión"
+          },
+          "403": {
+            "description": "Acceso no autorizado, sin revelar existencia"
+          }
+        }
+      }
+    },
     "/students/{studentId}/training-sessions": {
       "post": {
         "operationId": "startTrainingSession",
@@ -70,7 +132,7 @@
       "get": {
         "operationId": "listTrainingSessions",
         "summary": "Historial paginado de sesiones del alumno (RF-035)",
-        "description": "De la más reciente a la más vieja, con conteo de series completadas. Filtros opcionales por estado y rango de ocurrencia (fecha local del gimnasio).",
+        "description": "Orden estable por occurredOn, startedAt e id descendentes. Continuar con nextCursor; omitir cursor para la primera ventana. page sigue disponible por compatibilidad. Incluye ABANDONADA y simuladas identificadas. Usa sólo snapshot; los campos históricos no recuperables son null y snapshotComplete=false. Alumno propietario o entrenador con asignación vigente; administrador sin otro rol autorizado recibe 403. Instantes UTC acompañados por timezone y fecha local occurredOn.",
         "security": [
           {
             "SessionCookie": []
@@ -91,10 +153,7 @@
             "name": "state",
             "required": false,
             "schema": {
-              "type": "string",
-              "enum": {
-                "$ref": "#/components/schemas/TrainingSessionState"
-              }
+              "$ref": "#/components/schemas/TrainingSessionState"
             }
           },
           {
@@ -134,6 +193,24 @@
               "minimum": 1,
               "maximum": 50,
               "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          {
+            "in": "query",
+            "name": "simulated",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
             }
           }
         ],
@@ -297,7 +374,7 @@
       "patch": {
         "operationId": "updateSeriesRecord",
         "summary": "Registrar una serie (RF-029)",
-        "description": "Actualiza sólo valores ejecutados; la prescripción congelada es inmutable (RN-61). Valida rangos RN-55, exige confirmación ante atípico RN-55a y es idempotente por (sesión, orden) RN-60. Cada escritura renueva lastActivityAt.",
+        "description": "Sólo campos ejecutados, en EN_CURSO o corrección de COMPLETADA dentro de 48 h. Campos prescriptos desconocidos se rechazan con 400. additional es inmutable: additional=true en la siguiente posición global crea una serie sin prescripción, exige performedExerciseId y admite performedWarmup al crear. El reenvío de posición es idempotente. Carga atípica requiere confirmación. Una serie completada no admite motivo de omisión.",
         "security": [
           {
             "SessionCookie": []
@@ -484,7 +561,7 @@
       }
     },
     "/internal/jobs/training-sessions/expire": {
-      "post": {
+      "get": {
         "operationId": "expireTrainingSessions",
         "summary": "Cierre automático por inactividad (RN-53, RN-58)",
         "description": "ABANDONADA tras 8 h sin actividad; BLOQUEADA tras 48 h de COMPLETADA. Idempotente, sólo scheduler con CRON_SECRET.",
@@ -583,10 +660,14 @@
           "additional": {
             "type": "boolean"
           },
+          "performedWarmup": {
+            "type": "boolean"
+          },
           "omissionReason": {
             "anyOf": [
               {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 500
               },
               {
@@ -622,11 +703,13 @@
           },
           "from": {
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
           },
           "to": {
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
           },
           "page": {
             "default": 1,
@@ -639,10 +722,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 50
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "simulated": {
+            "type": "string",
+            "enum": ["true", "false"]
           }
-        },
-        "required": ["page", "pageSize"],
-        "additionalProperties": false
+        }
       },
       "TrainingSessionState": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -655,16 +744,120 @@
         "properties": {
           "position": {
             "type": "integer",
-            "minimum": 1,
+            "exclusiveMinimum": 0,
             "maximum": 9007199254740991
           },
           "prescribedExerciseId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "prescribedExerciseName": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedExercisePosition": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedSetPosition": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedMinRepetitions": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedMaxRepetitions": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedLoad": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedRestSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prescribedWarmup": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "performedExerciseId": {
             "anyOf": [
@@ -687,29 +880,6 @@
                 "type": "null"
               }
             ]
-          },
-          "prescribedMinRepetitions": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "prescribedMaxRepetitions": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "prescribedLoad": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "warmup": {
-            "type": "boolean"
           },
           "performedLoad": {
             "anyOf": [
@@ -745,6 +915,9 @@
               }
             ]
           },
+          "warmup": {
+            "type": "boolean"
+          },
           "completed": {
             "type": "boolean"
           },
@@ -769,21 +942,174 @@
           "position",
           "prescribedExerciseId",
           "prescribedExerciseName",
-          "performedExerciseId",
-          "performedExerciseName",
+          "prescribedExercisePosition",
+          "prescribedSetPosition",
           "prescribedMinRepetitions",
           "prescribedMaxRepetitions",
           "prescribedLoad",
-          "warmup",
+          "prescribedRestSeconds",
+          "prescribedNote",
+          "prescribedWarmup",
+          "performedExerciseId",
+          "performedExerciseName",
           "performedLoad",
           "performedRepetitions",
           "perceivedEffort",
+          "warmup",
           "completed",
           "additional",
           "omissionReason",
           "atypicalConfirmed"
-        ],
-        "additionalProperties": false
+        ]
+      },
+      "TrainingSessionSummary": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "studentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "routineId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "routineVersionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "routineDayId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "routineDayName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "routineDayPosition": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "routineVersionNumber": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "durationSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "simulated": {
+            "type": "boolean"
+          },
+          "snapshotComplete": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["EN_CURSO", "COMPLETADA", "ABANDONADA", "BLOQUEADA"]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurredOn": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "totalSeries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "completedSeries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "studentId",
+          "routineId",
+          "routineVersionId",
+          "routineDayId",
+          "routineDayName",
+          "routineDayPosition",
+          "routineVersionNumber",
+          "durationSeconds",
+          "timezone",
+          "simulated",
+          "snapshotComplete",
+          "state",
+          "startedAt",
+          "completedAt",
+          "occurredOn",
+          "totalSeries",
+          "completedSeries"
+        ]
       },
       "TrainingSession": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -815,12 +1141,66 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "routineDayName": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "routineDayPosition": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "routineVersionNumber": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "durationSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "simulated": {
+            "type": "boolean"
+          },
+          "snapshotComplete": {
+            "type": "boolean"
           },
           "state": {
             "type": "string",
@@ -844,7 +1224,9 @@
             ]
           },
           "occurredOn": {
-            "type": "string"
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
           },
           "lastActivityAt": {
             "type": "string",
@@ -876,8 +1258,7 @@
                   "type": "string"
                 }
               },
-              "required": ["exerciseId", "state"],
-              "additionalProperties": false
+              "required": ["exerciseId", "state"]
             }
           },
           "setRecords": {
@@ -887,16 +1268,120 @@
               "properties": {
                 "position": {
                   "type": "integer",
-                  "minimum": 1,
+                  "exclusiveMinimum": 0,
                   "maximum": 9007199254740991
                 },
                 "prescribedExerciseId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "prescribedExerciseName": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedExercisePosition": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedSetPosition": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedMinRepetitions": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedMaxRepetitions": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedLoad": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedRestSeconds": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedNote": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "prescribedWarmup": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "performedExerciseId": {
                   "anyOf": [
@@ -919,29 +1404,6 @@
                       "type": "null"
                     }
                   ]
-                },
-                "prescribedMinRepetitions": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                "prescribedMaxRepetitions": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                "prescribedLoad": {
-                  "anyOf": [
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "warmup": {
-                  "type": "boolean"
                 },
                 "performedLoad": {
                   "anyOf": [
@@ -977,6 +1439,9 @@
                     }
                   ]
                 },
+                "warmup": {
+                  "type": "boolean"
+                },
                 "completed": {
                   "type": "boolean"
                 },
@@ -1001,21 +1466,25 @@
                 "position",
                 "prescribedExerciseId",
                 "prescribedExerciseName",
-                "performedExerciseId",
-                "performedExerciseName",
+                "prescribedExercisePosition",
+                "prescribedSetPosition",
                 "prescribedMinRepetitions",
                 "prescribedMaxRepetitions",
                 "prescribedLoad",
-                "warmup",
+                "prescribedRestSeconds",
+                "prescribedNote",
+                "prescribedWarmup",
+                "performedExerciseId",
+                "performedExerciseName",
                 "performedLoad",
                 "performedRepetitions",
                 "perceivedEffort",
+                "warmup",
                 "completed",
                 "additional",
                 "omissionReason",
                 "atypicalConfirmed"
-              ],
-              "additionalProperties": false
+              ]
             }
           }
         },
@@ -1027,6 +1496,11 @@
           "routineDayId",
           "routineDayName",
           "routineDayPosition",
+          "routineVersionNumber",
+          "durationSeconds",
+          "timezone",
+          "simulated",
+          "snapshotComplete",
           "state",
           "startedAt",
           "completedAt",
@@ -1035,97 +1509,7 @@
           "aptitudeWarning",
           "compatibilityWarnings",
           "setRecords"
-        ],
-        "additionalProperties": false
-      },
-      "ExpireResult": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "abandoned": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "blocked": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["abandoned", "blocked"],
-        "additionalProperties": false
-      },
-      "TrainingSessionSummary": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "studentId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "routineDayName": {
-            "type": "string"
-          },
-          "routineDayPosition": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "state": {
-            "type": "string",
-            "enum": ["EN_CURSO", "COMPLETADA", "ABANDONADA", "BLOQUEADA"]
-          },
-          "startedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "completedAt": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time",
-                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "occurredOn": {
-            "type": "string"
-          },
-          "totalSeries": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "completedSeries": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": [
-          "id",
-          "studentId",
-          "routineDayName",
-          "routineDayPosition",
-          "state",
-          "startedAt",
-          "completedAt",
-          "occurredOn",
-          "totalSeries",
-          "completedSeries"
-        ],
-        "additionalProperties": false
+        ]
       },
       "TrainingSessionPage": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1146,13 +1530,82 @@
                   "format": "uuid",
                   "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                 },
+                "routineId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "routineVersionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "routineDayId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
                 "routineDayName": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "routineDayPosition": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "routineVersionNumber": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "durationSeconds": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "timezone": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "simulated": {
+                  "type": "boolean"
+                },
+                "snapshotComplete": {
+                  "type": "boolean"
                 },
                 "state": {
                   "type": "string",
@@ -1176,7 +1629,9 @@
                   ]
                 },
                 "occurredOn": {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
                 },
                 "totalSeries": {
                   "type": "integer",
@@ -1192,16 +1647,23 @@
               "required": [
                 "id",
                 "studentId",
+                "routineId",
+                "routineVersionId",
+                "routineDayId",
                 "routineDayName",
                 "routineDayPosition",
+                "routineVersionNumber",
+                "durationSeconds",
+                "timezone",
+                "simulated",
+                "snapshotComplete",
                 "state",
                 "startedAt",
                 "completedAt",
                 "occurredOn",
                 "totalSeries",
                 "completedSeries"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "total": {
@@ -1211,17 +1673,43 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "exclusiveMinimum": 0,
             "maximum": 9007199254740991
           },
           "pageSize": {
             "type": "integer",
-            "minimum": 1,
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["items", "total", "page", "pageSize", "nextCursor"]
+      },
+      "ExpireResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "abandoned": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "blocked": {
+            "type": "integer",
+            "minimum": 0,
             "maximum": 9007199254740991
           }
         },
-        "required": ["items", "total", "page", "pageSize"],
-        "additionalProperties": false
+        "required": ["abandoned", "blocked"]
       },
       "Error": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1232,8 +1720,154 @@
           },
           "details": {}
         },
-        "required": ["error"],
-        "additionalProperties": false
+        "required": ["error"]
+      },
+      "MuscleActivity": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "studentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "sessionCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "calculatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "unit": {
+            "type": "string",
+            "const": "SERIES_EFECTIVAS"
+          },
+          "groups": {
+            "minItems": 17,
+            "maxItems": 17,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "enum": [
+                    "PECTORAL",
+                    "DELTOIDES_ANTERIOR",
+                    "DELTOIDES_LATERAL",
+                    "BICEPS",
+                    "ANTEBRAZO",
+                    "ABDOMINALES",
+                    "OBLICUOS",
+                    "CUADRICEPS",
+                    "ADUCTORES",
+                    "DORSAL",
+                    "TRAPECIO",
+                    "DELTOIDES_POSTERIOR",
+                    "TRICEPS",
+                    "ERECTORES_LUMBARES",
+                    "GLUTEO",
+                    "ISQUIOTIBIALES",
+                    "GEMELOS"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["SIN_DATOS", "CALCULADO"]
+                },
+                "volume": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "frequency": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": ["group", "status", "volume", "frequency"]
+            }
+          },
+          "exerciseVolumes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "exerciseId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "completedWorkSets": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "unit": {
+                  "type": "string",
+                  "const": "SERIES_DE_TRABAJO"
+                },
+                "classification": {
+                  "type": "string",
+                  "enum": ["CLASIFICADO", "NO_CLASIFICADO"]
+                }
+              },
+              "required": [
+                "exerciseId",
+                "completedWorkSets",
+                "unit",
+                "classification"
+              ]
+            }
+          }
+        },
+        "required": [
+          "studentId",
+          "from",
+          "to",
+          "timezone",
+          "sessionCount",
+          "calculatedAt",
+          "unit",
+          "groups",
+          "exerciseVolumes"
+        ]
       }
     }
   }

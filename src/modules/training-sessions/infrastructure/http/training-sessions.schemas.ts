@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decodeSessionCursor } from '../session-cursor';
 
 const uuid = z.string().uuid();
 
@@ -26,25 +27,39 @@ export const startSessionBodySchema = z
   .strict();
 
 /** Historial paginado (RF-035): filtros por estado y rango de ocurrencia. */
-export const listSessionsQuerySchema = z.object({
-  state: z
-    .enum(['EN_CURSO', 'COMPLETADA', 'ABANDONADA', 'BLOQUEADA'])
-    .optional(),
-  from: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, {
-      message: 'from debe ser una fecha YYYY-MM-DD',
-    })
-    .optional(),
-  to: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, {
-      message: 'to debe ser una fecha YYYY-MM-DD',
-    })
-    .optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(50).default(20),
-});
+export const listSessionsQuerySchema = z
+  .object({
+    state: z
+      .enum(['EN_CURSO', 'COMPLETADA', 'ABANDONADA', 'BLOQUEADA'])
+      .optional(),
+    from: z.iso
+      .date()
+      .refine((value) => value >= '0001-01-01')
+      .optional(),
+    to: z.iso
+      .date()
+      .refine((value) => value >= '0001-01-01')
+      .optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(50).default(20),
+    cursor: z
+      .string()
+      .max(512)
+      .refine((value) => decodeSessionCursor(value) !== null, 'Cursor inválido')
+      .optional(),
+    simulated: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
+  })
+  .refine(
+    (query) => !query.from || !query.to || query.from <= query.to,
+    'from debe ser anterior o igual a to',
+  )
+  .refine(
+    (query) => !query.cursor || query.page === 1,
+    'cursor no admite page distinto de 1',
+  );
 
 export type ListSessionsQuery = z.infer<typeof listSessionsQuerySchema>;
 
@@ -65,7 +80,8 @@ export const updateSeriesBodySchema = z
     perceivedEffort: z.number().int().min(1).max(10).nullable().optional(),
     completed: z.boolean().optional(),
     additional: z.boolean().optional(),
-    omissionReason: z.string().trim().max(500).nullable().optional(),
+    performedWarmup: z.boolean().optional(),
+    omissionReason: z.string().trim().min(1).max(500).nullable().optional(),
     performedExerciseId: uuid.nullable().optional(),
     atypicalConfirmed: z.boolean().optional(),
   })

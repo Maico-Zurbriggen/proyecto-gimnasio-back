@@ -67,7 +67,11 @@ export class GetActiveTrainingSessionUseCase {
     ) {
       throw new SessionAccessError();
     }
-    const active = await this.sessions.findActive(studentId, this.clock.now());
+    const active = await this.sessions.findActive(
+      studentId,
+      this.clock.now(),
+      actor,
+    );
     if (!active) throw new SessionNotFoundError();
     return active;
   }

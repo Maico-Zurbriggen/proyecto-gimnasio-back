@@ -7,8 +7,16 @@ export type TrainingSessionState =
 export interface TrainingSessionSummary {
   id: string;
   studentId: string;
-  routineDayName: string;
-  routineDayPosition: number;
+  routineDayName: string | null;
+  routineDayPosition: number | null;
+  routineId?: string;
+  routineVersionId?: string;
+  routineDayId?: string;
+  routineVersionNumber?: number | null;
+  durationSeconds?: number | null;
+  timezone?: string | null;
+  simulated?: boolean;
+  snapshotComplete?: boolean;
   state: TrainingSessionState;
   startedAt: Date;
   completedAt: Date | null;
@@ -25,6 +33,9 @@ export interface ListSessionsQuery {
   to?: string;
   page: number;
   pageSize: number;
+  /** Keyset cursor; omit for the first window. */
+  cursor?: string;
+  simulated?: boolean;
 }
 
 export interface TrainingSessionPage {
@@ -32,16 +43,22 @@ export interface TrainingSessionPage {
   total: number;
   page: number;
   pageSize: number;
+  nextCursor?: string | null;
 }
 
 export interface SessionSetRecordView {
   position: number;
-  prescribedExerciseId: string;
-  prescribedExerciseName: string;
+  prescribedExerciseId: string | null;
+  prescribedExerciseName: string | null;
   performedExerciseId: string | null;
   performedExerciseName: string | null;
-  prescribedMinRepetitions: number;
-  prescribedMaxRepetitions: number;
+  prescribedMinRepetitions: number | null;
+  prescribedMaxRepetitions: number | null;
+  prescribedExercisePosition?: number | null;
+  prescribedSetPosition?: number | null;
+  prescribedRestSeconds?: number | null;
+  prescribedNote?: string | null;
+  prescribedWarmup?: boolean | null;
   prescribedLoad: number | null;
   warmup: boolean;
   performedLoad: number | null;
@@ -59,8 +76,13 @@ export interface TrainingSessionView {
   routineId: string;
   routineVersionId: string;
   routineDayId: string;
-  routineDayName: string;
-  routineDayPosition: number;
+  routineDayName: string | null;
+  routineDayPosition: number | null;
+  routineVersionNumber?: number | null;
+  durationSeconds?: number | null;
+  timezone?: string | null;
+  simulated?: boolean;
+  snapshotComplete?: boolean;
   state: TrainingSessionState;
   startedAt: Date;
   completedAt: Date | null;
@@ -87,6 +109,8 @@ export interface UpdateSeriesCommand {
   perceivedEffort?: number | null;
   completed?: boolean;
   additional?: boolean;
+  /** Only accepted on insertion of an additional set. */
+  performedWarmup?: boolean;
   omissionReason?: string | null;
   performedExerciseId?: string | null;
   atypicalConfirmed?: boolean;
@@ -108,7 +132,11 @@ export interface TrainingSessionsRepository {
   start(
     command: StartSessionCommand & { now: Date },
   ): Promise<TrainingSessionView>;
-  findActive(studentId: string, now: Date): Promise<TrainingSessionView | null>;
+  findActive(
+    studentId: string,
+    now: Date,
+    actor: AuthUser,
+  ): Promise<TrainingSessionView | null>;
   updateSeries(
     command: UpdateSeriesCommand & { now: Date },
   ): Promise<TrainingSessionView>;
