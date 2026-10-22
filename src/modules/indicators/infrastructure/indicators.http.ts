@@ -11,6 +11,8 @@ import {
   requireStudentOwnership,
   requireRoles,
 } from '../../../shared/middleware/auth.middleware';
+import type { TrainerAssignments } from '../../students/application/ports/trainer-assignments.port';
+import { requireIndicatorsAccess } from './indicators.access';
 import {
   SessionNotFoundError,
   type GetAdherenceUseCase,
@@ -52,6 +54,7 @@ export function createIndicatorsRouter(
   getSessionCompliance: GetSessionComplianceUseCase,
   getSignals: GetSignalsUseCase,
   getMuscleActivity: GetMuscleActivityUseCase,
+  trainerAssignments: TrainerAssignments,
 ): Router {
   const router = Router();
   router.get(
@@ -88,10 +91,13 @@ export function createIndicatorsRouter(
     },
   );
 
-  // El alumno consulta sus indicadores; su entrenador también. El doble filtro
-  // de RA-01 lo resuelve `requireStudentOwnership`: rechaza al alumno que mira
-  // a otro y deja pasar al entrenador.
-  const propiosOAsignados = [requireAuth, requireStudentOwnership('studentId')];
+  // El alumno consulta sus indicadores; su entrenador con asignación vigente
+  // también. El administrador no: son datos de seguimiento personal, y el
+  // criterio de aceptación de HU23 le asigna 403 explícitamente.
+  const propiosOAsignados = [
+    requireAuth,
+    requireIndicatorsAccess(trainerAssignments, 'studentId'),
+  ];
 
   // HU23 - T1: adherencia sobre la ventana móvil de cuatro semanas.
   router.get(

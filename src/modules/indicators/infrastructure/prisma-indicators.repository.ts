@@ -10,6 +10,14 @@ import type { RegistroDeSerie } from '../domain/compliance';
 import type { SesionDelPeriodo } from '../domain/signals';
 import type { Participacion } from '../domain/volume';
 
+/**
+ * Lectura de lo registrado para derivar los indicadores.
+ *
+ * Todas las consultas excluyen las sesiones simuladas (RN-107): un registro
+ * simulado está marcado de forma inequívoca y queda fuera de toda analítica
+ * presentada como real. Si se colaran, inflarían adherencia y cumplimiento y
+ * podrían apagar una señal de HU26 que corresponde emitir.
+ */
 export class PrismaIndicatorsRepository implements IndicatorsRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -22,7 +30,7 @@ export class PrismaIndicatorsRepository implements IndicatorsRepository {
     }
 
     const rows = await this.prisma.trainingSession.findMany({
-      where: { studentId, occurredOn: { gte: desde } },
+      where: { studentId, occurredOn: { gte: desde }, simulated: false },
       select: { occurredOn: true, state: true },
       orderBy: { occurredOn: 'desc' },
     });
@@ -33,6 +41,19 @@ export class PrismaIndicatorsRepository implements IndicatorsRepository {
       // no terminó y ABANDONADA no se completó (D6/§4).
       completada: row.state === 'COMPLETADA' || row.state === 'BLOQUEADA',
     }));
+  }
+
+  async findGymTimeZone(studentId: string): Promise<string | null> {
+    if (!isUuid(studentId)) {
+      return null;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: studentId },
+      select: { gym: { select: { timezone: true } } },
+    });
+
+    return user?.gym.timezone ?? null;
   }
 
   async findTargetFrequencies(studentId: string): Promise<FrecuenciaVigente[]> {
@@ -90,7 +111,7 @@ export class PrismaIndicatorsRepository implements IndicatorsRepository {
     // El filtro por alumno es parte de la consulta: una sesión ajena responde
     // «no existe», sin revelar si existe (RNF-14).
     const session = await this.prisma.trainingSession.findFirst({
-      where: { id: sessionId, studentId },
+      where: { id: sessionId, studentId, simulated: false },
       select: {
         setRecords: {
           select: {
@@ -120,7 +141,7 @@ export class PrismaIndicatorsRepository implements IndicatorsRepository {
     }
 
     const rows = await this.prisma.trainingSession.findMany({
-      where: { studentId, occurredOn: { gte: desde } },
+      where: { studentId, occurredOn: { gte: desde }, simulated: false },
       select: {
         occurredOn: true,
         state: true,

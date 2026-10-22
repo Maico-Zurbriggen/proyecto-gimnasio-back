@@ -1,5 +1,6 @@
 import {
   calcularAdherencia,
+  ZONA_HORARIA_POR_DEFECTO,
   type FrecuenciaVigente,
   type SesionDeAdherencia,
 } from './adherence';
@@ -176,13 +177,15 @@ export function detectarCaidaDeAdherencia(
   sesiones: readonly SesionDeAdherencia[],
   frecuencias: readonly FrecuenciaVigente[],
   hasta: Date,
+  zona: string = ZONA_HORARIA_POR_DEFECTO,
 ): Senal<CaidaAdherenciaDetalle> {
-  const reciente = calcularAdherencia(sesiones, frecuencias, hasta, 2);
+  const reciente = calcularAdherencia(sesiones, frecuencias, hasta, 2, zona);
   const previa = calcularAdherencia(
     sesiones,
     frecuencias,
     new Date(hasta.getTime() - 2 * MS_POR_SEMANA),
     2,
+    zona,
   );
 
   if (!reciente.disponible || !previa.disponible) {

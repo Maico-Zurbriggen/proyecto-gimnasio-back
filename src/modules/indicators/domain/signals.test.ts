@@ -221,6 +221,136 @@ describe('detectarEstancamiento (RN-74)', () => {
     }
   });
 
+  describe('casos límite del umbral (criterio 3)', () => {
+    // Epley con 5 repeticiones: carga x (1 + 5/30) = carga x 1,1667. La
+    // variación porcentual entre dos cargas es la de las cargas mismas, así
+    // que 100 -> 102,5 da exactamente +2,5%.
+    it('exactamente +2,5% NO es estancamiento', () => {
+      const sesiones = [
+        sesion(40, [serie({ performedLoad: 100 })]),
+        sesion(38, [serie({ performedLoad: 100 })]),
+        sesion(5, [serie({ performedLoad: 102.5 })]),
+        sesion(3, [serie({ performedLoad: 102.5 })]),
+      ];
+      const resultado = detectarEstancamiento(sesiones, PRESS, HOY);
+
+      expect(variacionDeCargaMaxima(sesiones, PRESS, HOY)).toBe(2.5);
+      expect(resultado.estado).toBe('SIN_SENAL');
+    });
+
+    it('justo por debajo de +2,5% sí es estancamiento', () => {
+      const sesiones = [
+        sesion(40, [serie({ performedLoad: 100 })]),
+        sesion(38, [serie({ performedLoad: 100 })]),
+        sesion(5, [serie({ performedLoad: 102.4 })]),
+        sesion(3, [serie({ performedLoad: 102.4 })]),
+      ];
+
+      expect(detectarEstancamiento(sesiones, PRESS, HOY).estado).toBe(
+        'DETECTADA',
+      );
+    });
+
+    it('3 sesiones no alcanzan', () => {
+      const sesiones = [
+        sesion(40, [serie({ performedLoad: 100 })]),
+        sesion(38, [serie({ performedLoad: 100 })]),
+        sesion(5, [serie({ performedLoad: 100 })]),
+      ];
+
+      expect(detectarEstancamiento(sesiones, PRESS, HOY).estado).toBe(
+        'DATOS_INSUFICIENTES',
+      );
+    });
+
+    it('4 sesiones sí alcanzan', () => {
+      const sesiones = [
+        sesion(40, [serie({ performedLoad: 100 })]),
+        sesion(38, [serie({ performedLoad: 100 })]),
+        sesion(5, [serie({ performedLoad: 100 })]),
+        sesion(3, [serie({ performedLoad: 100 })]),
+      ];
+
+      expect(detectarEstancamiento(sesiones, PRESS, HOY).estado).toBe(
+        'DETECTADA',
+      );
+    });
+  });
+
+  describe('RN-65 · qué series son estimables (criterio 4)', () => {
+    it('un ejercicio de peso corporal no es evaluable', () => {
+      // Carga 0: válida como registro y aporta volumen, pero no produce carga
+      // máxima estimada (CB-42), así que no hay con qué medir progresión.
+      const sesiones = [
+        sesion(40, [serie({ performedLoad: 0 })]),
+        sesion(38, [serie({ performedLoad: 0 })]),
+        sesion(5, [serie({ performedLoad: 0 })]),
+        sesion(3, [serie({ performedLoad: 0 })]),
+      ];
+
+      expect(detectarEstancamiento(sesiones, PRESS, HOY).estado).toBe(
+        'DATOS_INSUFICIENTES',
+      );
+    });
+
+    it('series de más de 12 repeticiones no son evaluables', () => {
+      const muchasReps = { performedLoad: 100, performedRepetitions: 15 };
+      const sesiones = [
+        sesion(40, [serie(muchasReps)]),
+        sesion(38, [serie(muchasReps)]),
+        sesion(5, [serie(muchasReps)]),
+        sesion(3, [serie(muchasReps)]),
+      ];
+
+      expect(detectarEstancamiento(sesiones, PRESS, HOY).estado).toBe(
+        'DATOS_INSUFICIENTES',
+      );
+    });
+
+    it('exactamente 12 repeticiones sí son evaluables', () => {
+      const doce = { performedLoad: 100, performedRepetitions: 12 };
+      const sesiones = [
+        sesion(40, [serie(doce)]),
+        sesion(38, [serie(doce)]),
+        sesion(5, [serie(doce)]),
+        sesion(3, [serie(doce)]),
+      ];
+
+      expect(detectarEstancamiento(sesiones, PRESS, HOY).estado).toBe(
+        'DETECTADA',
+      );
+    });
+
+    it('una serie no completada no cuenta para la estimación', () => {
+      const sesiones = [
+        sesion(40, [serie({ completed: false })]),
+        sesion(38, [serie({ completed: false })]),
+        sesion(5, [serie({ completed: false })]),
+        sesion(3, [serie({ completed: false })]),
+      ];
+
+      expect(detectarEstancamiento(sesiones, PRESS, HOY).estado).toBe(
+        'DATOS_INSUFICIENTES',
+      );
+    });
+
+    it('RN-74a: si falta uno de los dos extremos no es calculable', () => {
+      // Cuatro sesiones, todas en el tramo reciente: no hay con qué comparar.
+      const sesiones = [
+        sesion(10, [serie({ performedLoad: 100 })]),
+        sesion(8, [serie({ performedLoad: 100 })]),
+        sesion(5, [serie({ performedLoad: 100 })]),
+        sesion(3, [serie({ performedLoad: 100 })]),
+      ];
+      const resultado = detectarEstancamiento(sesiones, PRESS, HOY);
+
+      expect(resultado.estado).toBe('DATOS_INSUFICIENTES');
+      if (resultado.estado === 'DATOS_INSUFICIENTES') {
+        expect(resultado.falta).toContain('no es calculable');
+      }
+    });
+  });
+
   it('no hay señal cuando la carga progresa por encima del umbral', () => {
     const sesiones = [
       sesion(40, [serie({ performedLoad: 100 })]),
@@ -265,9 +395,12 @@ describe('detectarCaidaDeAdherencia (RN-75)', () => {
   });
 
   it('detecta la caída cuando el alumno deja de venir', () => {
-    // Previas: 8 sesiones en dos semanas (100%). Recientes: ninguna (0%).
+    // RN-110: los tramos son semanas calendario. El reciente va del lunes 5 al
+    // domingo 18 de octubre (días 3 a 16 atrás) y el previo las dos semanas
+    // anteriores (días 17 a 30). Ocho sesiones en el previo, ninguna en el
+    // reciente.
     const resultado = detectarCaidaDeAdherencia(
-      asistencias([16, 17, 18, 19, 20, 21, 22, 23]),
+      asistencias([17, 18, 19, 20, 21, 22, 23, 24]),
       frecuencia,
       HOY,
     );
@@ -277,6 +410,59 @@ describe('detectarCaidaDeAdherencia (RN-75)', () => {
       expect(resultado.detalle.caidaEnPuntos).toBeGreaterThanOrEqual(25);
       expect(resultado.detalle.adherenciaReciente).toBe(0);
     }
+  });
+
+  describe('casos límite del umbral: 24, 25 y 26 puntos (criterio 5)', () => {
+    // Frecuencia 4/semana: cada tramo de dos semanas espera 8 sesiones, así
+    // que cada sesión vale 12,5 puntos. Para medir puntos exactos se usa una
+    // frecuencia de 50/semana (100 esperadas por tramo, 1 punto por sesión).
+    const porPunto: FrecuenciaVigente[] = [
+      { desde: hace(90), hasta: null, sesionesPorSemana: 50 },
+    ];
+
+    /** `n` sesiones dentro del tramo indicado, repartidas día por medio. */
+    function enTramo(n: number, desde: number): SesionDeAdherencia[] {
+      return Array.from({ length: n }, (_, i) => ({
+        occurredOn: hace(desde + (i % 14)),
+        completada: true,
+      }));
+    }
+
+    it('una caída de 24 puntos NO se señala', () => {
+      const resultado = detectarCaidaDeAdherencia(
+        [...enTramo(50, 17), ...enTramo(26, 3)],
+        porPunto,
+        HOY,
+      );
+
+      expect(resultado.estado).toBe('SIN_SENAL');
+    });
+
+    it('una caída de exactamente 25 puntos SÍ se señala', () => {
+      const resultado = detectarCaidaDeAdherencia(
+        [...enTramo(50, 17), ...enTramo(25, 3)],
+        porPunto,
+        HOY,
+      );
+
+      expect(resultado.estado).toBe('DETECTADA');
+      if (resultado.estado === 'DETECTADA') {
+        expect(resultado.detalle.caidaEnPuntos).toBe(25);
+      }
+    });
+
+    it('una caída de 26 puntos se señala', () => {
+      const resultado = detectarCaidaDeAdherencia(
+        [...enTramo(50, 17), ...enTramo(24, 3)],
+        porPunto,
+        HOY,
+      );
+
+      expect(resultado.estado).toBe('DETECTADA');
+      if (resultado.estado === 'DETECTADA') {
+        expect(resultado.detalle.caidaEnPuntos).toBe(26);
+      }
+    });
   });
 
   it('no hay señal cuando la asistencia se sostiene', () => {
@@ -312,6 +498,42 @@ describe('detectarDesbalance (RN-76)', () => {
       expect(pectoral?.tipo).toBe('POR_DEFECTO');
       expect(pectoral?.seriesSemanales).toBe(1);
     }
+  });
+
+  describe('casos límite del rango: 6 y 22 (criterio 7)', () => {
+    /** `n` series primarias por semana durante cuatro semanas. */
+    function semanalmente(n: number): SesionDelPeriodo[] {
+      const series = Array.from({ length: n }, () => serie());
+      return [3, 10, 17, 24].map((d) => sesion(d, series));
+    }
+
+    it('exactamente 6 series semanales NO es desbalance', () => {
+      expect(detectarDesbalance(semanalmente(6), HOY).estado).toBe('SIN_SENAL');
+    });
+
+    it('5 series semanales es desbalance por defecto', () => {
+      const resultado = detectarDesbalance(semanalmente(5), HOY);
+
+      expect(resultado.estado).toBe('DETECTADA');
+      if (resultado.estado === 'DETECTADA') {
+        expect(resultado.detalle[0]?.tipo).toBe('POR_DEFECTO');
+      }
+    });
+
+    it('exactamente 22 series semanales NO es desbalance', () => {
+      expect(detectarDesbalance(semanalmente(22), HOY).estado).toBe(
+        'SIN_SENAL',
+      );
+    });
+
+    it('23 series semanales es desbalance por exceso', () => {
+      const resultado = detectarDesbalance(semanalmente(23), HOY);
+
+      expect(resultado.estado).toBe('DETECTADA');
+      if (resultado.estado === 'DETECTADA') {
+        expect(resultado.detalle[0]?.tipo).toBe('POR_EXCESO');
+      }
+    });
   });
 
   it('detecta desbalance por exceso', () => {
