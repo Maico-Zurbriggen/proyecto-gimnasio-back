@@ -14,6 +14,52 @@ export const SEMANAS_MINIMAS_PARA_CALCULAR = 2;
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 const MS_POR_SEMANA = 7 * MS_POR_DIA;
 
+/** Zona horaria con la que se recortan las semanas si no se indica otra. */
+export const ZONA_HORARIA_POR_DEFECTO = 'America/Argentina/Buenos_Aires';
+
+/**
+ * Fecha civil de un instante en una zona horaria, como medianoche UTC.
+ *
+ * Trabajar con la fecha civil y no con el instante es lo que permite que una
+ * sesión de las 22:00 del domingo caiga en la semana del domingo y no en la del
+ * lunes siguiente, que es lo que pasaría comparando instantes UTC.
+ */
+export function fechaLocal(instante: Date, zona: string): Date {
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: zona,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instante);
+  const parte = (tipo: Intl.DateTimeFormatPartTypes) =>
+    Number(partes.find((candidata) => candidata.type === tipo)?.value);
+
+  return new Date(Date.UTC(parte('year'), parte('month') - 1, parte('day')));
+}
+
+/**
+ * Comienzo del lunes de la semana que contiene a la fecha dada (RN-110).
+ *
+ * Las semanas van de lunes a domingo en la zona horaria del gimnasio. En
+ * JavaScript el domingo es 0, así que se lo trata como séptimo día.
+ */
+export function inicioDeSemana(fecha: Date): Date {
+  const dia = fecha.getUTCDay();
+  const diasDesdeLunes = dia === 0 ? 6 : dia - 1;
+  return new Date(fecha.getTime() - diasDesdeLunes * MS_POR_DIA);
+}
+
+/**
+ * Fin de la última semana **completa** anterior al instante dado (RN-110).
+ *
+ * La ventana móvil cuenta semanas completas, así que la semana en curso no
+ * entra: incluirla mediría un alumno a mitad de semana contra una frecuencia
+ * objetivo entera y lo mostraría peor de lo que está.
+ */
+export function finDeUltimaSemanaCompleta(hasta: Date, zona: string): Date {
+  return inicioDeSemana(fechaLocal(hasta, zona));
+}
+
 /** Sesión ya ejecutada, reducida a lo que la adherencia necesita. */
 export interface SesionDeAdherencia {
   /** Fecha de ocurrencia, no de registro (RN-72). */
@@ -132,6 +178,7 @@ export function calcularAdherencia(
   frecuencias: readonly FrecuenciaVigente[],
   hasta: Date,
   semanas: number = SEMANAS_VENTANA_ADHERENCIA,
+  zona: string = ZONA_HORARIA_POR_DEFECTO,
 ): Adherencia {
   if (
     semanasConRutinaVigente(frecuencias, hasta) < SEMANAS_MINIMAS_PARA_CALCULAR
@@ -139,14 +186,20 @@ export function calcularAdherencia(
     return { disponible: false, motivo: 'SIN_HISTORIAL_SUFICIENTE' };
   }
 
-  const esperadas = sesionesEsperadasEnVentana(frecuencias, hasta, semanas);
+  // La ventana termina el domingo de la última semana completa, no «ahora»
+  // (RN-110): así las cuatro semanas son semanas calendario del gimnasio y no
+  // bloques de siete días que empiezan un miércoles cualquiera.
+  const corte = finDeUltimaSemanaCompleta(hasta, zona);
+
+  const esperadas = sesionesEsperadasEnVentana(frecuencias, corte, semanas);
   if (esperadas === 0) {
     return { disponible: false, motivo: 'SIN_FRECUENCIA_OBJETIVO' };
   }
 
-  const desde = inicioDeVentana(hasta, semanas);
+  const desde = inicioDeVentana(corte, semanas);
   const completadas = sesiones.filter(
-    (s) => s.completada && dentroDe(s.occurredOn, desde, hasta),
+    (s) =>
+      s.completada && dentroDe(fechaLocal(s.occurredOn, zona), desde, corte),
   ).length;
 
   const porcentaje = Math.min(100, (completadas / esperadas) * 100);

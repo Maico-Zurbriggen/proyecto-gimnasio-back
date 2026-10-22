@@ -90,6 +90,10 @@ export class PrismaSetPreloadRepository implements SetPreloadRepository {
         session: {
           studentId,
           state: { in: ['COMPLETADA', 'BLOQUEADA'] },
+          // Un registro simulado no vuelve como valor propuesto: RN-107 lo
+          // excluye de toda presentación como real, y precargarlo sería
+          // ofrecerle al alumno una carga que nunca levantó.
+          simulated: false,
         },
         // RN-56: una serie sustituida se imputa al ejercicio *ejecutado*. El
         // historial del press no puede contener la carga de la sustitución que
@@ -107,36 +111,34 @@ export class PrismaSetPreloadRepository implements SetPreloadRepository {
         performedRepetitions: true,
         session: { select: { occurredOn: true } },
       },
-      orderBy: [{ session: { occurredOn: 'desc' } }, { position: 'asc' }],
+      orderBy: [{ session: { occurredOn: 'desc' } }, { position: 'desc' }],
     });
 
-    // Una ejecución por ejercicio: la de la sesión más reciente. Esa sesión
-    // suele tener varias series del mismo ejercicio con valores distintos, y
-    // de ellas se toma la de mayor carga, siguiendo el criterio que RN-66 ya
-    // fija para el mismo problema en la carga máxima estimada. Tomar «la
-    // última serie» sería arbitrario y además sesga a la baja: la última es
-    // habitualmente la más fatigada.
+    // Una ejecución por ejercicio: la **última serie de trabajo completada**,
+    // que es el supuesto que fijan los criterios de aceptación de T2. Las filas
+    // llegan de la sesión más reciente a la más vieja y, dentro de cada sesión,
+    // de la última posición a la primera, así que la primera que aparece para
+    // un ejercicio es la que corresponde.
+    //
+    // [SUPUESTO] RF-030 dice «la última ejecución» sin precisar cuál serie
+    // cuando la sesión tuvo varias del mismo ejercicio con valores distintos.
+    // RN-66 resuelve ese mismo problema para la carga máxima estimada tomando
+    // la mayor, y ese criterio evitaría el sesgo a la baja de la última serie,
+    // que es habitualmente la más fatigada: con datos del seed, la última da
+    // 65 kg x 9 donde la mejor da 65 kg x 10. Se implementa la última porque
+    // es lo que fija el criterio de aceptación; queda anotado por si el equipo
+    // decide alinearlo con RN-66.
     const ultimas = new Map<string, EjecucionPrevia>();
     for (const row of rows) {
       const exerciseId = row.performedExerciseId ?? row.prescribedExerciseId;
-      const carga =
-        row.performedLoad === null ? null : row.performedLoad.toNumber();
-      const previa = ultimas.get(exerciseId);
-
-      // Las filas llegan de la sesión más reciente a la más vieja, así que una
-      // vez fijada la fecha sólo compiten las series de esa misma sesión.
-      if (previa !== undefined) {
-        const esOtraSesion =
-          previa.occurredOn.getTime() !== row.session.occurredOn.getTime();
-        if (esOtraSesion || carga === null || (previa.carga ?? 0) >= carga) {
-          continue;
-        }
+      if (ultimas.has(exerciseId)) {
+        continue;
       }
 
       ultimas.set(exerciseId, {
         exerciseId,
         occurredOn: row.session.occurredOn,
-        carga,
+        carga: row.performedLoad === null ? null : row.performedLoad.toNumber(),
         repeticiones: row.performedRepetitions,
       });
     }

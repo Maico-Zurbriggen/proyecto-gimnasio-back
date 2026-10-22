@@ -89,6 +89,20 @@ describe('compliance (HU23 - T2)', () => {
     });
   });
 
+  it('RN-56: una serie sustituida cuenta como cumplida', () => {
+    // La sustitución llega con `completed: true` porque se ejecutó: lo que
+    // cambió es el ejercicio, no el hecho de haber hecho la serie. Si
+    // sustituir castigara la métrica, el alumno dejaría de declararlo.
+    const registros = [serie(), serie(), serie({ completed: false })];
+    const resultado = cumplimientoDeSeries(registros);
+
+    expect(resultado.disponible).toBe(true);
+    if (resultado.disponible) {
+      expect(resultado.numerador).toBe(2);
+      expect(resultado.denominador).toBe(3);
+    }
+  });
+
   describe('cumplimientoDeRepeticiones (RN-69a)', () => {
     it('usa el tope del rango como objetivo', () => {
       // Rango 8-12: cumplir el 100% es haber hecho 12, no 8.
@@ -100,6 +114,23 @@ describe('compliance (HU23 - T2)', () => {
       if (resultado.disponible) {
         expect(resultado.denominador).toBe(12);
         expect(resultado.porcentaje).toBe(100);
+      }
+    });
+
+    it('el ejemplo del criterio: 3 series de 8-12 con 12, 10 y 8 = 83,3%', () => {
+      // Objetivo 36 (3 x el tope de 12); ejecutadas 30.
+      const registros = [
+        serie({ prescribedMaxRepetitions: 12, performedRepetitions: 12 }),
+        serie({ prescribedMaxRepetitions: 12, performedRepetitions: 10 }),
+        serie({ prescribedMaxRepetitions: 12, performedRepetitions: 8 }),
+      ];
+      const resultado = cumplimientoDeRepeticiones(registros);
+
+      expect(resultado.disponible).toBe(true);
+      if (resultado.disponible) {
+        expect(resultado.denominador).toBe(36);
+        expect(resultado.numerador).toBe(30);
+        expect(resultado.porcentaje).toBeCloseTo(83.3, 1);
       }
     });
 

@@ -58,8 +58,12 @@ export function cargaMaximaEstimadaDeSerie(
     return null;
   }
 
-  const estimada = carga * (1 + repeticiones / 30);
-  return Math.round(estimada * 100) / 100;
+  // Sin redondear: el valor se usa para comparar dos estimaciones entre sí
+  // (RN-74), y redondear acá arrastra el error al cociente. Con el redondeo a
+  // dos decimales, una progresión de 100 a 102,5 kg daba 2,49% en lugar de
+  // 2,5% y caía del lado equivocado del umbral de estancamiento. Quien muestre
+  // el valor lo redondea al presentarlo.
+  return carga * (1 + repeticiones / 30);
 }
 
 /**

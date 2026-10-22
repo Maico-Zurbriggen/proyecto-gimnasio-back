@@ -1,6 +1,8 @@
 import type { Clock } from '../../routines/application/ports/clock';
 import {
   calcularAdherencia,
+  SEMANAS_VENTANA_ADHERENCIA,
+  ZONA_HORARIA_POR_DEFECTO,
   type Adherencia,
   type FrecuenciaVigente,
   type SesionDeAdherencia,
@@ -52,6 +54,15 @@ export interface IndicatorsRepository {
     studentId: string,
     desde: Date,
   ): Promise<SesionDelPeriodo[]>;
+
+  /**
+   * Zona horaria del gimnasio del alumno (RN-110).
+   *
+   * Las semanas de la ventana móvil se recortan de lunes a domingo en esta
+   * zona, no en UTC: una sesión del domingo a la noche pertenece a la semana
+   * que el alumno vivió, no a la siguiente.
+   */
+  findGymTimeZone(studentId: string): Promise<string | null>;
 }
 
 /** Indicadores de adherencia de un alumno (HU23 - T1). */
@@ -80,14 +91,21 @@ export class GetAdherenceUseCase {
     // margen y no dependa de la hora exacta del corte.
     const desde = new Date(now.getTime() - 5 * 7 * 24 * 60 * 60 * 1000);
 
-    const [sesiones, frecuencias] = await Promise.all([
+    const [sesiones, frecuencias, zona] = await Promise.all([
       this.indicators.findSessionsSince(studentId, desde),
       this.indicators.findTargetFrequencies(studentId),
+      this.indicators.findGymTimeZone(studentId),
     ]);
 
     return {
       studentId,
-      adherencia: calcularAdherencia(sesiones, frecuencias, now),
+      adherencia: calcularAdherencia(
+        sesiones,
+        frecuencias,
+        now,
+        SEMANAS_VENTANA_ADHERENCIA,
+        zona ?? ZONA_HORARIA_POR_DEFECTO,
+      ),
       calculadoEl: now.toISOString(),
     };
   }
@@ -171,10 +189,11 @@ export class GetSignalsUseCase {
     // que necesita alguna de las tres señales.
     const desde = new Date(now.getTime() - 6 * 7 * 24 * 60 * 60 * 1000);
 
-    const [sesionesConSeries, sesiones, frecuencias] = await Promise.all([
+    const [sesionesConSeries, sesiones, frecuencias, zona] = await Promise.all([
       this.indicators.findSessionsWithSeriesSince(studentId, desde),
       this.indicators.findSessionsSince(studentId, desde),
       this.indicators.findTargetFrequencies(studentId),
+      this.indicators.findGymTimeZone(studentId),
     ]);
 
     // El estancamiento se evalúa por ejercicio: un alumno puede progresar en
@@ -192,7 +211,12 @@ export class GetSignalsUseCase {
       estancamiento: ejercicios.map((exerciseId) =>
         detectarEstancamiento(sesionesConSeries, exerciseId, now),
       ),
-      caidaDeAdherencia: detectarCaidaDeAdherencia(sesiones, frecuencias, now),
+      caidaDeAdherencia: detectarCaidaDeAdherencia(
+        sesiones,
+        frecuencias,
+        now,
+        zona ?? ZONA_HORARIA_POR_DEFECTO,
+      ),
       desbalance: detectarDesbalance(sesionesConSeries, now),
       calculadoEl: now.toISOString(),
     };
