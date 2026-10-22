@@ -521,6 +521,7 @@ export function createApp({
         resolvedAssignments,
         resolvedClock,
       ),
+      resolvedAssignments,
     ),
   );
 
