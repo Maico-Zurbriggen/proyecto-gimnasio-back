@@ -35,6 +35,17 @@ export class AdjustmentNotApplicableError extends Error {
   }
 }
 
+/** El criterio o el dato de un ajuste no cumple RN-84 / RF-090 (T1). */
+export class InvalidAdjustmentEvidenceError extends Error {
+  constructor(
+    readonly field: 'criterion' | 'supportingData',
+    readonly reason: string,
+  ) {
+    super(`Invalid adjustment evidence (${field}): ${reason}`);
+    this.name = 'InvalidAdjustmentEvidenceError';
+  }
+}
+
 /** La rutina sobre la que se diagnosticó ya no tiene una versión vigente. */
 export class RoutineNotAvailableError extends Error {
   constructor(message = 'Routine for the proposal is not available') {

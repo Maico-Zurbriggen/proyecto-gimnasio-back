@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { validateGenerationV2 } from '../../../../integrations/ai/routine-generation-v2';
+import { assertValidAdjustmentEvidence } from '../../domain/services/adjustment-evidence';
 import {
   validateGymGenerationSettings,
   generationPolicySnapshot,
@@ -411,6 +412,12 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
           true,
         );
         const evaluation = cycle.evaluation as unknown as RenewalEvaluation;
+        // T1 (RN-84, RF-090): valida el par criterio+dato también en renovación;
+        // si el ciclo trajera evidencia vacía, falla antes de persistir.
+        const evidence = assertValidAdjustmentEvidence(
+          evaluation.criterio,
+          cycle.evaluation,
+        );
         const diagnostic = await tx.evolutionDiagnostic.create({
           data: {
             studentId,
@@ -451,7 +458,7 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
                 // cambio de estructura por ciclo vencido; la evidencia que lo
                 // sustenta es la del ciclo, no un disparador de RN-89a.
                 type: 'ESTRUCTURA',
-                criterion: evaluation.criterio,
+                criterion: evidence.criterion,
                 previousValue: {
                   routine_type: source.routine.routineType,
                   target_weekly_frequency: source.routine.targetWeeklyFrequency,
@@ -481,7 +488,8 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
                     })),
                   }),
                 ) as Prisma.InputJsonValue,
-                supportingData: cycle.evaluation as Prisma.InputJsonValue,
+                supportingData:
+                  evidence.supportingData as unknown as Prisma.InputJsonValue,
               },
             },
           },

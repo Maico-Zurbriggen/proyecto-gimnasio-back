@@ -21,6 +21,13 @@ export interface ProposalSummaryDto {
   student: { id: string; displayName: string };
   globalSituation: string;
   adjustmentsCount: number;
+  /**
+   * T2 (RF-090, FL-10): la bandeja muestra el criterio y el dato de cada
+   * ajuste sin abrir el detalle. Es el mismo registro del detalle; para
+   * ESTRUCTURA el candidato completo viaja en `proposedValue`/`supportingData`
+   * y la vista decide cuánto resumir.
+   */
+  adjustments: ProposalAdjustmentRecord[];
   advertenciaDatos: AdvertenciaDatosDesactualizadosDto;
 }
 
@@ -97,6 +104,7 @@ export function toProposalSummaryDto(
     student: record.student,
     globalSituation: record.diagnostic.globalSituation,
     adjustmentsCount: record.adjustments.length,
+    adjustments: record.adjustments,
     advertenciaDatos: evaluarAdvertencia(record),
   };
 }
