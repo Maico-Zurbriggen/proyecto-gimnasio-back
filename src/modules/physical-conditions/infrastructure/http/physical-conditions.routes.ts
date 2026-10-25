@@ -66,6 +66,14 @@ export function createPhysicalConditionsRouter(
   );
 
   // T2: cerrar una condición vigente.
+  // T2: revisar zona o severidad. Cierra la anterior y abre la nueva, para que
+  // el historial conserve el período con los valores viejos (criterio 14).
+  router.post(
+    '/students/:studentId/conditions/:conditionId/revise',
+    ...soloElAlumno,
+    controller.revise,
+  );
+
   router.post(
     '/students/:studentId/conditions/:conditionId/close',
     ...soloElAlumno,

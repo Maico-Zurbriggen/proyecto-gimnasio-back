@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import type { ReviseConditionUseCase } from '../../application/use-cases/revise-condition.use-case';
 import type { CloseConditionUseCase } from '../../application/use-cases/close-condition.use-case';
 import type { ConditionsDeclarationUseCases } from '../../application/use-cases/conditions-declaration.use-cases';
 import type { DeclareConditionUseCase } from '../../application/use-cases/declare-condition.use-case';
@@ -15,6 +16,7 @@ import {
 } from '../../domain/errors/condition-errors';
 import {
   closeConditionBodySchema,
+  reviseConditionBodySchema,
   conditionParamsSchema,
   declareConditionBodySchema,
   listConditionsQuerySchema,
@@ -73,6 +75,7 @@ export class PhysicalConditionsController {
     private readonly declareCondition: DeclareConditionUseCase,
     private readonly listConditions: ListConditionsUseCase,
     private readonly closeCondition: CloseConditionUseCase,
+    private readonly reviseCondition: ReviseConditionUseCase,
     private readonly declaration: ConditionsDeclarationUseCases,
   ) {}
 
@@ -223,6 +226,43 @@ export class PhysicalConditionsController {
       });
 
       res.status(200).json(condition);
+    } catch (error) {
+      sendConditionError(error, res, next);
+    }
+  };
+
+  /** T2: revisar zona o severidad conservando el período anterior. */
+  revise = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = conditionParamsSchema.safeParse(req.params);
+      if (!params.success) {
+        res.status(400).json({
+          error: 'invalid_request_parameters',
+          details: params.error.flatten(),
+        });
+        return;
+      }
+
+      const body = reviseConditionBodySchema.safeParse(req.body ?? {});
+      if (!body.success) {
+        res.status(400).json({
+          error: 'invalid_request_body',
+          details: body.error.flatten(),
+        });
+        return;
+      }
+
+      res.status(200).json(
+        await this.reviseCondition.execute({
+          studentId: params.data.studentId,
+          conditionId: params.data.conditionId,
+          ...body.data,
+        }),
+      );
     } catch (error) {
       sendConditionError(error, res, next);
     }

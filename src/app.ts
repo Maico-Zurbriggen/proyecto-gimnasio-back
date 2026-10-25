@@ -107,6 +107,9 @@ import { PrismaAttemptLimiter } from './modules/invitations/infrastructure/persi
 import { PrismaInvitationsRepository } from './modules/invitations/infrastructure/persistence/prisma-invitations.repository';
 import type { PhysicalConditionsRepository } from './modules/physical-conditions/application/ports/physical-conditions.repository';
 import { CloseConditionUseCase } from './modules/physical-conditions/application/use-cases/close-condition.use-case';
+import { ReviseConditionUseCase } from './modules/physical-conditions/application/use-cases/revise-condition.use-case';
+import type { RoutineRevaluation } from './modules/physical-conditions/application/ports/routine-revaluation.port';
+import { PrismaRoutineRevaluation } from './modules/physical-conditions/infrastructure/persistence/prisma-routine-revaluation';
 import { DeclareConditionUseCase } from './modules/physical-conditions/application/use-cases/declare-condition.use-case';
 import { ListConditionsUseCase } from './modules/physical-conditions/application/use-cases/list-conditions.use-case';
 import { PhysicalConditionsController } from './modules/physical-conditions/infrastructure/http/physical-conditions.controller';
@@ -251,6 +254,7 @@ interface AppDependencies {
   routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
   physicalConditionsRepository?: PhysicalConditionsRepository;
+  routineRevaluation?: RoutineRevaluation;
   invitationAttemptLimiter?: AttemptLimiter;
   gymsRepository?: GymsRepository;
   timezoneCatalog?: TimezoneCatalog;
@@ -318,6 +322,7 @@ export function createApp({
   routineRenewalsRepository,
   invitationsRepository,
   physicalConditionsRepository,
+  routineRevaluation,
   invitationAttemptLimiter,
   gymsRepository,
   timezoneCatalog,
@@ -539,12 +544,28 @@ export function createApp({
   const resolvedConditionsRepo =
     physicalConditionsRepository ??
     new PrismaPhysicalConditionsRepository(prisma);
+  // RN-91: declarar, revisar o cerrar una condición remarca la rutina vigente.
+  const resolvedRevaluation =
+    routineRevaluation ?? new PrismaRoutineRevaluation(prisma);
   app.use(
     createPhysicalConditionsRouter(
       new PhysicalConditionsController(
-        new DeclareConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new DeclareConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          resolvedRevaluation,
+        ),
         new ListConditionsUseCase(resolvedConditionsRepo, resolvedClock),
-        new CloseConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new CloseConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          resolvedRevaluation,
+        ),
+        new ReviseConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          resolvedRevaluation,
+        ),
         new ConditionsDeclarationUseCases(
           resolvedConditionsRepo,
           resolvedClock,
