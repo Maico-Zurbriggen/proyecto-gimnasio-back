@@ -110,6 +110,35 @@ export class PrismaPhysicalConditionsRepository implements PhysicalConditionsRep
     return toRecord(updated);
   }
 
+  async revise(
+    conditionId: string,
+    cierre: Date,
+    nueva: DeclareConditionCommand,
+  ): Promise<{
+    cerrada: PhysicalConditionRecord;
+    vigente: PhysicalConditionRecord;
+  }> {
+    // Las dos escrituras van juntas: media revisión dejaría al alumno sin la
+    // condición que quiso corregir.
+    return this.prisma.$transaction(async (tx) => {
+      const cerrada = await tx.physicalCondition.update({
+        where: { id: conditionId },
+        data: { endsOn: cierre },
+      });
+      const vigente = await tx.physicalCondition.create({
+        data: {
+          studentId: nueva.studentId,
+          bodyZoneCode: nueva.bodyZoneCode,
+          severity: nueva.severity,
+          description: nueva.description,
+          startsOn: nueva.startsOn,
+        },
+      });
+
+      return { cerrada: toRecord(cerrada), vigente: toRecord(vigente) };
+    });
+  }
+
   async hasHealthConsent(studentId: string): Promise<boolean> {
     if (!isUuid(studentId)) return false;
     const consent = await this.prisma.consent.findFirst({
