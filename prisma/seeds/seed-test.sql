@@ -267,6 +267,31 @@ VALUES
   ('10000000-0000-4000-8000-000000000001', 'BANDAS_ELASTICAS', true, '21000000-0000-4000-8000-000000000001', '2026-08-01T10:00:00Z')
 ON CONFLICT DO NOTHING;
 
+-- Los ejercicios aprobados visibles para el gimnasio deben habilitarse de
+-- forma explícita. Sin esta relación, el catálogo los considera no disponibles
+-- aunque pertenezcan al catálogo base (RN-117).
+INSERT INTO app.gym_exercises
+  (gym_id, exercise_id, enabled, updated_by_user_id, updated_at)
+SELECT
+  '10000000-0000-4000-8000-000000000001'::uuid,
+  e.id,
+  true,
+  '21000000-0000-4000-8000-000000000001'::uuid,
+  CURRENT_TIMESTAMP
+FROM app.exercises e
+WHERE e.state = 'APROBADO'
+  AND (
+    (e.origin = 'CATALOGO_BASE' AND e.gym_id IS NULL)
+    OR
+    (e.origin = 'GIMNASIO' AND e.gym_id = '10000000-0000-4000-8000-000000000001'::uuid)
+  )
+ON CONFLICT (gym_id, exercise_id) DO UPDATE
+SET enabled = true,
+    updated_by_user_id = EXCLUDED.updated_by_user_id,
+    updated_at = EXCLUDED.updated_at,
+    revision = app.gym_exercises.revision + 1
+WHERE app.gym_exercises.enabled IS DISTINCT FROM true;
+
 -- ---------------------------------------------------------------------------
 -- 12. Plantillas privadas de lucia (sin presets en esta entrega, ARCH §11.7)
 -- ---------------------------------------------------------------------------
