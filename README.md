@@ -164,14 +164,14 @@ Antes de cambiar el esquema, consultar [operations/local-database.md](https://gi
 ### Recuperación de credenciales y objetivos (HU09 y HU10)
 
 El contrato de estas historias y de las operaciones afectadas está en
-[`openapi.json`](openapi.json). La recuperación usa el
-[API HTTP de Resend](https://resend.com/docs/api-reference/emails/send-email)
-sin nuevas dependencias. Configurar `RECOVERY_EMAIL_API_KEY`,
-`RECOVERY_EMAIL_FROM` (remitente verificado) y `RECOVERY_PAGE_URL` (URL de la
-pantalla que recibe el token; HTTPS en despliegues). No se incluyen credenciales
-en el repositorio. Configurar `TRUST_PROXY_HOPS` sólo con la cantidad exacta de
-proxies confiables del despliegue; localmente vale `0`. Esto permite limitar por
-IP real sin aceptar encabezados de origen arbitrarios.
+[`openapi.json`](openapi.json). La recuperación y las invitaciones usan el
+[API HTTP transaccional de Brevo](https://developers.brevo.com/docs/send-a-transactional-email)
+sin nuevas dependencias. Configurar `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`
+(remitente verificado), `BREVO_SENDER_NAME`, `RECOVERY_PAGE_URL` e
+`INVITATION_PAGE_URL`; las URLs deben usar HTTPS en despliegues. No se incluyen
+credenciales en el repositorio. Configurar `TRUST_PROXY_HOPS` sólo con la
+cantidad exacta de proxies confiables del despliegue; localmente vale `0`. Esto
+permite limitar por IP real sin aceptar encabezados de origen arbitrarios.
 
 - `POST /auth/password-recovery`, `{ "email": "alumno@gimnasio.test" }`: `202`
   genérico para cualquier cuenta; máximo dos solicitudes por IP y día UTC,
