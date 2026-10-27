@@ -32,7 +32,7 @@ function toRecord(row: Row): PhysicalConditionRecord {
   };
 }
 
-/** RN-45: recalcula la última versión vigente o propuesta del alumno. */
+/** RN-91/RN-92: recalcula marcas y deriva avisos/propuesta de sustitución. */
 async function reevaluateCurrentRoutines(
   tx: Prisma.TransactionClient,
   studentId: string,
@@ -59,10 +59,13 @@ async function reevaluateCurrentRoutines(
     tx.routine.findMany({
       where: { studentId, state: { in: ['VIGENTE', 'PROPUESTA'] } },
       select: {
+        id: true,
+        state: true,
         versions: {
           orderBy: { versionNumber: 'desc' },
           take: 1,
           select: {
+            id: true,
             days: {
               select: {
                 exercises: {
@@ -70,6 +73,9 @@ async function reevaluateCurrentRoutines(
                     id: true,
                     exercise: {
                       select: {
+                        id: true,
+                        name: true,
+                        movementPattern: true,
                         state: true,
                         difficultyLevel: true,
                         equipment: { select: { equipmentCode: true } },
@@ -102,9 +108,41 @@ async function reevaluateCurrentRoutines(
     }));
   const presentEquipment = equipment.map((item) => item.equipmentCode);
 
+  const catalog = await tx.gymExercise.findMany({
+    where: {
+      gymId: student.user.gymId,
+      enabled: true,
+      exercise: { state: 'APROBADO' },
+    },
+    select: {
+      exercise: {
+        select: {
+          id: true,
+          name: true,
+          movementPattern: true,
+          state: true,
+          difficultyLevel: true,
+          equipment: { select: { equipmentCode: true } },
+          muscles: {
+            where: { participation: 'PRIMARIA' },
+            select: { muscleCode: true },
+          },
+          joints: { select: { jointCode: true } },
+        },
+      },
+    },
+  });
+
   for (const routine of routines) {
     const version = routine.versions[0];
     if (!version) continue;
+    const incompatibilities: Array<{
+      routineExerciseId: string;
+      exerciseId: string;
+      exerciseName: string;
+      reason: string;
+      replacement: { id: string; name: string } | null;
+    }> = [];
     for (const day of version.days) {
       for (const item of day.exercises) {
         const compatibility = evaluateExerciseCompatibility({
@@ -128,7 +166,160 @@ async function reevaluateCurrentRoutines(
             compatibilityReason: compatibility.reason,
           },
         });
+
+        if (
+          routine.state === 'VIGENTE' &&
+          compatibility.state === 'INCOMPATIBLE'
+        ) {
+          const replacement = catalog
+            .map(({ exercise }) => ({
+              exercise,
+              compatibility: evaluateExerciseCompatibility({
+                exerciseState: exercise.state,
+                exerciseDifficulty: exercise.difficultyLevel,
+                studentExperience: student.experienceLevel,
+                requiredEquipment: exercise.equipment.map(
+                  (requirement) => requirement.equipmentCode,
+                ),
+                presentEquipment,
+                primaryMuscles: exercise.muscles.map(
+                  (muscle) => muscle.muscleCode,
+                ),
+                joints: exercise.joints.map((joint) => joint.jointCode),
+                activeConditions,
+              }),
+            }))
+            .find(
+              ({ exercise, compatibility: candidateCompatibility }) =>
+                exercise.id !== item.exercise.id &&
+                exercise.movementPattern === item.exercise.movementPattern &&
+                candidateCompatibility.state === 'COMPATIBLE',
+            )?.exercise;
+          incompatibilities.push({
+            routineExerciseId: item.id,
+            exerciseId: item.exercise.id,
+            exerciseName: item.exercise.name,
+            reason:
+              compatibility.reason ??
+              'El ejercicio es incompatible con una condición física vigente.',
+            replacement: replacement
+              ? { id: replacement.id, name: replacement.name }
+              : null,
+          });
+        }
       }
+    }
+
+    if (routine.state !== 'VIGENTE') continue;
+
+    const superseded = await tx.adaptationProposal.findMany({
+      where: {
+        studentId,
+        state: { in: ['PENDIENTE', 'BLOQUEADA'] },
+      },
+      select: { id: true },
+    });
+    if (superseded.length > 0) {
+      const supersededIds = superseded.map((proposal) => proposal.id);
+      await tx.adaptationProposal.updateMany({
+        where: { id: { in: supersededIds } },
+        data: {
+          state: 'INVALIDADA',
+          resolvedAt: evaluatedAt,
+          resolutionReason: 'Cambió el contexto de condiciones físicas.',
+        },
+      });
+      await tx.notice.updateMany({
+        where: {
+          referenceType: 'ADAPTATION_PROPOSAL',
+          referenceId: { in: supersededIds },
+          expired: false,
+        },
+        data: { expired: true },
+      });
+    }
+
+    if (incompatibilities.length === 0) continue;
+
+    const assignment = await tx.trainerStudentAssignment.findFirst({
+      where: {
+        studentId,
+        startsAt: { lte: evaluatedAt },
+        OR: [{ endsAt: null }, { endsAt: { gt: evaluatedAt } }],
+      },
+      select: { trainerId: true },
+    });
+    const day = new Date(
+      `${evaluatedAt.toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
+    const diagnostic = await tx.evolutionDiagnostic.create({
+      data: {
+        studentId,
+        routineVersionId: version.id,
+        periodStart: day,
+        periodEnd: day,
+        globalSituation: 'DATOS_INSUFICIENTES',
+        componentVersion: 'condition-context-v1',
+        criteriaNotEvaluated: ['rendimiento'],
+        calculatedAt: evaluatedAt,
+      },
+    });
+    const actionable = incompatibilities.filter(
+      (
+        item,
+      ): item is typeof item & { replacement: { id: string; name: string } } =>
+        item.replacement !== null,
+    );
+    const proposal = await tx.adaptationProposal.create({
+      data: {
+        diagnosticId: diagnostic.id,
+        studentId,
+        state:
+          assignment && actionable.length === incompatibilities.length
+            ? 'PENDIENTE'
+            : 'BLOQUEADA',
+        componentVersion: 'condition-context-v1',
+        createdAt: evaluatedAt,
+        resolutionReason:
+          actionable.length === incompatibilities.length
+            ? null
+            : 'No hay una alternativa compatible para todos los ejercicios afectados.',
+        adjustments: {
+          create: actionable.map((item) => ({
+            type: 'SUSTITUCION',
+            routineExerciseId: item.routineExerciseId,
+            previousValue: {
+              exercise_id: item.exerciseId,
+              exercise_name: item.exerciseName,
+            },
+            proposedValue: {
+              exercise_id: item.replacement.id,
+              exercise_name: item.replacement.name,
+            },
+            criterion: item.reason,
+            supportingData: {
+              motivo: item.reason,
+              origen: 'condicion_fisica_vigente',
+            },
+          })),
+        },
+      },
+    });
+    const recipients = [
+      studentId,
+      ...(assignment ? [assignment.trainerId] : []),
+    ];
+    for (const recipientUserId of recipients) {
+      await tx.notice.create({
+        data: {
+          recipientUserId,
+          type: 'INCOMPATIBILIDAD_SOBREVENIDA',
+          referenceType: 'ADAPTATION_PROPOSAL',
+          referenceId: proposal.id,
+          text: 'Una condición física vigente afecta ejercicios de la rutina. La rutina sigue disponible y requiere revisión del entrenador.',
+          createdAt: evaluatedAt,
+        },
+      });
     }
   }
 }
@@ -141,30 +332,33 @@ export class PrismaPhysicalConditionsRepository implements PhysicalConditionsRep
   ): Promise<PhysicalConditionRecord | null> {
     if (!isUuid(command.studentId)) return null;
 
-    return this.prisma.$transaction(async (tx) => {
-      const profile = await tx.studentProfile.findUnique({
-        where: { userId: command.studentId },
-        select: { userId: true },
-      });
-      if (!profile) return null;
+    return this.prisma.$transaction(
+      async (tx) => {
+        const profile = await tx.studentProfile.findUnique({
+          where: { userId: command.studentId },
+          select: { userId: true },
+        });
+        if (!profile) return null;
 
-      const created = await tx.physicalCondition.create({
-        data: {
-          studentId: command.studentId,
-          bodyZoneCode: command.bodyZoneCode,
-          severity: command.severity,
-          description: command.description,
-          startsOn: command.startsOn,
-        },
-      });
-      // FL-01/A1: declarar una condición anula la declaración de "ninguna".
-      await tx.studentProfile.update({
-        where: { userId: command.studentId },
-        data: { noConditionsDeclaredAt: null },
-      });
-      await reevaluateCurrentRoutines(tx, command.studentId, new Date());
-      return toRecord(created);
-    });
+        const created = await tx.physicalCondition.create({
+          data: {
+            studentId: command.studentId,
+            bodyZoneCode: command.bodyZoneCode,
+            severity: command.severity,
+            description: command.description,
+            startsOn: command.startsOn,
+          },
+        });
+        // FL-01/A1: declarar una condición anula la declaración de "ninguna".
+        await tx.studentProfile.update({
+          where: { userId: command.studentId },
+          data: { noConditionsDeclaredAt: null },
+        });
+        await reevaluateCurrentRoutines(tx, command.studentId, new Date());
+        return toRecord(created);
+      },
+      { timeout: 20000 },
+    );
   }
 
   async listByStudent(studentId: string): Promise<PhysicalConditionRecord[]> {
@@ -191,14 +385,17 @@ export class PrismaPhysicalConditionsRepository implements PhysicalConditionsRep
     conditionId: string,
     endsOn: Date,
   ): Promise<PhysicalConditionRecord> {
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.physicalCondition.update({
-        where: { id: conditionId },
-        data: { endsOn },
-      });
-      await reevaluateCurrentRoutines(tx, updated.studentId, new Date());
-      return toRecord(updated);
-    });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const updated = await tx.physicalCondition.update({
+          where: { id: conditionId },
+          data: { endsOn },
+        });
+        await reevaluateCurrentRoutines(tx, updated.studentId, new Date());
+        return toRecord(updated);
+      },
+      { timeout: 20000 },
+    );
   }
 
   async hasHealthConsent(studentId: string): Promise<boolean> {
