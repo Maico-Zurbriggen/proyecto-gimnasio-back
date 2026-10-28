@@ -9,6 +9,10 @@ import type {
 import type { Severidad, ZonaCorporal } from '../../domain/services/body-zones';
 import { estabaVigenteEn } from '../../domain/services/condition-validity';
 import { evaluateExerciseCompatibility } from '../../domain/services/exercise-compatibility';
+import {
+  conditionProposalState,
+  conditionSubstitutionValue,
+} from '../../domain/services/condition-proposal';
 
 interface Row {
   id: string;
@@ -264,42 +268,31 @@ async function reevaluateCurrentRoutines(
         calculatedAt: evaluatedAt,
       },
     });
-    const actionable = incompatibilities.filter(
-      (
-        item,
-      ): item is typeof item & { replacement: { id: string; name: string } } =>
-        item.replacement !== null,
-    );
     const proposal = await tx.adaptationProposal.create({
       data: {
         diagnosticId: diagnostic.id,
         studentId,
-        state:
-          assignment && actionable.length === incompatibilities.length
-            ? 'PENDIENTE'
-            : 'BLOQUEADA',
+        // BLOQUEADA representa exclusivamente la falta de entrenador vigente.
+        // Si no existe un reemplazo automático, el entrenador igualmente debe
+        // recibir la propuesta y resolver el ejercicio de forma manual.
+        state: conditionProposalState(assignment !== null),
         componentVersion: 'condition-context-v1',
         createdAt: evaluatedAt,
-        resolutionReason:
-          actionable.length === incompatibilities.length
-            ? null
-            : 'No hay una alternativa compatible para todos los ejercicios afectados.',
+        resolutionReason: null,
         adjustments: {
-          create: actionable.map((item) => ({
+          create: incompatibilities.map((item) => ({
             type: 'SUSTITUCION',
             routineExerciseId: item.routineExerciseId,
             previousValue: {
               exercise_id: item.exerciseId,
               exercise_name: item.exerciseName,
             },
-            proposedValue: {
-              exercise_id: item.replacement.id,
-              exercise_name: item.replacement.name,
-            },
+            proposedValue: conditionSubstitutionValue(item.replacement),
             criterion: item.reason,
             supportingData: {
               motivo: item.reason,
               origen: 'condicion_fisica_vigente',
+              requires_manual_intervention: item.replacement === null,
             },
           })),
         },

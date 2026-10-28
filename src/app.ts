@@ -113,6 +113,14 @@ import { PhysicalConditionsController } from './modules/physical-conditions/infr
 import { createPhysicalConditionsRouter } from './modules/physical-conditions/infrastructure/http/physical-conditions.routes';
 import { ConditionsDeclarationUseCases } from './modules/physical-conditions/application/use-cases/conditions-declaration.use-cases';
 import { PrismaPhysicalConditionsRepository } from './modules/physical-conditions/infrastructure/persistence/prisma-physical-conditions.repository';
+import type { NoticesRepository } from './modules/notifications/application/ports/notices.repository';
+import {
+  ListOwnNoticesUseCase,
+  MarkNoticeReadUseCase,
+} from './modules/notifications/application/use-cases/notices.use-cases';
+import { NoticesController } from './modules/notifications/infrastructure/http/notices.controller';
+import { createNoticesRouter } from './modules/notifications/infrastructure/http/notices.routes';
+import { PrismaNoticesRepository } from './modules/notifications/infrastructure/persistence/prisma-notices.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
 import { CreateManualRoutineUseCase } from './modules/prescriptions/application/use-cases/create-manual-routine.use-case';
@@ -251,6 +259,7 @@ interface AppDependencies {
   routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
   physicalConditionsRepository?: PhysicalConditionsRepository;
+  noticesRepository?: NoticesRepository;
   invitationAttemptLimiter?: AttemptLimiter;
   gymsRepository?: GymsRepository;
   timezoneCatalog?: TimezoneCatalog;
@@ -318,6 +327,7 @@ export function createApp({
   routineRenewalsRepository,
   invitationsRepository,
   physicalConditionsRepository,
+  noticesRepository,
   invitationAttemptLimiter,
   gymsRepository,
   timezoneCatalog,
@@ -730,6 +740,17 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+
+  const resolvedNoticesRepo =
+    noticesRepository ?? new PrismaNoticesRepository(prisma);
+  app.use(
+    createNoticesRouter(
+      new NoticesController(
+        new ListOwnNoticesUseCase(resolvedNoticesRepo),
+        new MarkNoticeReadUseCase(resolvedNoticesRepo, resolvedClock),
+      ),
+    ),
+  );
   // RF-027 — Ciclo de vida de la sesión (FL-05, FL-07, RN-50 a RN-61).
   // Pausar no es una transición: es estado local del cliente (CB-25, FL-07).
   const resolvedTrainingSessionsRepo =

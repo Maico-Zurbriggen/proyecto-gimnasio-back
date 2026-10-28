@@ -30,9 +30,9 @@ function diaUtc(fecha: Date): number {
 /**
  * `true` si la condición regía en la fecha indicada.
  *
- * Vigente es la que empezó en esa fecha o antes y no terminó, o terminó
- * después (RN-10). El día de inicio cuenta; el de cierre también, porque la
- * condición estuvo vigente ese día.
+ * Vigente es la que empezó en esa fecha o antes y no terminó, o termina en una
+ * fecha futura (RN-10/RN-11). El día de inicio cuenta; el de cierre no: desde
+ * esa fecha deja de restringir la rutina.
  */
 export function estabaVigenteEn(
   condicion: Pick<CondicionFisica, 'startsOn' | 'endsOn'>,
@@ -46,7 +46,7 @@ export function estabaVigenteEn(
   if (condicion.endsOn === null) {
     return true;
   }
-  return diaUtc(condicion.endsOn) >= dia;
+  return diaUtc(condicion.endsOn) > dia;
 }
 
 /** Condiciones que regían en una fecha dada. */

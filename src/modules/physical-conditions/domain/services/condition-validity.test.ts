@@ -78,12 +78,22 @@ describe('condition-validity (HU11 - T2)', () => {
       expect(estabaVigenteEn(condicion, hoy)).toBe(false);
     });
 
-    it('rige el mismo día en que se cierra', () => {
+    it('deja de regir desde el mismo día en que se cierra (RN-11)', () => {
       const condicion = {
         startsOn: new Date('2026-09-01T00:00:00Z'),
         endsOn: new Date('2026-10-05T00:00:00Z'),
       };
-      expect(estabaVigenteEn(condicion, hoy)).toBe(true);
+      expect(estabaVigenteEn(condicion, hoy)).toBe(false);
+    });
+
+    it('sigue vigente hasta el día anterior a su cierre', () => {
+      const condicion = {
+        startsOn: new Date('2026-09-01T00:00:00Z'),
+        endsOn: new Date('2026-10-05T00:00:00Z'),
+      };
+      expect(estabaVigenteEn(condicion, new Date('2026-10-04T23:59:59Z'))).toBe(
+        true,
+      );
     });
 
     it('responde qué regía en una fecha pasada, no sólo hoy (RF-085)', () => {
