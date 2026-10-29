@@ -116,6 +116,7 @@ import { PrismaPhysicalConditionsRepository } from './modules/physical-condition
 import type { NoticesRepository } from './modules/notifications/application/ports/notices.repository';
 import {
   ListOwnNoticesUseCase,
+  MarkAllNoticesReadUseCase,
   MarkNoticeReadUseCase,
 } from './modules/notifications/application/use-cases/notices.use-cases';
 import { NoticesController } from './modules/notifications/infrastructure/http/notices.controller';
@@ -746,8 +747,9 @@ export function createApp({
   app.use(
     createNoticesRouter(
       new NoticesController(
-        new ListOwnNoticesUseCase(resolvedNoticesRepo),
+        new ListOwnNoticesUseCase(resolvedNoticesRepo, resolvedClock),
         new MarkNoticeReadUseCase(resolvedNoticesRepo, resolvedClock),
+        new MarkAllNoticesReadUseCase(resolvedNoticesRepo, resolvedClock),
       ),
     ),
   );

@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { noticeEventKeys } from '../../../notifications/domain/notice-event';
 import {
   assertGymExercisesAvailable,
   lockGymCatalog,
@@ -862,9 +863,23 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           },
           data: { expired: true },
         });
-        await tx.notice.create({
-          data: {
+        const reviewEventKey = noticeEventKeys.routineReview(
+          command.routineId,
+          command.versionId,
+          aprueba ? 'approved' : 'rejected',
+        );
+        await tx.notice.upsert({
+          where: {
+            recipientUserId_eventKey: {
+              recipientUserId: before.studentId,
+              eventKey: reviewEventKey,
+            },
+          },
+          update: {},
+          create: {
             recipientUserId: before.studentId,
+            eventKey: reviewEventKey,
+            audienceRole: 'ALUMNO',
             type: aprueba ? 'RUTINA_EN_VIGENCIA' : 'RUTINA_RECHAZADA',
             referenceType: 'ROUTINE',
             referenceId: command.routineId,

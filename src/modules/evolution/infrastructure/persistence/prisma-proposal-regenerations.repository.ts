@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { noticeEventKeys } from '../../../notifications/domain/notice-event';
 import { CatalogError } from '../../../exercise-catalog/domain/catalog';
 import { lockGymCatalog } from '../../../exercise-catalog/infrastructure/persistence/prisma-catalog.repository';
 import { validateGenerationV2 } from '../../../../integrations/ai/routine-generation-v2';
@@ -394,9 +395,18 @@ export class PrismaProposalRegenerationsRepository implements ProposalRegenerati
         },
       });
       if (changed.count)
-        await tx.notice.create({
-          data: {
+        await tx.notice.upsert({
+          where: {
+            recipientUserId_eventKey: {
+              recipientUserId: row.trainerId,
+              eventKey: noticeEventKeys.proposalRegenerationFailed(row.id),
+            },
+          },
+          update: {},
+          create: {
             recipientUserId: row.trainerId,
+            eventKey: noticeEventKeys.proposalRegenerationFailed(row.id),
+            audienceRole: 'ENTRENADOR',
             type: 'SENAL_DETECTADA',
             referenceType: 'ADAPTATION_PROPOSAL',
             referenceId: row.proposalId,

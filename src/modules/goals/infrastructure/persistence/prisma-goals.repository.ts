@@ -1,4 +1,5 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
+import { noticeEventKeys } from '../../../notifications/domain/notice-event';
 import type { AuthUser } from '../../../../shared/types/auth';
 import type { TrainingPurpose } from '../../../prescriptions/application/ports/prescriptions.repository';
 import {
@@ -290,9 +291,18 @@ export class PrismaGoalsRepository implements GoalsRepository {
       studentId,
       ...(assignment ? [assignment.trainerId] : []),
     ])
-      await tx.notice.create({
-        data: {
+      await tx.notice.upsert({
+        where: {
+          recipientUserId_eventKey: {
+            recipientUserId,
+            eventKey: noticeEventKeys.goalChangeProposal(proposal.id),
+          },
+        },
+        update: {},
+        create: {
           recipientUserId,
+          eventKey: noticeEventKeys.goalChangeProposal(proposal.id),
+          audienceRole: recipientUserId === studentId ? 'ALUMNO' : 'ENTRENADOR',
           type: 'PROPUESTA_PENDIENTE',
           referenceType: 'ADAPTATION_PROPOSAL',
           referenceId: proposal.id,

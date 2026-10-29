@@ -606,40 +606,40 @@ model GymEquipment {
 }
 
 model Exercise {
-  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  gymId               String?              @map("gym_id") @db.Uuid
-  authorUserId        String?              @map("author_user_id") @db.Uuid
+  id                  String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gymId               String?                      @map("gym_id") @db.Uuid
+  authorUserId        String?                      @map("author_user_id") @db.Uuid
   name                String
   instructions        String
-  movementPattern     MovementPattern      @map("movement_pattern")
-  difficultyLevel     ExperienceLevel      @map("difficulty_level")
-  unilateral          Boolean              @default(false)
-  visualResourceUrl   String               @map("visual_resource_url")
-  state               ExerciseState        @default(APROBADO)
-  revision            Int                  @default(1)
+  movementPattern     MovementPattern              @map("movement_pattern")
+  difficultyLevel     ExperienceLevel              @map("difficulty_level")
+  unilateral          Boolean                      @default(false)
+  visualResourceUrl   String                       @map("visual_resource_url")
+  state               ExerciseState                @default(APROBADO)
+  revision            Int                          @default(1)
   source              String?
-  sourceId            String?              @map("source_id")
-  sourceRevision      String?              @map("source_revision")
+  sourceId            String?                      @map("source_id")
+  sourceRevision      String?                      @map("source_revision")
   description         String?
-  tips                String[]             @default([])
-  reviewedByUserId    String?              @map("reviewed_by_user_id") @db.Uuid
-  reviewedAt          DateTime?            @map("reviewed_at") @db.Timestamptz(6)
-  reviewObservation   String?              @map("review_observation")
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  reviewedBy          User?                @relation("ExerciseReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  tips                String[]                     @default([])
+  reviewedByUserId    String?                      @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt          DateTime?                    @map("reviewed_at") @db.Timestamptz(6)
+  reviewObservation   String?                      @map("review_observation")
+  createdAt           DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  reviewedBy          User?                        @relation("ExerciseReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
   availability        GymExercise[]
   media               ExerciseMedia[]
   origin              ExerciseOrigin
-  gym                 Gym?                 @relation(fields: [gymId], references: [id], onDelete: Restrict)
-  author              User?                @relation("ExerciseAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  gym                 Gym?                         @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  author              User?                        @relation("ExerciseAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
   equipment           ExerciseEquipment[]
   muscles             ExerciseMuscle[]
   joints              ExerciseJoint[]
   templateExercises   TemplateExercise[]
   routineExercises    RoutineExercise[]
-  prescribedRecords   SessionSetRecord[]   @relation("PrescribedExercise")
-  performedRecords    SessionSetRecord[]   @relation("PerformedExercise")
+  prescribedRecords   SessionSetRecord[]           @relation("PrescribedExercise")
+  performedRecords    SessionSetRecord[]           @relation("PerformedExercise")
   additionalRecords   SessionAdditionalSetRecord[]
   exerciseDiagnostics ExerciseDiagnostic[]
   personalRecords     PersonalRecord[]
@@ -946,29 +946,29 @@ model PrescribedSet {
 }
 
 model TrainingSession {
-  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentId        String               @map("student_id") @db.Uuid
-  routineId        String               @map("routine_id") @db.Uuid
-  routineVersionId String               @map("routine_version_id") @db.Uuid
-  routineDayId     String               @map("routine_day_id") @db.Uuid
-  state            TrainingSessionState @default(EN_CURSO)
-  startedAt        DateTime             @default(now()) @map("started_at") @db.Timestamptz(6)
-  completedAt      DateTime?            @map("completed_at") @db.Timestamptz(6)
-  occurredOn       DateTime             @map("occurred_on") @db.Date
-  lastActivityAt   DateTime             @default(now()) @map("last_activity_at") @db.Timestamptz(6)
-  simulated        Boolean              @default(false)
-  snapshotComplete Boolean              @default(false) @map("snapshot_complete")
-  dayNameSnapshot  String?              @map("day_name_snapshot")
-  dayPositionSnapshot Int?              @map("day_position_snapshot")
-  versionNumberSnapshot Int?            @map("version_number_snapshot")
-  timezoneSnapshot String?              @map("timezone_snapshot")
-  student          StudentProfile       @relation(fields: [studentId], references: [userId], onDelete: Restrict)
-  routine          Routine              @relation(fields: [routineId], references: [id], onDelete: Restrict)
-  routineVersion   RoutineVersion       @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)
-  routineDay       RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Restrict)
-  setRecords       SessionSetRecord[]
-  additionalSetRecords SessionAdditionalSetRecord[]
-  personalRecords  PersonalRecord[]
+  id                    String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId             String                       @map("student_id") @db.Uuid
+  routineId             String                       @map("routine_id") @db.Uuid
+  routineVersionId      String                       @map("routine_version_id") @db.Uuid
+  routineDayId          String                       @map("routine_day_id") @db.Uuid
+  state                 TrainingSessionState         @default(EN_CURSO)
+  startedAt             DateTime                     @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt           DateTime?                    @map("completed_at") @db.Timestamptz(6)
+  occurredOn            DateTime                     @map("occurred_on") @db.Date
+  lastActivityAt        DateTime                     @default(now()) @map("last_activity_at") @db.Timestamptz(6)
+  simulated             Boolean                      @default(false)
+  snapshotComplete      Boolean                      @default(false) @map("snapshot_complete")
+  dayNameSnapshot       String?                      @map("day_name_snapshot")
+  dayPositionSnapshot   Int?                         @map("day_position_snapshot")
+  versionNumberSnapshot Int?                         @map("version_number_snapshot")
+  timezoneSnapshot      String?                      @map("timezone_snapshot")
+  student               StudentProfile               @relation(fields: [studentId], references: [userId], onDelete: Restrict)
+  routine               Routine                      @relation(fields: [routineId], references: [id], onDelete: Restrict)
+  routineVersion        RoutineVersion               @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)
+  routineDay            RoutineDay                   @relation(fields: [routineDayId], references: [id], onDelete: Restrict)
+  setRecords            SessionSetRecord[]
+  additionalSetRecords  SessionAdditionalSetRecord[]
+  personalRecords       PersonalRecord[]
 
   @@index([studentId, occurredOn])
   @@index([routineId])
@@ -980,31 +980,31 @@ model TrainingSession {
 }
 
 model SessionSetRecord {
-  id                       String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sessionId                String          @map("session_id") @db.Uuid
-  position                 Int
-  prescribedExerciseId     String          @map("prescribed_exercise_id") @db.Uuid
-  performedExerciseId      String?         @map("performed_exercise_id") @db.Uuid
-  prescribedMinRepetitions Int             @map("prescribed_min_repetitions")
-  prescribedMaxRepetitions Int             @map("prescribed_max_repetitions")
-  prescribedLoad           Decimal?        @map("prescribed_load") @db.Decimal(10, 2)
-  prescribedExerciseName   String?         @map("prescribed_exercise_name")
-  prescribedExercisePosition Int?          @map("prescribed_exercise_position")
-  prescribedSetPosition    Int?            @map("prescribed_set_position")
-  prescribedRestSeconds    Int?            @map("prescribed_rest_seconds")
-  prescribedNote           String?         @map("prescribed_note")
-  performedExerciseName    String?         @map("performed_exercise_name")
-  warmup                   Boolean         @default(false)
-  performedLoad            Decimal?        @map("performed_load") @db.Decimal(10, 2)
-  performedRepetitions     Int?            @map("performed_repetitions")
-  perceivedEffort          Int?            @map("perceived_effort")
-  completed                Boolean         @default(false)
-  additional               Boolean         @default(false)
-  omissionReason           String?         @map("omission_reason")
-  atypicalConfirmed        Boolean         @default(false) @map("atypical_confirmed")
-  session                  TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  prescribedExercise       Exercise        @relation("PrescribedExercise", fields: [prescribedExerciseId], references: [id], onDelete: Restrict)
-  performedExercise        Exercise?       @relation("PerformedExercise", fields: [performedExerciseId], references: [id], onDelete: Restrict)
+  id                         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId                  String          @map("session_id") @db.Uuid
+  position                   Int
+  prescribedExerciseId       String          @map("prescribed_exercise_id") @db.Uuid
+  performedExerciseId        String?         @map("performed_exercise_id") @db.Uuid
+  prescribedMinRepetitions   Int             @map("prescribed_min_repetitions")
+  prescribedMaxRepetitions   Int             @map("prescribed_max_repetitions")
+  prescribedLoad             Decimal?        @map("prescribed_load") @db.Decimal(10, 2)
+  prescribedExerciseName     String?         @map("prescribed_exercise_name")
+  prescribedExercisePosition Int?            @map("prescribed_exercise_position")
+  prescribedSetPosition      Int?            @map("prescribed_set_position")
+  prescribedRestSeconds      Int?            @map("prescribed_rest_seconds")
+  prescribedNote             String?         @map("prescribed_note")
+  performedExerciseName      String?         @map("performed_exercise_name")
+  warmup                     Boolean         @default(false)
+  performedLoad              Decimal?        @map("performed_load") @db.Decimal(10, 2)
+  performedRepetitions       Int?            @map("performed_repetitions")
+  perceivedEffort            Int?            @map("perceived_effort")
+  completed                  Boolean         @default(false)
+  additional                 Boolean         @default(false)
+  omissionReason             String?         @map("omission_reason")
+  atypicalConfirmed          Boolean         @default(false) @map("atypical_confirmed")
+  session                    TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  prescribedExercise         Exercise        @relation("PrescribedExercise", fields: [prescribedExerciseId], references: [id], onDelete: Restrict)
+  performedExercise          Exercise?       @relation("PerformedExercise", fields: [performedExerciseId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, position])
   @@index([prescribedExerciseId])
@@ -1016,20 +1016,20 @@ model SessionSetRecord {
 // Execution only. Keeps the existing non-null prescription contract used by
 // other modules intact; the session API merges both kinds by global position.
 model SessionAdditionalSetRecord {
-  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sessionId String @map("session_id") @db.Uuid
-  position Int
-  performedExerciseId String @map("performed_exercise_id") @db.Uuid
-  performedExerciseName String @map("performed_exercise_name")
-  warmup Boolean @default(false)
-  performedLoad Decimal? @map("performed_load") @db.Decimal(10, 2)
-  performedRepetitions Int? @map("performed_repetitions")
-  perceivedEffort Int? @map("perceived_effort")
-  completed Boolean @default(false)
-  omissionReason String? @map("omission_reason")
-  atypicalConfirmed Boolean @default(false) @map("atypical_confirmed")
-  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  performedExercise Exercise @relation(fields: [performedExerciseId], references: [id], onDelete: Restrict)
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId             String          @map("session_id") @db.Uuid
+  position              Int
+  performedExerciseId   String          @map("performed_exercise_id") @db.Uuid
+  performedExerciseName String          @map("performed_exercise_name")
+  warmup                Boolean         @default(false)
+  performedLoad         Decimal?        @map("performed_load") @db.Decimal(10, 2)
+  performedRepetitions  Int?            @map("performed_repetitions")
+  perceivedEffort       Int?            @map("perceived_effort")
+  completed             Boolean         @default(false)
+  omissionReason        String?         @map("omission_reason")
+  atypicalConfirmed     Boolean         @default(false) @map("atypical_confirmed")
+  session               TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  performedExercise     Exercise        @relation(fields: [performedExerciseId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, position])
   @@index([performedExerciseId])
@@ -1040,6 +1040,8 @@ model SessionAdditionalSetRecord {
 model Notice {
   id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   recipientUserId String     @map("recipient_user_id") @db.Uuid
+  eventKey        String?    @map("event_key")
+  audienceRole    UserRole?  @map("audience_role")
   type            NoticeType
   referenceType   String     @map("reference_type")
   referenceId     String     @map("reference_id") @db.Uuid
@@ -1049,6 +1051,7 @@ model Notice {
   expired         Boolean    @default(false)
   recipient       User       @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
 
+  @@unique([recipientUserId, eventKey], map: "notices_recipient_user_id_event_key_key")
   @@index([recipientUserId, expired, createdAt])
   @@index([referenceType, referenceId])
   @@map("notices")

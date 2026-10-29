@@ -38,7 +38,7 @@
         "additionalProperties": false,
         "properties": {
           "id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "type": {
@@ -395,6 +395,16 @@
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string", "format": "uuid" },
+          "audienceRole": {
+            "type": ["string", "null"],
+            "enum": [
+              "ALUMNO",
+              "ENTRENADOR",
+              "ADMINISTRADOR",
+              "SUPERADMIN",
+              null
+            ]
+          },
           "type": { "type": "string" },
           "referenceType": { "type": "string" },
           "referenceId": { "type": "string", "format": "uuid" },
@@ -404,6 +414,7 @@
         },
         "required": [
           "id",
+          "audienceRole",
           "type",
           "referenceType",
           "referenceId",
@@ -456,14 +467,59 @@
     "/notices": {
       "get": {
         "operationId": "listOwnNotices",
-        "summary": "Listar avisos activos del usuario autenticado",
+        "summary": "Listar avisos recientes del usuario autenticado",
         "security": [{ "session": [] }],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["unread", "all"],
+              "default": "unread"
+            },
+            "description": "Por defecto devuelve sólo pendientes. all incluye leídos. En ambos casos se limita a los últimos 90 días."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Avisos activos.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/NoticeList" }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente o inválida.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notices/read-all": {
+      "patch": {
+        "operationId": "markAllOwnNoticesRead",
+        "summary": "Marcar todos los avisos recientes como leídos",
+        "security": [{ "session": [] }],
+        "responses": {
+          "200": {
+            "description": "Cantidad de avisos actualizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "updatedCount": { "type": "integer", "minimum": 0 }
+                  },
+                  "required": ["updatedCount"]
+                }
               }
             }
           },

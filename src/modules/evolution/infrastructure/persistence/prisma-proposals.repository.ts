@@ -5,6 +5,7 @@ import type {
   PrismaClient,
   TrainingPurpose,
 } from '@prisma/client';
+import { noticeEventKeys } from '../../../notifications/domain/notice-event';
 import type { ValidGeneratedRoutine } from '../../../routine-generations/domain/services/generated-routine-validator';
 import type { RenewalEvaluation } from '../../application/ports/routine-renewals.repository';
 import { assertGenerationContextCurrent } from '../../../routine-generations/infrastructure/persistence/generation-context-validity';
@@ -422,9 +423,22 @@ export class PrismaProposalsRepository implements ProposalsRepository {
         });
 
         if (resultingVersionNumber !== null && command.routineId) {
-          await tx.notice.create({
-            data: {
+          const eventKey = noticeEventKeys.routineAdjusted(
+            command.routineId,
+            resultingVersionNumber,
+          );
+          await tx.notice.upsert({
+            where: {
+              recipientUserId_eventKey: {
+                recipientUserId: command.studentId,
+                eventKey,
+              },
+            },
+            update: {},
+            create: {
               recipientUserId: command.studentId,
+              eventKey,
+              audienceRole: 'ALUMNO',
               type: 'RUTINA_AJUSTADA',
               referenceType: 'ROUTINE',
               referenceId: command.routineId,

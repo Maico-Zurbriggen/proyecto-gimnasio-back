@@ -638,18 +638,22 @@ ON CONFLICT (id) DO NOTHING;
 -- 21. Avisos (tipos D2 §4.12) y records personales (RI-22)
 -- ---------------------------------------------------------------------------
 INSERT INTO app.notices
-  (id, recipient_user_id, type, reference_type, reference_id, text, created_at, read_at, expired)
+  (id, recipient_user_id, event_key, audience_role, type, reference_type, reference_id, text, created_at, read_at, expired)
 VALUES
   ('72000000-0000-4000-8000-000000000001', '21000000-0000-4000-8000-000000000004',
+   'seed:routine-active:60000000-0000-4000-8000-000000000001', 'ALUMNO',
    'RUTINA_EN_VIGENCIA', 'ROUTINE', '60000000-0000-4000-8000-000000000001',
    'Tu rutina de hipertrofia entro en vigencia.', '2026-09-01T11:00:00Z', '2026-09-01T18:00:00Z', false),
   ('72000000-0000-4000-8000-000000000002', '21000000-0000-4000-8000-000000000003',
+   'seed:routine-pending:60000000-0000-4000-8000-000000000003', 'ENTRENADOR',
    'RUTINA_PROPUESTA_PENDIENTE', 'ROUTINE', '60000000-0000-4000-8000-000000000003',
    'Diego tiene una rutina generada pendiente de revision.', '2026-09-10T10:02:00Z', NULL, false),
   ('72000000-0000-4000-8000-000000000003', '21000000-0000-4000-8000-000000000005',
+   'seed:clearance-expiring:34000000-0000-4000-8000-000000000002', 'ALUMNO',
    'APTITUD_POR_VENCER', 'FITNESS_CLEARANCE', '34000000-0000-4000-8000-000000000002',
    'Tu aptitud vence el 2026-01-10.', '2025-12-11T10:00:00Z', NULL, true),
   ('72000000-0000-4000-8000-000000000004', '21000000-0000-4000-8000-000000000004',
+   'seed:personal-record:74000000-0000-4000-8000-000000000001', 'ALUMNO',
    'RECORD_ALCANZADO', 'PERSONAL_RECORD', '74000000-0000-4000-8000-000000000001',
    'Nuevo record: 40 kg movilizados en press de banca plano.', '2026-09-02T15:00:00Z', NULL, false)
 ON CONFLICT (id) DO NOTHING;
