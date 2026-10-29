@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { noticeEventKeys } from '../../../notifications/domain/notice-event';
 
 import { isUuid } from '../../../../shared/types/uuid';
 import type {
@@ -303,9 +304,18 @@ async function reevaluateCurrentRoutines(
       ...(assignment ? [assignment.trainerId] : []),
     ];
     for (const recipientUserId of recipients) {
-      await tx.notice.create({
-        data: {
+      await tx.notice.upsert({
+        where: {
+          recipientUserId_eventKey: {
+            recipientUserId,
+            eventKey: noticeEventKeys.physicalConditionProposal(proposal.id),
+          },
+        },
+        update: {},
+        create: {
           recipientUserId,
+          eventKey: noticeEventKeys.physicalConditionProposal(proposal.id),
+          audienceRole: recipientUserId === studentId ? 'ALUMNO' : 'ENTRENADOR',
           type: 'INCOMPATIBILIDAD_SOBREVENIDA',
           referenceType: 'ADAPTATION_PROPOSAL',
           referenceId: proposal.id,

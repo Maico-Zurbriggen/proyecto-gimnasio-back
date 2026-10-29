@@ -6,9 +6,16 @@ import type {
 
 export class NoticeNotFoundError extends Error {}
 
+const NOTICE_RETENTION_DAYS = 90;
+
+function retentionStart(now: Date): Date {
+  return new Date(now.getTime() - NOTICE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
 function toDto(notice: NoticeRecord) {
   return {
     id: notice.id,
+    audienceRole: notice.audienceRole,
     type: notice.type,
     referenceType: notice.referenceType,
     referenceId: notice.referenceId,
@@ -19,13 +26,19 @@ function toDto(notice: NoticeRecord) {
 }
 
 export class ListOwnNoticesUseCase {
-  constructor(private readonly notices: NoticesRepository) {}
+  constructor(
+    private readonly notices: NoticesRepository,
+    private readonly clock: Clock,
+  ) {}
 
-  async execute(userId: string) {
-    const items = (await this.notices.listActiveForUser(userId)).map(toDto);
+  async execute(userId: string, status: 'unread' | 'all') {
+    const result = await this.notices.listActiveForUser(userId, {
+      includeRead: status === 'all',
+      createdAfter: retentionStart(this.clock.now()),
+    });
     return {
-      items,
-      unreadCount: items.filter((notice) => notice.readAt === null).length,
+      items: result.items.map(toDto),
+      unreadCount: result.unreadCount,
     };
   }
 }
@@ -44,5 +57,23 @@ export class MarkNoticeReadUseCase {
     );
     if (!notice) throw new NoticeNotFoundError();
     return toDto(notice);
+  }
+}
+
+export class MarkAllNoticesReadUseCase {
+  constructor(
+    private readonly notices: NoticesRepository,
+    private readonly clock: Clock,
+  ) {}
+
+  async execute(userId: string) {
+    const now = this.clock.now();
+    return {
+      updatedCount: await this.notices.markAllRead(
+        userId,
+        now,
+        retentionStart(now),
+      ),
+    };
   }
 }

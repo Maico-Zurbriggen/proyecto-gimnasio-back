@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { noticeEventKeys } from '../../../notifications/domain/notice-event';
 import { validateGenerationV2 } from '../../../../integrations/ai/routine-generation-v2';
 import { assertValidAdjustmentEvidence } from '../../domain/services/adjustment-evidence';
 import {
@@ -511,6 +512,10 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
         await tx.notice.createMany({
           data: recipients.map(({ id }) => ({
             recipientUserId: id,
+            eventKey: noticeEventKeys.renewalProposal(proposal.id),
+            audienceRole: trainer
+              ? ('ENTRENADOR' as const)
+              : ('ADMINISTRADOR' as const),
             type: 'PROPUESTA_PENDIENTE' as const,
             referenceType: 'ADAPTATION_PROPOSAL',
             referenceId: proposal.id,
@@ -521,6 +526,7 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
                 : ''),
             createdAt: evaluatedAt,
           })),
+          skipDuplicates: true,
         });
         return 'generated';
       },
@@ -583,12 +589,17 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
       await tx.notice.createMany({
         data: recipients.map(({ id }) => ({
           recipientUserId: id,
+          eventKey: noticeEventKeys.renewalGenerationFailed(cycleId),
+          audienceRole: assignment
+            ? ('ENTRENADOR' as const)
+            : ('ADMINISTRADOR' as const),
           type: 'SENAL_DETECTADA' as const,
           referenceType: 'ROUTINE_RENEWAL_CYCLE',
           referenceId: cycleId,
           text: 'No se generó la rutina de renovación ESTRUCTURA: el servicio de IA falló o no entregó una propuesta válida. Revisar el ciclo pendiente.',
           createdAt: evaluatedAt,
         })),
+        skipDuplicates: true,
       });
     });
   }
