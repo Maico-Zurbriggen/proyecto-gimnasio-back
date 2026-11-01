@@ -31,6 +31,20 @@ export interface SerieConMusculos {
   musculos: readonly { grupo: string; participacion: Participacion }[];
 }
 
+/**
+ * Series de trabajo completadas sin clasificación muscular (RN-30).
+ *
+ * `volumenPorGrupo` no las suma a ningún grupo; este conteo las expone aparte
+ * para que no pasen por volumen cero.
+ */
+export function seriesSinClasificar(
+  series: readonly SerieConMusculos[],
+): number {
+  return series.filter(
+    (serie) => !serie.warmup && serie.completed && serie.musculos.length === 0,
+  ).length;
+}
+
 /** Volumen acumulado por grupo muscular, en series efectivas. */
 export type VolumenPorGrupo = Map<string, number>;
 

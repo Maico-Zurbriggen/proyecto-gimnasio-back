@@ -106,7 +106,15 @@ describe('adherence (HU23 - T1)', () => {
 
       expect(resultado.disponible).toBe(false);
       if (!resultado.disponible) {
-        expect(resultado.motivo).toBe('SIN_HISTORIAL_SUFICIENTE');
+        expect(resultado).toMatchObject({
+          status: 'SIN_DATOS_SUFICIENTES',
+          missing: 'semanas con rutina vigente',
+          unit: 'semanas',
+          required: 2,
+          available: 1,
+          remaining: 1,
+        });
+        expect(resultado.action).not.toBe('');
       }
     });
 

@@ -9,7 +9,7 @@
       "get": {
         "operationId": "getMuscleActivity",
         "summary": "Volumen en series efectivas y frecuencia por grupo muscular (HU25)",
-        "description": "Alumno propietario o entrenador con asignación vigente del mismo gimnasio. Excluye simuladas, EN_CURSO, ABANDONADA, calentamiento, omisiones e incompletas. Usa el ejercicio ejecutado y cuenta series adicionales. Fechas de ocurrencia locales, límites inclusivos. No permite futuro en el gimnasio. SIN_DATOS devuelve null; CALCULADO puede devolver cero. El resultado se deriva en cada consulta.",
+        "description": "Alumno propietario o entrenador con asignación vigente del mismo gimnasio. Excluye simuladas, EN_CURSO, ABANDONADA, calentamiento, omisiones e incompletas. Usa el ejercicio ejecutado y cuenta series adicionales. Fechas de ocurrencia locales, límites inclusivos. No permite futuro en el gimnasio. SIN_DATOS devuelve null y se explica en insufficientData (qué falta y cuánto); CALCULADO puede devolver cero. unclassifiedSets cuenta series de ejercicios sin clasificación (RN-30), aparte del volumen. El resultado se deriva en cada consulta.",
         "security": [
           {
             "SessionCookie": []
@@ -1758,6 +1758,54 @@
             "type": "string",
             "const": "SERIES_EFECTIVAS"
           },
+          "insufficientData": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "const": "SIN_DATOS_SUFICIENTES"
+                  },
+                  "missing": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "required": {
+                    "type": "number"
+                  },
+                  "available": {
+                    "type": "number"
+                  },
+                  "remaining": {
+                    "type": "number"
+                  },
+                  "action": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "missing",
+                  "unit",
+                  "required",
+                  "available",
+                  "remaining",
+                  "action"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unclassifiedSets": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "groups": {
             "minItems": 17,
             "maxItems": 17,
@@ -1865,6 +1913,8 @@
           "sessionCount",
           "calculatedAt",
           "unit",
+          "insufficientData",
+          "unclassifiedSets",
           "groups",
           "exerciseVolumes"
         ]

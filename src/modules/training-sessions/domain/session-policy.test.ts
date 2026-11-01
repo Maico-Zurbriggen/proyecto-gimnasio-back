@@ -72,6 +72,7 @@ describe('session-policy (D6/§4, RN-50 a RN-61)', () => {
   it('marca atípico sólo por encima del 150% con histórico (RN-55a)', () => {
     expect(isAtypicalLoad(151, 100)).toBe(true);
     expect(isAtypicalLoad(150, 100)).toBe(false);
+    expect(isAtypicalLoad(150.01, 100)).toBe(true);
     expect(isAtypicalLoad(1000, null)).toBe(false);
     expect(isAtypicalLoad(1000, 0)).toBe(false);
     expect(ATYPICAL_LOAD_FACTOR).toBe(1.5);

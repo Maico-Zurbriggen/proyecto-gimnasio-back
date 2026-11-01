@@ -149,7 +149,12 @@ describe('Indicators API - HU23', () => {
       ).expect(200);
 
       expect(response.body.adherencia.disponible).toBe(false);
-      expect(response.body.adherencia.motivo).toBe('SIN_HISTORIAL_SUFICIENTE');
+      expect(response.body.adherencia).toMatchObject({
+        status: 'SIN_DATOS_SUFICIENTES',
+        unit: 'semanas',
+        required: 2,
+        remaining: 2,
+      });
       expect(response.body.adherencia.porcentaje).toBeUndefined();
     });
 
@@ -274,9 +279,10 @@ describe('Indicators API - HU23', () => {
       ).expect(200);
 
       expect(response.body.cumplimientoDeSeries.disponible).toBe(false);
-      expect(response.body.cumplimientoDeSeries.motivo).toBe(
-        'SIN_SERIES_DE_TRABAJO',
-      );
+      expect(response.body.cumplimientoDeSeries).toMatchObject({
+        status: 'SIN_DATOS_SUFICIENTES',
+        remaining: 1,
+      });
     });
 
     it('RNF-14: una sesión ajena responde 404 genérico', async () => {
@@ -386,7 +392,10 @@ describe('Indicators API - HU26', () => {
       ).expect(200);
 
       expect(response.body.estancamiento[0].estado).toBe('DATOS_INSUFICIENTES');
-      expect(response.body.estancamiento[0].falta).toContain('4 sesiones');
+      expect(response.body.estancamiento[0]).toMatchObject({
+        status: 'SIN_DATOS_SUFICIENTES',
+        required: 4,
+      });
       expect(response.body.estancamiento[0].detalle).toBeUndefined();
       // RN-77: sin atribución la lista no se puede leer, porque
       // `DATOS_INSUFICIENTES` es idéntico entre un ejercicio y otro.
@@ -583,9 +592,10 @@ describe('Indicators API - HU26', () => {
       ).expect(200);
 
       expect(response.body.desbalance.estado).toBe('DATOS_INSUFICIENTES');
-      expect(response.body.desbalance.falta).toContain(
+      expect(response.body.desbalance.missing).toContain(
         'clasificación muscular',
       );
+      expect(response.body.seriesSinClasificar).toBeGreaterThan(0);
     });
 
     it('DD-04: informa el instante de cálculo porque el indicador no se persiste', async () => {

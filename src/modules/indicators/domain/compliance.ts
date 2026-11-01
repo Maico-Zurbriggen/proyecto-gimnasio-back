@@ -6,6 +6,11 @@
  * prohíbe hablar de «cumplimiento» sin calificar cuál (D2/§2).
  */
 
+import {
+  sinDatosSuficientes,
+  type InsufficientData,
+} from './insufficient-data';
+
 /** Registro de una serie dentro de una sesión, con lo prescripto y lo ejecutado. */
 export interface RegistroDeSerie {
   /** Una serie de calentamiento no cuenta para ningún indicador (RN-54). */
@@ -25,7 +30,22 @@ export type Cumplimiento =
       numerador: number;
       denominador: number;
     }
-  | { disponible: false; motivo: 'SIN_SERIES_DE_TRABAJO' };
+  | ({ disponible: false } & InsufficientData);
+
+const sinSeriesDeTrabajo = (
+  missing: string,
+  unit: string,
+  available: number,
+): Cumplimiento => ({
+  disponible: false,
+  ...sinDatosSuficientes(
+    missing,
+    unit,
+    1,
+    available,
+    'Registrá al menos una serie de trabajo prescripta en la sesión.',
+  ),
+});
 
 /**
  * Series de trabajo prescriptas: ni calentamiento ni agregadas sobre la marcha.
@@ -53,7 +73,7 @@ export function cumplimientoDeSeries(
   const deTrabajo = seriesDeTrabajoPrescriptas(registros);
 
   if (deTrabajo.length === 0) {
-    return { disponible: false, motivo: 'SIN_SERIES_DE_TRABAJO' };
+    return sinSeriesDeTrabajo('series de trabajo prescriptas', 'series', 0);
   }
 
   const completadas = deTrabajo.filter((r) => r.completed).length;
@@ -84,7 +104,7 @@ export function cumplimientoDeRepeticiones(
   const deTrabajo = seriesDeTrabajoPrescriptas(registros);
 
   if (deTrabajo.length === 0) {
-    return { disponible: false, motivo: 'SIN_SERIES_DE_TRABAJO' };
+    return sinSeriesDeTrabajo('series de trabajo prescriptas', 'series', 0);
   }
 
   const objetivo = deTrabajo.reduce(
@@ -93,7 +113,11 @@ export function cumplimientoDeRepeticiones(
   );
 
   if (objetivo === 0) {
-    return { disponible: false, motivo: 'SIN_SERIES_DE_TRABAJO' };
+    return sinSeriesDeTrabajo(
+      'repeticiones objetivo prescriptas',
+      'repeticiones',
+      0,
+    );
   }
 
   const ejecutadas = deTrabajo.reduce(

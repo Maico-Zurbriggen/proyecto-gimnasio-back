@@ -1,3 +1,8 @@
+import {
+  sinDatosSuficientes,
+  type InsufficientData,
+} from './insufficient-data';
+
 /**
  * Adherencia sobre la ventana móvil de cuatro semanas (HU23 - T1, RN-67 y RN-68).
  *
@@ -91,11 +96,8 @@ export type Adherencia =
       sesionesCompletadas: number;
       sesionesEsperadas: number;
     }
-  | {
-      disponible: false;
-      /** Por qué no se puede calcular, para declararlo en lugar de mostrar 0. */
-      motivo: 'SIN_HISTORIAL_SUFICIENTE' | 'SIN_FRECUENCIA_OBJETIVO';
-    };
+  /** Se declara qué falta y cuánto, en lugar de mostrar 0 (RN-73). */
+  | ({ disponible: false } & InsufficientData);
 
 function inicioDeVentana(hasta: Date, semanas: number): Date {
   return new Date(hasta.getTime() - semanas * MS_POR_SEMANA);
@@ -183,7 +185,17 @@ export function calcularAdherencia(
   if (
     semanasConRutinaVigente(frecuencias, hasta) < SEMANAS_MINIMAS_PARA_CALCULAR
   ) {
-    return { disponible: false, motivo: 'SIN_HISTORIAL_SUFICIENTE' };
+    const semanasConRutina = semanasConRutinaVigente(frecuencias, hasta);
+    return {
+      disponible: false,
+      ...sinDatosSuficientes(
+        'semanas con rutina vigente',
+        'semanas',
+        SEMANAS_MINIMAS_PARA_CALCULAR,
+        semanasConRutina,
+        'Esperá a completar las semanas de entrenamiento con rutina vigente para ver la adherencia.',
+      ),
+    };
   }
 
   // La ventana termina el domingo de la última semana completa, no «ahora»
@@ -193,7 +205,16 @@ export function calcularAdherencia(
 
   const esperadas = sesionesEsperadasEnVentana(frecuencias, corte, semanas);
   if (esperadas === 0) {
-    return { disponible: false, motivo: 'SIN_FRECUENCIA_OBJETIVO' };
+    return {
+      disponible: false,
+      ...sinDatosSuficientes(
+        'frecuencia semanal objetivo en la ventana',
+        'sesiones por semana',
+        1,
+        0,
+        'Asigná una rutina con frecuencia semanal para poder medir la adherencia.',
+      ),
+    };
   }
 
   const desde = inicioDeVentana(corte, semanas);

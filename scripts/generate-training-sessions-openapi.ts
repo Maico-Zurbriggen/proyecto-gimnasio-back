@@ -72,7 +72,7 @@ const document = {
         summary:
           'Volumen en series efectivas y frecuencia por grupo muscular (HU25)',
         description:
-          'Alumno propietario o entrenador con asignación vigente del mismo gimnasio. Excluye simuladas, EN_CURSO, ABANDONADA, calentamiento, omisiones e incompletas. Usa el ejercicio ejecutado y cuenta series adicionales. Fechas de ocurrencia locales, límites inclusivos. No permite futuro en el gimnasio. SIN_DATOS devuelve null; CALCULADO puede devolver cero. El resultado se deriva en cada consulta.',
+          'Alumno propietario o entrenador con asignación vigente del mismo gimnasio. Excluye simuladas, EN_CURSO, ABANDONADA, calentamiento, omisiones e incompletas. Usa el ejercicio ejecutado y cuenta series adicionales. Fechas de ocurrencia locales, límites inclusivos. No permite futuro en el gimnasio. SIN_DATOS devuelve null y se explica en insufficientData (qué falta y cuánto); CALCULADO puede devolver cero. unclassifiedSets cuenta series de ejercicios sin clasificación (RN-30), aparte del volumen. El resultado se deriva en cada consulta.',
         security,
         parameters: [
           studentIdParam,
@@ -345,6 +345,18 @@ const document = {
           sessionCount: z.number().int(),
           calculatedAt: z.iso.datetime(),
           unit: z.literal('SERIES_EFECTIVAS'),
+          insufficientData: z
+            .object({
+              status: z.literal('SIN_DATOS_SUFICIENTES'),
+              missing: z.string(),
+              unit: z.string(),
+              required: z.number(),
+              available: z.number(),
+              remaining: z.number(),
+              action: z.string(),
+            })
+            .nullable(),
+          unclassifiedSets: z.number().int(),
           groups: z
             .array(
               z.object({
