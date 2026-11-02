@@ -5,6 +5,10 @@ import {
   type SesionDeAdherencia,
 } from './adherence';
 import { cargaMaximaEstimada, type SerieEstimable } from './estimated-max-load';
+import {
+  sinDatosSuficientes,
+  type InsufficientData,
+} from './insufficient-data';
 import { volumenPorGrupo, type SerieConMusculos } from './volume';
 
 /**
@@ -57,7 +61,7 @@ export interface SesionDelPeriodo {
 export type Senal<T> = { sobre?: string } & (
   | { estado: 'DETECTADA'; detalle: T }
   | { estado: 'SIN_SENAL' }
-  | { estado: 'DATOS_INSUFICIENTES'; falta: string }
+  | ({ estado: 'DATOS_INSUFICIENTES' } & InsufficientData)
 );
 
 /**
@@ -67,12 +71,12 @@ export type Senal<T> = { sobre?: string } & (
  * primeras 3`. Si falta alguno de los dos extremos, **la variación no es
  * calculable** — no vale asumir cero.
  */
-export function variacionDeCargaMaxima(
+function extremosDeCargaMaxima(
   sesiones: readonly SesionDelPeriodo[],
   exerciseId: string,
   hasta: Date,
-  semanas: number = SEMANAS_PERIODO_DIAGNOSTICO,
-): number | null {
+  semanas: number,
+): { primeras: number | null; ultimas: number | null } {
   const inicioPeriodo = new Date(hasta.getTime() - semanas * MS_POR_SEMANA);
   const mitad = new Date(hasta.getTime() - (semanas / 2) * MS_POR_SEMANA);
 
@@ -88,8 +92,24 @@ export function variacionDeCargaMaxima(
         s.series.filter((serie) => serie.exerciseId === exerciseId),
       );
 
-  const primeras = cargaMaximaEstimada(seriesDe(inicioPeriodo, mitad));
-  const ultimas = cargaMaximaEstimada(seriesDe(mitad, hasta));
+  return {
+    primeras: cargaMaximaEstimada(seriesDe(inicioPeriodo, mitad)),
+    ultimas: cargaMaximaEstimada(seriesDe(mitad, hasta)),
+  };
+}
+
+export function variacionDeCargaMaxima(
+  sesiones: readonly SesionDelPeriodo[],
+  exerciseId: string,
+  hasta: Date,
+  semanas: number = SEMANAS_PERIODO_DIAGNOSTICO,
+): number | null {
+  const { primeras, ultimas } = extremosDeCargaMaxima(
+    sesiones,
+    exerciseId,
+    hasta,
+    semanas,
+  );
 
   if (primeras === null || ultimas === null || primeras === 0) {
     return null;
@@ -125,17 +145,36 @@ export function detectarEstancamiento(
     return {
       sobre: exerciseId,
       estado: 'DATOS_INSUFICIENTES',
-      falta: `hacen falta ${String(SESIONES_MINIMAS_ESTANCAMIENTO)} sesiones con el ejercicio y hay ${String(conElEjercicio.length)}`,
+      ...sinDatosSuficientes(
+        'sesiones completadas con el ejercicio',
+        'sesiones',
+        SESIONES_MINIMAS_ESTANCAMIENTO,
+        conElEjercicio.length,
+        'Seguí entrenando con este ejercicio y registrá sus series.',
+      ),
     };
   }
 
   const variacion = variacionDeCargaMaxima(sesiones, exerciseId, hasta);
 
   if (variacion === null) {
+    const { primeras, ultimas } = extremosDeCargaMaxima(
+      sesiones,
+      exerciseId,
+      hasta,
+      SEMANAS_PERIODO_DIAGNOSTICO,
+    );
     return {
       sobre: exerciseId,
       estado: 'DATOS_INSUFICIENTES',
-      falta: 'la variación de carga máxima estimada no es calculable',
+      ...sinDatosSuficientes(
+        'mitades del período con carga máxima estimable (carga y repeticiones registradas)',
+        'mitades del período',
+        2,
+        [primeras !== null && primeras > 0, ultimas !== null].filter(Boolean)
+          .length,
+        'Registrá carga y repeticiones del ejercicio en ambas mitades del período.',
+      ),
     };
   }
 
@@ -191,7 +230,13 @@ export function detectarCaidaDeAdherencia(
   if (!reciente.disponible || !previa.disponible) {
     return {
       estado: 'DATOS_INSUFICIENTES',
-      falta: 'no hay adherencia calculable en los dos tramos de dos semanas',
+      ...sinDatosSuficientes(
+        'tramos de dos semanas con adherencia calculable',
+        'tramos',
+        2,
+        [reciente, previa].filter((tramo) => tramo.disponible).length,
+        'Esperá a acumular semanas con rutina vigente para comparar la adherencia.',
+      ),
     };
   }
 
@@ -253,7 +298,13 @@ export function detectarDesbalance(
   if (delPeriodo.length === 0) {
     return {
       estado: 'DATOS_INSUFICIENTES',
-      falta: 'no hay sesiones completadas en las últimas cuatro semanas',
+      ...sinDatosSuficientes(
+        'sesiones completadas en las últimas cuatro semanas',
+        'sesiones',
+        1,
+        0,
+        'Registrá sesiones completadas para evaluar el balance de volumen.',
+      ),
     };
   }
 
@@ -262,7 +313,13 @@ export function detectarDesbalance(
   if (volumen.size === 0) {
     return {
       estado: 'DATOS_INSUFICIENTES',
-      falta: 'ningún ejercicio ejecutado tiene clasificación muscular',
+      ...sinDatosSuficientes(
+        'series completadas de ejercicios con clasificación muscular',
+        'series',
+        1,
+        0,
+        'Clasificá los ejercicios ejecutados para poder medir el volumen por grupo.',
+      ),
     };
   }
 

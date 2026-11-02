@@ -4,7 +4,7 @@ import {
   presentMuscleActivity,
   validClassification,
 } from './muscle-activity';
-import { volumenPorGrupo } from './volume';
+import { seriesSinClasificar, volumenPorGrupo } from './volume';
 
 const muscles = [
   { group: 'PECTORAL', participation: 'PRIMARIA' as const },
@@ -34,6 +34,21 @@ describe('HU25 muscle activity', () => {
     ]);
   });
 
+  it('exposes unclassified work sets apart from volume (RN-30)', () => {
+    const base = { warmup: false, completed: true };
+    expect(
+      seriesSinClasificar([
+        { ...base, musculos: [] },
+        { ...base, warmup: true, musculos: [] },
+        { ...base, completed: false, musculos: [] },
+        {
+          ...base,
+          musculos: [{ grupo: 'PECTORAL', participacion: 'PRIMARIA' }],
+        },
+      ]),
+    ).toBe(1);
+  });
+
   it('returns the official 17 groups and separates missing data from calculated zero', () => {
     const empty = presentMuscleActivity(0, [], []);
     expect(empty.groups.map((g) => g.group)).toEqual(GRUPOS_MUSCULARES);
@@ -44,12 +59,30 @@ describe('HU25 muscle activity', () => {
           g.volume === null && g.frequency === null && g.status === 'SIN_DATOS',
       ),
     ).toBe(true);
-    const zero = presentMuscleActivity(1, [], []);
-    expect(
-      zero.groups.every(
-        (g) => g.volume === 0 && g.frequency === 0 && g.status === 'CALCULADO',
-      ),
-    ).toBe(true);
+    expect(empty.insufficientData).toMatchObject({
+      status: 'SIN_DATOS_SUFICIENTES',
+      unit: 'sesiones',
+      required: 1,
+      remaining: 1,
+    });
+    // Sesiones sin ejercicios: no es un cero calculado.
+    const noExercises = presentMuscleActivity(1, [], []);
+    expect(noExercises.groups.every((g) => g.status === 'SIN_DATOS')).toBe(
+      true,
+    );
+    expect(noExercises.insufficientData?.unit).toBe('series');
+    // Cero real: hay series clasificadas pero ninguna toca este grupo.
+    const zero = presentMuscleActivity(
+      1,
+      [{ group: 'PECTORAL', primarySets: 1, secondarySets: 0, sessions: 1 }],
+      [{ exerciseId: 'press', completedWorkSets: 1, sessions: 1, muscles }],
+    );
+    expect(zero.insufficientData).toBeNull();
+    expect(zero.groups.find((g) => g.group === 'GEMELOS')).toMatchObject({
+      volume: 0,
+      frequency: 0,
+      status: 'CALCULADO',
+    });
   });
 
   it('keeps exercise work sets separate from weighted volume and session frequency', () => {
@@ -86,6 +119,8 @@ describe('HU25 muscle activity', () => {
     );
     expect(result.exerciseVolumes[0]!.classification).toBe('NO_CLASIFICADO');
     expect(result.groups.every((g) => g.volume === null)).toBe(true);
+    expect(result.unclassifiedSets).toBe(1);
+    expect(result.insufficientData?.action).toContain('Clasificá');
     expect(
       validClassification([{ group: 'INVENTADO', participation: 'PRIMARIA' }]),
     ).toBe(false);

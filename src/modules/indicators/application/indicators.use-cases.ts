@@ -23,6 +23,7 @@ import {
   type Senal,
   type SesionDelPeriodo,
 } from '../domain/signals';
+import { seriesSinClasificar } from '../domain/volume';
 
 /** Lo que el módulo necesita leer para calcular los indicadores. */
 export interface IndicatorsRepository {
@@ -167,6 +168,8 @@ export interface SignalsDto {
   estancamiento: Senal<EstancamientoDetalle>[];
   caidaDeAdherencia: Senal<CaidaAdherenciaDetalle>;
   desbalance: Senal<DesbalanceDetalle[]>;
+  /** Series completadas sin clasificación muscular (RN-30): no son volumen 0. */
+  seriesSinClasificar: number;
   calculadoEl: string;
 }
 
@@ -218,6 +221,9 @@ export class GetSignalsUseCase {
         zona ?? ZONA_HORARIA_POR_DEFECTO,
       ),
       desbalance: detectarDesbalance(sesionesConSeries, now),
+      seriesSinClasificar: seriesSinClasificar(
+        sesionesConSeries.filter((s) => s.completada).flatMap((s) => s.series),
+      ),
       calculadoEl: now.toISOString(),
     };
   }
