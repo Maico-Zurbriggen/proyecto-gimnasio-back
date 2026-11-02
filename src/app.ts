@@ -52,6 +52,10 @@ import { createGoalsRouter } from './modules/goals/infrastructure/http/goals.rou
 import { PrismaGoalsRepository } from './modules/goals/infrastructure/persistence/prisma-goals.repository';
 import type { RoutineRenewalsRepository } from './modules/evolution/application/ports/routine-renewals.repository';
 import { RenewRoutineCyclesUseCase } from './modules/evolution/application/use-cases/renew-routine-cycles.use-case';
+import { ElaborateAdjustmentProposalUseCase } from './modules/evolution/application/use-cases/elaborate-adjustment-proposal.use-case';
+import { ElaborateWeeklyAdjustmentProposalsUseCase } from './modules/evolution/application/use-cases/elaborate-weekly-adjustment-proposals.use-case';
+import { createAdjustmentProposalsJobRouter } from './modules/evolution/infrastructure/http/adjustment-proposals.routes';
+import { PrismaAdjustmentProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-adjustment-proposals.repository';
 import { createRoutineRenewalsRouter } from './modules/evolution/infrastructure/http/routine-renewals.routes';
 import { PrismaRoutineRenewalsRepository } from './modules/evolution/infrastructure/persistence/prisma-routine-renewals.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
@@ -719,6 +723,22 @@ export function createApp({
           resolvedMeasurementCheckpointsRepo,
           resolvedClock,
         ),
+      ),
+    ),
+  );
+
+  const adjustmentProposalsRepository = new PrismaAdjustmentProposalsRepository(
+    prisma,
+  );
+  app.use(
+    createAdjustmentProposalsJobRouter(
+      new ElaborateWeeklyAdjustmentProposalsUseCase(
+        adjustmentProposalsRepository,
+        new ElaborateAdjustmentProposalUseCase(
+          adjustmentProposalsRepository,
+          resolvedClock,
+        ),
+        resolvedClock,
       ),
     ),
   );
