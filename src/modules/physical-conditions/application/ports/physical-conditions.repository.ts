@@ -37,6 +37,23 @@ export interface PhysicalConditionsRepository {
   /** Cierra la condición con la fecha indicada. */
   close(conditionId: string, endsOn: Date): Promise<PhysicalConditionRecord>;
 
+  /**
+   * Revisa una condición: cierra la anterior y abre la nueva, en una sola
+   * transacción (criterio 14).
+   *
+   * Es atómico a propósito. Si el cierre ocurriera y el alta fallara, el alumno
+   * se quedaría sin la condición que quiso corregir, que es peor que no haber
+   * modificado nada.
+   */
+  revise(
+    conditionId: string,
+    cierre: Date,
+    nueva: DeclareConditionCommand,
+  ): Promise<{
+    cerrada: PhysicalConditionRecord;
+    vigente: PhysicalConditionRecord;
+  }>;
+
   /** RN-104: último consentimiento para datos de salud del alumno. */
   hasHealthConsent(studentId: string): Promise<boolean>;
 

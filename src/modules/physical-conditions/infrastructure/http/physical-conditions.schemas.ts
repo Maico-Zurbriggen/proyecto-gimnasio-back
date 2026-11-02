@@ -33,6 +33,25 @@ export const closeConditionBodySchema = z.object({
   endsOn: diaSchema.optional(),
 });
 
+/**
+ * Revisión de una condición vigente (criterio 14). Los tres campos son
+ * opcionales —se conserva lo que no se envía— pero al menos uno debe venir:
+ * una revisión que no cambia nada sólo cerraría la condición sin motivo.
+ */
+export const reviseConditionBodySchema = z
+  .object({
+    bodyZoneCode: z.enum(ZONAS_CORPORALES).optional(),
+    severity: z.enum(SEVERIDADES).optional(),
+    description: z.string().max(500).nullable().optional(),
+  })
+  .refine(
+    (body) =>
+      body.bodyZoneCode !== undefined ||
+      body.severity !== undefined ||
+      body.description !== undefined,
+    { message: 'Indicá al menos un campo a revisar' },
+  );
+
 export const listConditionsQuerySchema = z.object({
   vigentesEn: diaSchema.optional(),
 });

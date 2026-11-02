@@ -109,6 +109,8 @@ import type { PhysicalConditionsRepository } from './modules/physical-conditions
 import { CloseConditionUseCase } from './modules/physical-conditions/application/use-cases/close-condition.use-case';
 import { DeclareConditionUseCase } from './modules/physical-conditions/application/use-cases/declare-condition.use-case';
 import { ListConditionsUseCase } from './modules/physical-conditions/application/use-cases/list-conditions.use-case';
+import { ReviseConditionUseCase } from './modules/physical-conditions/application/use-cases/revise-condition.use-case';
+import type { RoutineRevaluation } from './modules/physical-conditions/application/ports/routine-revaluation.port';
 import { PhysicalConditionsController } from './modules/physical-conditions/infrastructure/http/physical-conditions.controller';
 import { createPhysicalConditionsRouter } from './modules/physical-conditions/infrastructure/http/physical-conditions.routes';
 import { ConditionsDeclarationUseCases } from './modules/physical-conditions/application/use-cases/conditions-declaration.use-cases';
@@ -260,6 +262,7 @@ interface AppDependencies {
   routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
   physicalConditionsRepository?: PhysicalConditionsRepository;
+  routineRevaluation?: RoutineRevaluation;
   noticesRepository?: NoticesRepository;
   invitationAttemptLimiter?: AttemptLimiter;
   gymsRepository?: GymsRepository;
@@ -328,6 +331,7 @@ export function createApp({
   routineRenewalsRepository,
   invitationsRepository,
   physicalConditionsRepository,
+  routineRevaluation,
   noticesRepository,
   invitationAttemptLimiter,
   gymsRepository,
@@ -553,9 +557,22 @@ export function createApp({
   app.use(
     createPhysicalConditionsRouter(
       new PhysicalConditionsController(
-        new DeclareConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new DeclareConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          routineRevaluation,
+        ),
         new ListConditionsUseCase(resolvedConditionsRepo, resolvedClock),
-        new CloseConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new CloseConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          routineRevaluation,
+        ),
+        new ReviseConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          routineRevaluation,
+        ),
         new ConditionsDeclarationUseCases(
           resolvedConditionsRepo,
           resolvedClock,
