@@ -11,6 +11,8 @@ export interface DeliveredProposal {
 }
 
 export interface AdjustmentProposalsRepository {
+  /** Ids de diagnósticos calculados desde `since` que aún no tienen propuesta. */
+  listDiagnosticIdsWithoutProposal(since: Date): Promise<string[]>;
   /** Carga el diagnóstico con lo que necesita la tabla; null si no existe. */
   loadDiagnostic(diagnosticId: string): Promise<DiagnosticInput | null>;
   /** Propuesta ya entregada para el diagnóstico, si existe. */

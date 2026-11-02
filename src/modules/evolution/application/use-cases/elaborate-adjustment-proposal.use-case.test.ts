@@ -59,6 +59,7 @@ function setup(
     alreadyExisted: false,
   } satisfies DeliveredProposal);
   const repository: AdjustmentProposalsRepository = {
+    listDiagnosticIdsWithoutProposal: vi.fn().mockResolvedValue([]),
     loadDiagnostic: vi.fn().mockResolvedValue(loaded),
     findProposalByDiagnostic: vi.fn().mockResolvedValue(existing),
     deliver,
