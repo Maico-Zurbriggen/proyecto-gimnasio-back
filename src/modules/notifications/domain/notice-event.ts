@@ -3,6 +3,8 @@ export const noticeEventKeys = {
     `goal-change-proposal:${proposalId}`,
   physicalConditionProposal: (proposalId: string) =>
     `physical-condition-proposal:${proposalId}`,
+  adaptationProposal: (proposalId: string, state: 'pending' | 'blocked') =>
+    `adaptation-proposal:${proposalId}:${state}`,
   routineReview: (
     routineId: string,
     versionId: string,

@@ -164,6 +164,8 @@ import { GetRoutineGenerationUseCase } from './modules/routine-generations/appli
 import { FinalizeRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/finalize-routine-generation.use-case';
 import { RequestRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/request-routine-generation.use-case';
 import { RoutineGenerationsController } from './modules/routine-generations/infrastructure/http/routine-generations.controller';
+import { GetRoutineHistoryUseCase } from './modules/routine-generations/application/use-cases/get-routine-history.use-case';
+import { PrismaRoutineHistoryRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-history.repository';
 import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
 import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
 import { PrismaGeneratedRoutinesRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generated-routines.repository';
@@ -686,6 +688,7 @@ export function createApp({
     requestRoutineGenerationUseCase,
     getRoutineGenerationUseCase,
     new FinalizeRoutineGenerationUseCase(resolvedGeneratedRoutinesRepository),
+    new GetRoutineHistoryUseCase(new PrismaRoutineHistoryRepository(prisma)),
   );
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,

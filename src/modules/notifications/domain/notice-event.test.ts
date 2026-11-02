@@ -19,4 +19,10 @@ describe('notice event keys', () => {
       noticeEventKeys.routineReview('routine-1', 'version-2', 'approved'),
     );
   });
+
+  it('distinguishes a pending proposal from a blocked proposal', () => {
+    expect(
+      noticeEventKeys.adaptationProposal('proposal-1', 'pending'),
+    ).not.toBe(noticeEventKeys.adaptationProposal('proposal-1', 'blocked'));
+  });
 });

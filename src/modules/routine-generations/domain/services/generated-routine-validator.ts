@@ -50,7 +50,7 @@ export interface CatalogExerciseForValidation {
   movementPattern: string;
 }
 
-interface Rule {
+export interface Rule {
   frequency: readonly [number, number];
   workSets: readonly [number, number];
   repetitions: readonly [number, number];
@@ -58,7 +58,7 @@ interface Rule {
   exercises: readonly [number, number];
 }
 
-const RULES: Record<TrainingPurpose, Rule> = {
+export const RULES: Record<TrainingPurpose, Rule> = {
   FUERZA: {
     frequency: [3, 5],
     workSets: [3, 5],

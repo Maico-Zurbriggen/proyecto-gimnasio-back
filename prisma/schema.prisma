@@ -1085,6 +1085,7 @@ model EvolutionDiagnostic {
   adherence            Decimal?             @db.Decimal(5, 2)
   componentVersion     String               @map("component_version")
   criteriaNotEvaluated Json                 @map("criteria_not_evaluated")
+  globalFindings       Json?                @map("global_findings")
   calculatedAt         DateTime             @default(now()) @map("calculated_at") @db.Timestamptz(6)
   student              StudentProfile       @relation(fields: [studentId], references: [userId], onDelete: Restrict)
   routineVersion       RoutineVersion       @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)

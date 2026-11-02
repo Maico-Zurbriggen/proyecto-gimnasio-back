@@ -14,6 +14,186 @@
       }
     },
     "schemas": {
+      "ProposalAdjustment": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "criterion",
+          "previousValue",
+          "proposedValue",
+          "supportingData",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["CARGA", "VOLUMEN", "ESQUEMA", "SUSTITUCION", "ESTRUCTURA"]
+          },
+          "routineExerciseId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Null en los ajustes globales (ESTRUCTURA)."
+          },
+          "exerciseName": {
+            "type": "string",
+            "nullable": true
+          },
+          "criterion": {
+            "type": "string",
+            "description": "Fila de la tabla situación → ajuste que lo originó (p. ej. ESTIMULO_INSUFICIENTE)."
+          },
+          "previousValue": {
+            "type": "object",
+            "description": "Valor vigente antes del ajuste (RN-84)."
+          },
+          "proposedValue": {
+            "type": "object",
+            "description": "Valor propuesto (RN-84)."
+          },
+          "supportingData": {
+            "type": "object",
+            "description": "Datos que sustentan el ajuste (RN-84), con la versión de la tabla."
+          },
+          "state": {
+            "type": "string",
+            "enum": ["PENDIENTE", "ACEPTADO", "RECHAZADO"],
+            "description": "Siempre PENDIENTE al entregarse (RN-86)."
+          }
+        }
+      },
+      "ProposalSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "student": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            }
+          },
+          "globalSituation": {
+            "type": "string"
+          },
+          "adjustmentsCount": {
+            "type": "integer"
+          },
+          "advertenciaDatos": {
+            "type": "object"
+          }
+        }
+      },
+      "ProposalReview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "BLOQUEADA",
+              "ACEPTADA_TOTAL",
+              "ACEPTADA_PARCIAL",
+              "RECHAZADA",
+              "INVALIDADA",
+              "CADUCADA"
+            ],
+            "description": "BLOQUEADA cuando el alumno no tiene entrenador vigente."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resolutionReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "student": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            }
+          },
+          "routine": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "routineType": {
+                "type": "string"
+              },
+              "currentVersionNumber": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          },
+          "diagnostic": {
+            "type": "object",
+            "properties": {
+              "periodStart": {
+                "type": "string",
+                "format": "date"
+              },
+              "periodEnd": {
+                "type": "string",
+                "format": "date"
+              },
+              "globalSituation": {
+                "type": "string"
+              },
+              "adherence": {
+                "type": "number",
+                "nullable": true
+              }
+            }
+          },
+          "adjustments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProposalAdjustment"
+            }
+          },
+          "advertenciaDatos": {
+            "type": "object"
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "additionalProperties": false,
@@ -1044,6 +1224,261 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/routine-history": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getRoutineHistory",
+        "summary": "Trazabilidad de las rutinas del alumno",
+        "description": "Cada rutina del alumno (más nueva primero) con su generación: pedido del alumno, cambios pedidos, regeneraciones y revisiones del entrenador.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historial",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "routineId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string"
+                          },
+                          "routineType": {
+                            "type": "string"
+                          },
+                          "targetWeeklyFrequency": {
+                            "type": "integer"
+                          },
+                          "requestedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "requestedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "replacesRoutineId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                          },
+                          "replacedByRoutineId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                          },
+                          "versionCount": {
+                            "type": "integer"
+                          },
+                          "generation": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "requestId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "freeText": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "parameters": {
+                                "type": "object",
+                                "nullable": true
+                              },
+                              "changeRequest": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "trainerFeedback": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "explanation": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "attempts": {
+                                "type": "integer"
+                              },
+                              "modelVersion": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "requestedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "finishedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "nullable": true
+                              }
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ASIGNADA_DESDE_PLANTILLA",
+                                    "GENERACION_SOLICITADA",
+                                    "CAMBIO_SOLICITADO",
+                                    "REGENERACION_ENTRENADOR",
+                                    "RENOVACION_AUTOMATICA",
+                                    "PROPUESTA_GENERADA",
+                                    "REVISION_ENTRENADOR",
+                                    "CAMBIO_DE_ESTADO"
+                                  ]
+                                },
+                                "at": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "format": "uuid"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "detail": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "data": {
+                                  "type": "object"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin acceso al alumno"
+          }
+        }
+      }
+    },
+    "/trainers/me/proposals": {
+      "get": {
+        "operationId": "listMyProposals",
+        "summary": "Propuestas de ajuste pendientes de mi cartera",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Propuestas pendientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProposalSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proposals/{proposalId}": {
+      "parameters": [
+        {
+          "name": "proposalId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getProposalReview",
+        "summary": "Propuesta de ajuste con sus ajustes",
+        "description": "Cada propuesta deriva de exactamente un diagnóstico (RN-83) y llega PENDIENTE con sus ajustes PENDIENTE; nunca se aplica sin resolución del entrenador (RN-86).",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Propuesta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalReview"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin acceso al alumno"
+          },
+          "404": {
+            "description": "No existe"
           }
         }
       }
