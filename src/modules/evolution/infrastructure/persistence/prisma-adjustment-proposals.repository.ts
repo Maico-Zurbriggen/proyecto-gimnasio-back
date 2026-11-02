@@ -35,6 +35,15 @@ const json = (value: unknown) => value as Prisma.InputJsonValue;
 export class PrismaAdjustmentProposalsRepository implements AdjustmentProposalsRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
+  async listDiagnosticIdsWithoutProposal(since: Date): Promise<string[]> {
+    const rows = await this.prisma.evolutionDiagnostic.findMany({
+      where: { calculatedAt: { gte: since }, adaptationProposal: null },
+      orderBy: { calculatedAt: 'asc' },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   async findProposalByDiagnostic(
     diagnosticId: string,
   ): Promise<DeliveredProposal | null> {
