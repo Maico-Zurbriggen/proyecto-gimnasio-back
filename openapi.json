@@ -32,13 +32,7 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "CARGA",
-              "VOLUMEN",
-              "ESQUEMA",
-              "SUSTITUCION",
-              "ESTRUCTURA"
-            ]
+            "enum": ["CARGA", "VOLUMEN", "ESQUEMA", "SUSTITUCION", "ESTRUCTURA"]
           },
           "routineExerciseId": {
             "type": "string",
@@ -68,11 +62,7 @@
           },
           "state": {
             "type": "string",
-            "enum": [
-              "PENDIENTE",
-              "ACEPTADO",
-              "RECHAZADO"
-            ],
+            "enum": ["PENDIENTE", "ACEPTADO", "RECHAZADO"],
             "description": "Siempre PENDIENTE al entregarse (RN-86)."
           }
         }
