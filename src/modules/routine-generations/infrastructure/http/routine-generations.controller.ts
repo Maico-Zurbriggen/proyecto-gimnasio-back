@@ -21,6 +21,7 @@ import {
 import type { GetRoutineGenerationUseCase } from '../../application/use-cases/get-routine-generation.use-case';
 import type { FinalizeRoutineGenerationUseCase } from '../../application/use-cases/finalize-routine-generation.use-case';
 import type { RequestRoutineGenerationUseCase } from '../../application/use-cases/request-routine-generation.use-case';
+import type { GetRoutineHistoryUseCase } from '../../application/use-cases/get-routine-history.use-case';
 import {
   getGenerationParamsSchema,
   requestGenerationBodySchema,
@@ -32,6 +33,7 @@ export class RoutineGenerationsController {
     private readonly requestRoutineGenerationUseCase: RequestRoutineGenerationUseCase,
     private readonly getRoutineGenerationUseCase: GetRoutineGenerationUseCase,
     private readonly finalizeRoutineGenerationUseCase: FinalizeRoutineGenerationUseCase,
+    private readonly getRoutineHistoryUseCase?: GetRoutineHistoryUseCase,
   ) {}
 
   request = async (
@@ -170,6 +172,33 @@ export class RoutineGenerationsController {
         return;
       }
 
+      next(error);
+    }
+  };
+
+  history = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const parsedParams = requestGenerationParamsSchema.safeParse(req.params);
+      if (!parsedParams.success) {
+        res.status(400).json({
+          error: 'invalid_request_parameters',
+          details: parsedParams.error.flatten(),
+        });
+        return;
+      }
+      if (!this.getRoutineHistoryUseCase) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      const items = await this.getRoutineHistoryUseCase.execute({
+        studentId: parsedParams.data.studentId,
+      });
+      res.status(200).json({ items });
+    } catch (error) {
       next(error);
     }
   };
