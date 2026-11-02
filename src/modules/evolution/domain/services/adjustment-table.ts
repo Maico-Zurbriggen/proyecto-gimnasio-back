@@ -382,7 +382,10 @@ export function globalAdjustments(
             previousValue: {
               target_weekly_frequency: routine.targetWeeklyFrequency,
             },
-            proposedValue: { target_weekly_frequency: target },
+            proposedValue: {
+              target_weekly_frequency: target,
+              requires_manual_intervention: true,
+            },
             criterion: 'ADHERENCIA_BAJA_SOSTENIDA',
             supportingData: supporting,
           },
@@ -404,6 +407,7 @@ export function globalAdjustments(
               previousValue: { muscle_group: imbalance.muscleGroup },
               proposedValue: {
                 action: 'AGREGAR_EJERCICIO',
+                requires_manual_intervention: true,
                 movement_pattern: imbalance.stimulatingPattern,
                 muscle_group: imbalance.muscleGroup,
               },
@@ -456,6 +460,7 @@ export function globalAdjustments(
       proposedValue: {
         routine_type: global.goalChange.to,
         requires_type_change: true,
+        requires_manual_intervention: true,
       },
       criterion: 'CAMBIO_OBJETIVO',
       supportingData: { ...base, goalChange: global.goalChange },
@@ -491,7 +496,9 @@ function verify(
     });
 
   for (const adjustment of candidates) {
-    const key = `${adjustment.routineExerciseId ?? 'global'}:${adjustment.type}`;
+    // Los globales (sin ejercicio) se distinguen por criterio: puede haber
+    // varios ESTRUCTURA distintos en la misma propuesta.
+    const key = `${adjustment.routineExerciseId ?? `global:${adjustment.criterion}`}:${adjustment.type}`;
     if (seen.has(key)) {
       drop(adjustment, 'Ajuste duplicado sobre el mismo ejercicio.');
       continue;

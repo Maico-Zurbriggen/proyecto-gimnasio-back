@@ -433,3 +433,34 @@ describe('elaboración de la propuesta', () => {
     expect(perExercise.map((a) => a.type)).toEqual(['SUSTITUCION']);
   });
 });
+
+describe('ajustes de estructura', () => {
+  it('se marcan para intervención manual: el backend no los aplica solo', () => {
+    const routine = {
+      routineType: 'HIPERTROFIA' as const,
+      targetWeeklyFrequency: 4,
+      exercisesPerDay: [5, 5, 5, 5],
+    };
+    const result = elaborate([], {
+      routine,
+      adherence: 40,
+      global: {
+        lowAdherenceWeeks: 4,
+        goalChange: { to: 'FUERZA' },
+        imbalances: [
+          {
+            muscleGroup: 'ESPALDA',
+            kind: 'DEFECTO',
+            stimulatingPattern: 'TRACCION_HORIZONTAL',
+            routineExerciseIds: [],
+          },
+        ],
+      },
+    });
+    const structure = result.adjustments.filter((a) => a.type === 'ESTRUCTURA');
+    expect(structure).toHaveLength(3);
+    for (const adjustment of structure) {
+      expect(adjustment.proposedValue.requires_manual_intervention).toBe(true);
+    }
+  });
+});
