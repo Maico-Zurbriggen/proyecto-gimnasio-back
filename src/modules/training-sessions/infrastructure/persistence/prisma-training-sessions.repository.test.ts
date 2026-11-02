@@ -215,4 +215,45 @@ describe('HU21 snapshot persistence adapter', () => {
     expect(broken.transaction).toHaveBeenCalledTimes(1);
     expect(tx.trainingSession.create).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the start date when a session started 23:30 finishes at 00:40 gym time', async () => {
+    const { repository, tx } = setup();
+    const started = await repository.start({
+      actor,
+      studentId,
+      routineDayId: dayId,
+      now,
+    });
+    expect(started.occurredOn).toBe('2026-10-21');
+    const finishedAt = new Date('2026-10-22T03:40:00Z');
+    const stored = (await tx.trainingSession.findFirst()) as Record<
+      string,
+      unknown
+    >;
+    Object.assign(tx, {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      trainingSession: {
+        ...tx.trainingSession,
+        update: vi.fn(async () => ({
+          ...stored,
+          state: 'COMPLETADA',
+          completedAt: finishedAt,
+          lastActivityAt: finishedAt,
+        })),
+      },
+    });
+    tx.trainingSession.findFirst.mockResolvedValue({
+      id: sessionId,
+      state: 'EN_CURSO',
+      lastActivityAt: now,
+    } as never);
+    const finished = await repository.finish({
+      actor,
+      studentId,
+      sessionId,
+      now: finishedAt,
+    });
+    expect(finished.state).toBe('COMPLETADA');
+    expect(finished.occurredOn).toBe('2026-10-21');
+  });
 });

@@ -80,7 +80,13 @@ describe('compliance (HU23 - T2)', () => {
 
       expect(resultado.disponible).toBe(false);
       if (!resultado.disponible) {
-        expect(resultado.motivo).toBe('SIN_SERIES_DE_TRABAJO');
+        expect(resultado).toMatchObject({
+          status: 'SIN_DATOS_SUFICIENTES',
+          missing: 'series de trabajo prescriptas',
+          required: 1,
+          available: 0,
+          remaining: 1,
+        });
       }
     });
 
@@ -211,7 +217,11 @@ describe('compliance (HU23 - T2)', () => {
 
       expect(resultado.disponible).toBe(false);
       if (!resultado.disponible) {
-        expect(resultado.motivo).toBe('SIN_SERIES_DE_TRABAJO');
+        expect(resultado).toMatchObject({
+          status: 'SIN_DATOS_SUFICIENTES',
+          unit: 'series',
+          remaining: 1,
+        });
       }
     });
   });

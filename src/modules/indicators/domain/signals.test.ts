@@ -201,7 +201,13 @@ describe('detectarEstancamiento (RN-74)', () => {
 
     expect(resultado.estado).toBe('DATOS_INSUFICIENTES');
     if (resultado.estado === 'DATOS_INSUFICIENTES') {
-      expect(resultado.falta).toContain('4 sesiones');
+      expect(resultado).toMatchObject({
+        status: 'SIN_DATOS_SUFICIENTES',
+        unit: 'sesiones',
+        required: 4,
+        available: 3,
+        remaining: 1,
+      });
     }
   });
 
@@ -346,7 +352,11 @@ describe('detectarEstancamiento (RN-74)', () => {
 
       expect(resultado.estado).toBe('DATOS_INSUFICIENTES');
       if (resultado.estado === 'DATOS_INSUFICIENTES') {
-        expect(resultado.falta).toContain('no es calculable');
+        expect(resultado).toMatchObject({
+          unit: 'mitades del período',
+          required: 2,
+          remaining: 1,
+        });
       }
     });
   });
@@ -570,7 +580,7 @@ describe('detectarDesbalance (RN-76)', () => {
 
     expect(resultado.estado).toBe('DATOS_INSUFICIENTES');
     if (resultado.estado === 'DATOS_INSUFICIENTES') {
-      expect(resultado.falta).toContain('sesiones completadas');
+      expect(resultado).toMatchObject({ unit: 'sesiones', remaining: 1 });
     }
   });
 
@@ -580,7 +590,7 @@ describe('detectarDesbalance (RN-76)', () => {
 
     expect(resultado.estado).toBe('DATOS_INSUFICIENTES');
     if (resultado.estado === 'DATOS_INSUFICIENTES') {
-      expect(resultado.falta).toContain('clasificación muscular');
+      expect(resultado.missing).toContain('clasificación muscular');
     }
   });
 });

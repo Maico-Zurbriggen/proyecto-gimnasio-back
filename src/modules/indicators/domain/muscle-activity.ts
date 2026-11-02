@@ -3,6 +3,7 @@ import {
   PESO_PARTICIPACION_PRIMARIA,
   PESO_PARTICIPACION_SECUNDARIA,
 } from './volume';
+import { sinDatosSuficientes } from './insufficient-data';
 
 export { GRUPOS_MUSCULARES };
 export type MuscleCode = (typeof GRUPOS_MUSCULARES)[number];
@@ -30,9 +31,33 @@ export function presentMuscleActivity(
   const classifiedSets = exercises
     .filter((exercise) => validClassification(exercise.muscles))
     .reduce((sum, exercise) => sum + exercise.completedWorkSets, 0);
-  const available =
-    sessionCount > 0 && (exercises.length === 0 || classifiedSets > 0);
+  const unclassifiedSets = exercises
+    .filter((exercise) => !validClassification(exercise.muscles))
+    .reduce((sum, exercise) => sum + exercise.completedWorkSets, 0);
+  // Sin series clasificadas no hay volumen calculable: nunca se informa 0.
+  const available = sessionCount > 0 && classifiedSets > 0;
+  const insufficientData = available
+    ? null
+    : sessionCount === 0
+      ? sinDatosSuficientes(
+          'sesiones completadas en el período',
+          'sesiones',
+          1,
+          0,
+          'Elegí otro período o registrá una sesión completada.',
+        )
+      : sinDatosSuficientes(
+          'series de trabajo completadas de ejercicios con clasificación muscular',
+          'series',
+          1,
+          0,
+          unclassifiedSets > 0
+            ? 'Clasificá los ejercicios ejecutados (hay series sin clasificación muscular).'
+            : 'Registrá series de trabajo completadas en el período.',
+        );
   return {
+    insufficientData,
+    unclassifiedSets,
     unit: 'SERIES_EFECTIVAS' as const,
     groups: GRUPOS_MUSCULARES.map((group) => {
       const aggregate = aggregates.find((row) => row.group === group);
