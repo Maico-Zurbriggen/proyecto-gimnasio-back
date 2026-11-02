@@ -13,6 +13,8 @@ import { fechaDeInicioAdmisible } from '../../domain/services/condition-validity
 import type { PhysicalConditionDto } from '../dto/condition.dto';
 import { toConditionDto } from '../dto/condition.dto';
 import type { PhysicalConditionsRepository } from '../ports/physical-conditions.repository';
+import type { RoutineRevaluation } from '../ports/routine-revaluation.port';
+import { reevaluarRutina } from './revaluate-routine';
 
 export interface DeclareConditionInput {
   studentId: string;
@@ -48,6 +50,7 @@ export class DeclareConditionUseCase {
   constructor(
     private readonly conditions: PhysicalConditionsRepository,
     private readonly clock: Clock,
+    private readonly revaluation?: RoutineRevaluation,
   ) {}
 
   async execute(input: DeclareConditionInput): Promise<PhysicalConditionDto> {
@@ -78,6 +81,10 @@ export class DeclareConditionUseCase {
     if (!record) {
       throw new StudentNotFoundError();
     }
+
+    // RN-91: la rutina vigente tiene que reflejar la condición nueva sin
+    // esperar a la próxima renovación.
+    await reevaluarRutina(this.revaluation, input.studentId);
 
     return toConditionDto(record, now);
   }

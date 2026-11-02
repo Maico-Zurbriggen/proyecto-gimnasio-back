@@ -401,6 +401,42 @@ export class PrismaPhysicalConditionsRepository implements PhysicalConditionsRep
     );
   }
 
+  async revise(
+    conditionId: string,
+    cierre: Date,
+    nueva: DeclareConditionCommand,
+  ): Promise<{
+    cerrada: PhysicalConditionRecord;
+    vigente: PhysicalConditionRecord;
+  }> {
+    // Las dos escrituras van juntas: media revisión dejaría al alumno sin la
+    // condición que quiso corregir.
+    return this.prisma.$transaction(
+      async (tx) => {
+        const cerrada = await tx.physicalCondition.update({
+          where: { id: conditionId },
+          data: { endsOn: cierre },
+        });
+        const vigente = await tx.physicalCondition.create({
+          data: {
+            studentId: nueva.studentId,
+            bodyZoneCode: nueva.bodyZoneCode,
+            severity: nueva.severity,
+            description: nueva.description,
+            startsOn: nueva.startsOn,
+          },
+        });
+
+        // Conserva la reevaluacion completa vigente: estados, propuesta y
+        // notificaciones se actualizan en la misma transaccion que la revision.
+        await reevaluateCurrentRoutines(tx, nueva.studentId, new Date());
+
+        return { cerrada: toRecord(cerrada), vigente: toRecord(vigente) };
+      },
+      { timeout: 20000 },
+    );
+  }
+
   async hasHealthConsent(studentId: string): Promise<boolean> {
     if (!isUuid(studentId)) return false;
     const consent = await this.prisma.consent.findFirst({
