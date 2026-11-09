@@ -35,4 +35,15 @@ export function puedeOtorgarRoles(
 
 /** Estado de una invitación emitida, como lo ve quien la emitió. */
 export type EstadoInvitacionEmitida =
-  'PENDIENTE' | 'USADA' | 'VENCIDA' | 'REVOCADA';
+  'VIGENTE' | 'USADA' | 'REVOCADA' | 'CADUCADA';
+
+/**
+ * Estado efectivo de una invitación emitida (HU08 - criterio 15): CADUCADA se
+ * deriva de los 14 días aunque nadie haya actualizado la fila.
+ */
+export function estadoEfectivo(
+  motivo: 'USADA' | 'REVOCADA' | 'VENCIDA' | null,
+): EstadoInvitacionEmitida {
+  if (motivo === null) return 'VIGENTE';
+  return motivo === 'VENCIDA' ? 'CADUCADA' : motivo;
+}

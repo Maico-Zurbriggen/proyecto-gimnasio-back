@@ -1,6 +1,7 @@
 import type {
   MinimizedContext,
   RoutineGenerationPreferences,
+  RoutineRenewalStructureInput,
 } from '../dto/routine-generation-context.dto';
 
 export interface RoutineGenerationSnapshot {
@@ -33,8 +34,14 @@ export interface StoredRoutineGenerationRequest {
   alreadyExisted: boolean;
 }
 
+export interface ProposedRoutine {
+  id: string;
+  structure: RoutineRenewalStructureInput;
+}
+
 export interface RoutineGenerationsRepository {
   findProposedRoutineId(studentId: string): Promise<string | null>;
+  findProposedRoutine(studentId: string): Promise<ProposedRoutine | null>;
   createOrGetRequest(
     input: CreateRoutineGenerationRequest,
   ): Promise<StoredRoutineGenerationRequest>;

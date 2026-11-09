@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import type {
   CreateRoutineGenerationRequest,
+  ProposedRoutine,
   RoutineGenerationOwner,
   RoutineGenerationSnapshot,
   RoutineGenerationsRepository,
@@ -21,6 +22,74 @@ export class PrismaRoutineGenerationsRepository implements RoutineGenerationsRep
       select: { id: true },
     });
     return routine?.id ?? null;
+  }
+
+  async findProposedRoutine(
+    studentId: string,
+  ): Promise<ProposedRoutine | null> {
+    const routine = await this.prisma.routine.findFirst({
+      where: { studentId, state: 'PROPUESTA' },
+      select: {
+        id: true,
+        routineType: true,
+        targetWeeklyFrequency: true,
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+          take: 1,
+          select: {
+            days: {
+              orderBy: { position: 'asc' },
+              select: {
+                name: true,
+                dominantPattern: true,
+                exercises: {
+                  orderBy: { position: 'asc' },
+                  select: {
+                    exerciseId: true,
+                    note: true,
+                    sets: {
+                      orderBy: { position: 'asc' },
+                      select: {
+                        minRepetitions: true,
+                        maxRepetitions: true,
+                        suggestedLoad: true,
+                        restSeconds: true,
+                        warmup: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const version = routine?.versions[0];
+    if (!routine || !version) return null;
+    return {
+      id: routine.id,
+      structure: {
+        routineType: routine.routineType,
+        targetWeeklyFrequency: routine.targetWeeklyFrequency,
+        days: version.days.map((day) => ({
+          name: day.name,
+          dominantPattern: day.dominantPattern,
+          exercises: day.exercises.map((exercise) => ({
+            exerciseId: exercise.exerciseId,
+            note: exercise.note,
+            sets: exercise.sets.map((set) => ({
+              minRepetitions: set.minRepetitions,
+              maxRepetitions: set.maxRepetitions,
+              suggestedLoad:
+                set.suggestedLoad === null ? null : Number(set.suggestedLoad),
+              restSeconds: set.restSeconds,
+              warmup: set.warmup,
+            })),
+          })),
+        })),
+      },
+    };
   }
 
   async createOrGetRequest(input: CreateRoutineGenerationRequest) {
@@ -94,6 +163,15 @@ export class PrismaRoutineGenerationsRepository implements RoutineGenerationsRep
       ...(input.preferences.local_test_regeneration
         ? { local_test_regeneration: input.preferences.local_test_regeneration }
         : {}),
+      ...(input.preferences.routine_change_replacement
+        ? {
+            routine_change_replacement: {
+              replaces_proposed_routine_id:
+                input.preferences.routine_change_replacement
+                  .replaces_proposed_routine_id,
+            },
+          }
+        : {}),
       free_text: input.preferences.free_text,
       parameters: input.preferences.parameters
         ? { ...input.preferences.parameters }
@@ -107,6 +185,9 @@ export class PrismaRoutineGenerationsRepository implements RoutineGenerationsRep
       { ...minimizedContext, captured_at: null },
       {
         ...preferences,
+        ...(input.preferences.routine_change_replacement
+          ? { routine_change_replacement: true }
+          : {}),
         ...(input.preferences.local_test_regeneration
           ? { local_test_regeneration: true }
           : {}),

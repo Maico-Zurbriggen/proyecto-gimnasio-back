@@ -5,6 +5,7 @@ import type { CompleteAccountUseCase } from '../../application/use-cases/complet
 import type {
   IssueInvitationUseCase,
   ListInvitationsUseCase,
+  ResendInvitationUseCase,
 } from '../../application/use-cases/issue-invitation.use-case';
 import type { RevokeInvitationUseCase } from '../../application/use-cases/revoke-invitation.use-case';
 import type { ValidateInvitationUseCase } from '../../application/use-cases/validate-invitation.use-case';
@@ -123,11 +124,18 @@ function sendInvitationError(
     return;
   }
   if (error instanceof ForbiddenRevocationError) {
-    res.status(403).json({ error: 'forbidden_invitation_revocation' });
+    res.status(403).json({
+      error: 'forbidden_invitation_revocation',
+      message: error.message,
+    });
     return;
   }
   if (error instanceof InvitationNotRevocableError) {
-    res.status(409).json({ error: 'invitation_not_revocable' });
+    res.status(409).json({
+      error: 'invitation_not_revocable',
+      message: error.message,
+      estado: error.estado,
+    });
     return;
   }
   if (error instanceof UserAlreadyExistsError) {
@@ -148,7 +156,30 @@ export class InvitationsController {
     private readonly issueInvitation: IssueInvitationUseCase,
     private readonly listInvitations: ListInvitationsUseCase,
     private readonly revokeInvitation: RevokeInvitationUseCase,
+    private readonly resendInvitation: ResendInvitationUseCase,
   ) {}
+
+  /** HU08 - criterios 18 y 19: reenvía con un token nuevo. */
+  resend = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = invitationIdParamSchema.safeParse(req.params);
+      if (!params.success) throw new InvitationNotFoundError();
+      res
+        .status(200)
+        .json(
+          await this.resendInvitation.execute(
+            req.user!,
+            params.data.invitationId,
+          ),
+        );
+    } catch (error) {
+      sendInvitationError(error, res, next);
+    }
+  };
 
   /** FL-19/1-2: emisión de una invitación y envío del enlace por correo. */
   issue = async (

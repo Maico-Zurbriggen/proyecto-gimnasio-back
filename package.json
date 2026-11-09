@@ -10,6 +10,7 @@
     "generation:openapi": "node --require ./scripts/tsx-windows-userinfo-compat.cjs ./node_modules/tsx/dist/cli.mjs scripts/generate-generation-management-openapi.ts && prettier --write openapi/generation-management.openapi.json",
     "catalog:import": "node --require ./scripts/tsx-windows-userinfo-compat.cjs ./node_modules/tsx/dist/cli.mjs scripts/import-repdb.ts",
     "catalog:openapi": "node --require ./scripts/tsx-windows-userinfo-compat.cjs ./node_modules/tsx/dist/cli.mjs scripts/generate-catalog-openapi.ts",
+    "sessions:openapi": "node --require ./scripts/tsx-windows-userinfo-compat.cjs ./node_modules/tsx/dist/cli.mjs scripts/generate-training-sessions-openapi.ts && prettier --write openapi/training-sessions.openapi.json",
     "build": "tsc -p tsconfig.json",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
     "db:create-superadmin": "node scripts/create-superadmin.cjs",

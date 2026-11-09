@@ -65,7 +65,7 @@ function createProposalRecord(
         criterion: 'Tope del rango',
         previousValue: { min_repetitions: 3, max_repetitions: 6 },
         proposedValue: { min_repetitions: 4, max_repetitions: 6 },
-        supportingData: {},
+        supportingData: { sesionesConsideradas: 4 },
         state: 'PENDIENTE',
       },
     ],

@@ -42,6 +42,15 @@ export function createRoutineGenerationsRouter(
     controller.getById,
   );
 
+  // GET /students/:studentId/routine-history
+  // Trazabilidad: cada rutina del alumno con su generación, pedidos de cambio
+  // y decisiones del entrenador.
+  router.get(
+    '/students/:studentId/routine-history',
+    ...alumnoOEntrenadorAsignado,
+    controller.history,
+  );
+
   router.post(
     '/students/:studentId/routine-generations/:requestId/finalize',
     ...alumnoOEntrenadorAsignado,

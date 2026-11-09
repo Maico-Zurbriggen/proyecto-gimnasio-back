@@ -97,12 +97,23 @@ export interface InvitationsRepository {
     gymId: string,
   ): Promise<IssuedInvitationRecord | null>;
 
-  /** Revoca y audita atÃ³micamente una invitaciÃ³n que sigue vigente. */
+  /** Revoca y audita atómicamente una invitación que sigue vigente. */
   revoke(command: {
     invitationId: string;
     actorUserId: string;
     now: Date;
   }): Promise<boolean>;
+
+  /**
+   * Rota el token de una invitación vigente (reenvío, criterio 19), con
+   * auditoría. `null` si ya no está vigente.
+   */
+  rotateToken(command: {
+    invitationId: string;
+    tokenHash: string;
+    actorUserId: string;
+    now: Date;
+  }): Promise<IssuedInvitation | null>;
 
   /** Busca la invitación por el hash de su token. `null` si no existe. */
   findByTokenHash(tokenHash: string): Promise<InvitationRecord | null>;

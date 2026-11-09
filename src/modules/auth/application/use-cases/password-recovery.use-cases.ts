@@ -13,16 +13,23 @@ import type {
   RecoveryMailer,
 } from '../ports/password-recovery.repository';
 
-export class WeakPasswordError extends Error {}
+/** HU09 - criterio 10: la política es la misma de HU06 y dice qué falla. */
+export class WeakPasswordError extends Error {
+  constructor(readonly rules: string[] = []) {
+    super('La contraseña no cumple los requisitos');
+  }
+}
 export class InvalidRecoveryTokenError extends Error {}
 export class InvalidPasswordSessionError extends Error {}
 
 function validate(password: string): void {
-  if (
-    !validatePasswordStrength(password).valid ||
-    Buffer.byteLength(password, 'utf8') > 72
-  ) {
-    throw new WeakPasswordError();
+  const resultado = validatePasswordStrength(password);
+  if (!resultado.valid || Buffer.byteLength(password, 'utf8') > 72) {
+    throw new WeakPasswordError(
+      resultado.errors.length > 0
+        ? resultado.errors
+        : ['No puede tener más de 64 caracteres.'],
+    );
   }
 }
 

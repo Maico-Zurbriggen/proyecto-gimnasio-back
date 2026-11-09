@@ -6,8 +6,9 @@ afterEach(() => {
 });
 function configure() {
   vi.stubEnv('RECOVERY_PAGE_URL', 'https://gym.test/recover');
-  vi.stubEnv('RECOVERY_EMAIL_FROM', 'Gym <access@gym.test>');
-  vi.stubEnv('RECOVERY_EMAIL_API_KEY', 'provider-secret');
+  vi.stubEnv('BREVO_API_KEY', 'provider-secret');
+  vi.stubEnv('BREVO_SENDER_EMAIL', 'access@gym.test');
+  vi.stubEnv('BREVO_SENDER_NAME', 'Gym');
 }
 describe('recovery email HTTP adapter', () => {
   it('uses the configured recovery page and sends no password to the provider', async () => {
@@ -18,17 +19,23 @@ describe('recovery email HTTP adapter', () => {
     vi.stubGlobal('fetch', send);
     await new HttpRecoveryMailer().send('a@gym.test', 'token');
     const [url, options] = send.mock.calls[0]!;
-    expect(url).toBe('https://api.resend.com/emails');
-    expect(JSON.parse(options.body).text).toContain(
+    expect(url).toBe('https://api.brevo.com/v3/smtp/email');
+    expect(JSON.parse(options.body).textContent).toContain(
       'https://gym.test/recover?token=token',
     );
-    expect(JSON.parse(options.body).to).toEqual(['a@gym.test']);
+    expect(JSON.parse(options.body).sender).toEqual({
+      email: 'access@gym.test',
+      name: 'Gym',
+    });
+    expect(JSON.parse(options.body).to).toEqual([{ email: 'a@gym.test' }]);
+    expect(options.headers['api-key']).toBe('provider-secret');
+    expect(options.headers.Authorization).toBeUndefined();
     expect(options.signal).toBeInstanceOf(AbortSignal);
   });
   it('rejects missing configuration, unsafe URLs and failed delivery without exposing provider details', async () => {
     const send = vi.fn();
     vi.stubGlobal('fetch', send);
-    vi.stubEnv('RECOVERY_EMAIL_API_KEY', '');
+    vi.stubEnv('BREVO_API_KEY', '');
     await expect(
       new HttpRecoveryMailer().send('a@gym.test', 'token'),
     ).rejects.toThrow('not configured');

@@ -20,8 +20,16 @@ export const requestGenerationBodySchema = z
     parametros: requestGenerationParametrosSchema.nullish(),
     idempotencyKey: z.string().min(1).optional(),
     regenerar: z.boolean().optional(),
+    // Cambios pedidos sobre la rutina PROPUESTA vigente del alumno (HITL).
+    cambios: z.string().trim().min(1).max(2000).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (body) =>
+      !body.cambios ||
+      (!body.textoLibre && !body.parametros && body.regenerar !== true),
+    { message: 'cambios cannot be combined with other generation inputs' },
+  );
 
 export const getGenerationParamsSchema = z.object({
   studentId: z.string().uuid({ message: 'studentId must be a valid UUID' }),

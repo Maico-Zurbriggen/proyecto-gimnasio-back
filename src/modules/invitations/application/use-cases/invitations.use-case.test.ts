@@ -87,6 +87,10 @@ class InMemoryInvitations implements InvitationsRepository {
   revoke(): Promise<boolean> {
     return Promise.resolve(false);
   }
+
+  rotateToken(): Promise<null> {
+    return Promise.resolve(null);
+  }
 }
 
 function createAuthRepo(): {

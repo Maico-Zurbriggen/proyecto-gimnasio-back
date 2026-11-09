@@ -49,21 +49,19 @@ function cuerpo(email: InvitationEmail, link: string): string {
 }
 
 /**
- * Envío por la API HTTP de Resend, igual que la recuperación de contraseña
+ * Envío por la API HTTP de Brevo, igual que la recuperación de contraseña
  * (HU09): mismo proveedor y sin SDK. No registra el contenido ni la respuesta.
  *
- * Variables: `INVITATION_PAGE_URL` y, si no se definen las propias,
- * `INVITATION_EMAIL_FROM`/`INVITATION_EMAIL_API_KEY` heredan las de HU09.
+ * Variables: `INVITATION_PAGE_URL`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` y
+ * `BREVO_SENDER_NAME` opcional.
  */
 export class HttpInvitationMailer implements InvitationMailer {
   async sendInvitation(email: InvitationEmail): Promise<void> {
     const pageUrl = process.env.INVITATION_PAGE_URL;
-    const from =
-      process.env.INVITATION_EMAIL_FROM || process.env.RECOVERY_EMAIL_FROM;
-    const apiKey =
-      process.env.INVITATION_EMAIL_API_KEY ||
-      process.env.RECOVERY_EMAIL_API_KEY;
-    if (!pageUrl || !from || !apiKey) {
+    const apiKey = process.env.BREVO_API_KEY;
+    const senderEmail = process.env.BREVO_SENDER_EMAIL;
+    const senderName = process.env.BREVO_SENDER_NAME || 'Vivaz';
+    if (!pageUrl || !apiKey || !senderEmail) {
       throw new Error('Invitation email is not configured');
     }
     const link = new URL(enlaceDeInvitacion(pageUrl, email.token));
@@ -74,18 +72,19 @@ export class HttpInvitationMailer implements InvitationMailer {
       throw new Error('Invalid invitation URL');
     }
 
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       signal: AbortSignal.timeout(5000),
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        accept: 'application/json',
+        'api-key': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from,
-        to: [email.to],
+        sender: { email: senderEmail, name: senderName },
+        to: [{ email: email.to }],
         subject: contenidoDeInvitacion(email).subject,
-        text: cuerpo(email, link.toString()),
+        textContent: cuerpo(email, link.toString()),
       }),
     });
     if (!response.ok) throw new Error('Invitation delivery failed');
@@ -112,10 +111,8 @@ export class ConsoleInvitationMailer implements InvitationMailer {
 export function createInvitationMailerFromEnv(): InvitationMailer {
   const configured =
     Boolean(process.env.INVITATION_PAGE_URL) &&
-    Boolean(
-      process.env.INVITATION_EMAIL_API_KEY ||
-      process.env.RECOVERY_EMAIL_API_KEY,
-    );
+    Boolean(process.env.BREVO_API_KEY) &&
+    Boolean(process.env.BREVO_SENDER_EMAIL);
   if (!configured && process.env.NODE_ENV === 'development') {
     return new ConsoleInvitationMailer();
   }

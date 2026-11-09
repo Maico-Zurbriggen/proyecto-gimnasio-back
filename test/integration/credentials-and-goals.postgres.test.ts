@@ -462,6 +462,13 @@ describe.skipIf(!prisma)('HU09/HU10 PostgreSQL invariants', () => {
       routine_type: 'HIPERTROFIA',
       scheme: { minRepetitions: 6, maxRepetitions: 12 },
     });
+    // T1 (RN-84, RF-090): cada ajuste persiste criterio legible y dato sustentante.
+    expect(proposal.adjustments[0]!.criterion).toContain('HIPERTROFIA');
+    expect(proposal.adjustments[0]!.criterion).toContain('RN-89a');
+    expect(proposal.adjustments[0]!.supportingData).toMatchObject({
+      motivo: 'CAMBIO_OBJETIVO',
+      objetivoNuevo: 'HIPERTROFIA',
+    });
     expect(
       (await db.routine.findUniqueOrThrow({ where: { id: active.id } }))
         .routineType,

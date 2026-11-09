@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { noticeEventKeys } from '../../../notifications/domain/notice-event';
 import {
   assertGymExercisesAvailable,
   lockGymCatalog,
@@ -756,6 +757,8 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           available:
             exercise.exercise.state === 'APROBADO' &&
             (exercise.exercise.availability[0]?.enabled ?? false),
+          compatibilityState: exercise.compatibilityState,
+          compatibilityReason: exercise.compatibilityReason,
           movementPattern: exercise.exercise.movementPattern,
           note: exercise.note,
           sets: exercise.sets.map((set) => ({
@@ -860,15 +863,29 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           },
           data: { expired: true },
         });
-        await tx.notice.create({
-          data: {
+        const reviewEventKey = noticeEventKeys.routineReview(
+          command.routineId,
+          command.versionId,
+          aprueba ? 'approved' : 'rejected',
+        );
+        await tx.notice.upsert({
+          where: {
+            recipientUserId_eventKey: {
+              recipientUserId: before.studentId,
+              eventKey: reviewEventKey,
+            },
+          },
+          update: {},
+          create: {
             recipientUserId: before.studentId,
+            eventKey: reviewEventKey,
+            audienceRole: 'ALUMNO',
             type: aprueba ? 'RUTINA_EN_VIGENCIA' : 'RUTINA_RECHAZADA',
             referenceType: 'ROUTINE',
             referenceId: command.routineId,
             text: aprueba
-              ? 'Tu entrenador aprobÃ³ tu nueva rutina: ya estÃ¡ vigente.'
-              : `Tu entrenador rechazÃ³ la rutina propuesta. Motivo: ${command.observation ?? ''}`,
+              ? 'Tu entrenador aprobó tu nueva rutina: ya está vigente.'
+              : `Tu entrenador rechazó la rutina propuesta. Motivo: ${command.observation ?? ''}`,
           },
         });
         await tx.auditLog.create({

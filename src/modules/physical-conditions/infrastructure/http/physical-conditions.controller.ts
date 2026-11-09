@@ -1,17 +1,22 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import type { ReviseConditionUseCase } from '../../application/use-cases/revise-condition.use-case';
 import type { CloseConditionUseCase } from '../../application/use-cases/close-condition.use-case';
+import type { ConditionsDeclarationUseCases } from '../../application/use-cases/conditions-declaration.use-cases';
 import type { DeclareConditionUseCase } from '../../application/use-cases/declare-condition.use-case';
 import type { ListConditionsUseCase } from '../../application/use-cases/list-conditions.use-case';
 import {
+  ActiveConditionsExistError,
   ConditionNotClosableError,
   ConditionNotFoundError,
   FutureStartDateError,
+  HealthConsentRequiredError,
   InvalidBodyZoneError,
   StudentNotFoundError,
 } from '../../domain/errors/condition-errors';
 import {
   closeConditionBodySchema,
+  reviseConditionBodySchema,
   conditionParamsSchema,
   declareConditionBodySchema,
   listConditionsQuerySchema,
@@ -23,6 +28,19 @@ function sendConditionError(
   res: Response,
   next: NextFunction,
 ): void {
+  if (error instanceof HealthConsentRequiredError) {
+    res.status(403).json({
+      error: 'health_data_consent_required',
+      message: error.message,
+    });
+    return;
+  }
+  if (error instanceof ActiveConditionsExistError) {
+    res
+      .status(409)
+      .json({ error: 'active_conditions_exist', message: error.message });
+    return;
+  }
   if (error instanceof InvalidBodyZoneError) {
     res
       .status(400)
@@ -57,7 +75,49 @@ export class PhysicalConditionsController {
     private readonly declareCondition: DeclareConditionUseCase,
     private readonly listConditions: ListConditionsUseCase,
     private readonly closeCondition: CloseConditionUseCase,
+    private readonly reviseCondition: ReviseConditionUseCase,
+    private readonly declaration: ConditionsDeclarationUseCases,
   ) {}
+
+  /** HU11 - T3: consentimiento y declaración de "ninguna" para la pantalla. */
+  status = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = studentParamSchema.safeParse(req.params);
+      if (!params.success) {
+        res.status(404).json({ error: 'student_not_found' });
+        return;
+      }
+      res
+        .status(200)
+        .json(await this.declaration.status(params.data.studentId));
+    } catch (error) {
+      sendConditionError(error, res, next);
+    }
+  };
+
+  /** HU11 - criterio 8: declarar expresamente que no hay ninguna condición. */
+  declareNone = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = studentParamSchema.safeParse(req.params);
+      if (!params.success) {
+        res.status(404).json({ error: 'student_not_found' });
+        return;
+      }
+      res
+        .status(200)
+        .json(await this.declaration.declareNone(params.data.studentId));
+    } catch (error) {
+      sendConditionError(error, res, next);
+    }
+  };
 
   /** HU11 - T1: declarar una condición con zona corporal y severidad. */
   declare = async (
@@ -166,6 +226,43 @@ export class PhysicalConditionsController {
       });
 
       res.status(200).json(condition);
+    } catch (error) {
+      sendConditionError(error, res, next);
+    }
+  };
+
+  /** T2: revisar zona o severidad conservando el período anterior. */
+  revise = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const params = conditionParamsSchema.safeParse(req.params);
+      if (!params.success) {
+        res.status(400).json({
+          error: 'invalid_request_parameters',
+          details: params.error.flatten(),
+        });
+        return;
+      }
+
+      const body = reviseConditionBodySchema.safeParse(req.body ?? {});
+      if (!body.success) {
+        res.status(400).json({
+          error: 'invalid_request_body',
+          details: body.error.flatten(),
+        });
+        return;
+      }
+
+      res.status(200).json(
+        await this.reviseCondition.execute({
+          studentId: params.data.studentId,
+          conditionId: params.data.conditionId,
+          ...body.data,
+        }),
+      );
     } catch (error) {
       sendConditionError(error, res, next);
     }

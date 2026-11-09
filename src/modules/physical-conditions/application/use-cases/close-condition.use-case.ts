@@ -2,6 +2,7 @@ import type { Clock } from '../../../routines/application/ports/clock';
 import {
   ConditionNotClosableError,
   ConditionNotFoundError,
+  HealthConsentRequiredError,
 } from '../../domain/errors/condition-errors';
 import { puedeCerrarse } from '../../domain/services/condition-validity';
 import {
@@ -9,6 +10,8 @@ import {
   type PhysicalConditionDto,
 } from '../dto/condition.dto';
 import type { PhysicalConditionsRepository } from '../ports/physical-conditions.repository';
+import type { RoutineRevaluation } from '../ports/routine-revaluation.port';
+import { reevaluarRutina } from './revaluate-routine';
 
 export interface CloseConditionInput {
   studentId: string;
@@ -29,9 +32,13 @@ export class CloseConditionUseCase {
   constructor(
     private readonly conditions: PhysicalConditionsRepository,
     private readonly clock: Clock,
+    private readonly revaluation?: RoutineRevaluation,
   ) {}
 
   async execute(input: CloseConditionInput): Promise<PhysicalConditionDto> {
+    if (!(await this.conditions.hasHealthConsent(input.studentId))) {
+      throw new HealthConsentRequiredError();
+    }
     const record = await this.conditions.findById(
       input.conditionId,
       input.studentId,
@@ -52,6 +59,10 @@ export class CloseConditionUseCase {
     }
 
     const closed = await this.conditions.close(record.id, endsOn);
+
+    // RN-91: cerrar una condición puede devolver ejercicios a COMPATIBLE.
+    await reevaluarRutina(this.revaluation, input.studentId);
+
     return toConditionDto(closed, now);
   }
 }

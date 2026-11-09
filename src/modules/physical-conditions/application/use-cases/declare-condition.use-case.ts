@@ -1,6 +1,7 @@
 import type { Clock } from '../../../routines/application/ports/clock';
 import {
   FutureStartDateError,
+  HealthConsentRequiredError,
   InvalidBodyZoneError,
   StudentNotFoundError,
 } from '../../domain/errors/condition-errors';
@@ -12,6 +13,8 @@ import { fechaDeInicioAdmisible } from '../../domain/services/condition-validity
 import type { PhysicalConditionDto } from '../dto/condition.dto';
 import { toConditionDto } from '../dto/condition.dto';
 import type { PhysicalConditionsRepository } from '../ports/physical-conditions.repository';
+import type { RoutineRevaluation } from '../ports/routine-revaluation.port';
+import { reevaluarRutina } from './revaluate-routine';
 
 export interface DeclareConditionInput {
   studentId: string;
@@ -47,11 +50,17 @@ export class DeclareConditionUseCase {
   constructor(
     private readonly conditions: PhysicalConditionsRepository,
     private readonly clock: Clock,
+    private readonly revaluation?: RoutineRevaluation,
   ) {}
 
   async execute(input: DeclareConditionInput): Promise<PhysicalConditionDto> {
     if (!esZonaCorporalValida(input.bodyZoneCode)) {
       throw new InvalidBodyZoneError();
+    }
+
+    // RN-104: sin consentimiento no se registra ningún dato de salud.
+    if (!(await this.conditions.hasHealthConsent(input.studentId))) {
+      throw new HealthConsentRequiredError();
     }
 
     const now = this.clock.now();
@@ -72,6 +81,10 @@ export class DeclareConditionUseCase {
     if (!record) {
       throw new StudentNotFoundError();
     }
+
+    // RN-91: la rutina vigente tiene que reflejar la condición nueva sin
+    // esperar a la próxima renovación.
+    await reevaluarRutina(this.revaluation, input.studentId);
 
     return toConditionDto(record, now);
   }

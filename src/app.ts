@@ -52,6 +52,10 @@ import { createGoalsRouter } from './modules/goals/infrastructure/http/goals.rou
 import { PrismaGoalsRepository } from './modules/goals/infrastructure/persistence/prisma-goals.repository';
 import type { RoutineRenewalsRepository } from './modules/evolution/application/ports/routine-renewals.repository';
 import { RenewRoutineCyclesUseCase } from './modules/evolution/application/use-cases/renew-routine-cycles.use-case';
+import { ElaborateAdjustmentProposalUseCase } from './modules/evolution/application/use-cases/elaborate-adjustment-proposal.use-case';
+import { ElaborateWeeklyAdjustmentProposalsUseCase } from './modules/evolution/application/use-cases/elaborate-weekly-adjustment-proposals.use-case';
+import { createAdjustmentProposalsJobRouter } from './modules/evolution/infrastructure/http/adjustment-proposals.routes';
+import { PrismaAdjustmentProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-adjustment-proposals.repository';
 import { createRoutineRenewalsRouter } from './modules/evolution/infrastructure/http/routine-renewals.routes';
 import { PrismaRoutineRenewalsRepository } from './modules/evolution/infrastructure/persistence/prisma-routine-renewals.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
@@ -95,6 +99,7 @@ import { CompleteAccountUseCase } from './modules/invitations/application/use-ca
 import {
   IssueInvitationUseCase,
   ListInvitationsUseCase,
+  ResendInvitationUseCase,
 } from './modules/invitations/application/use-cases/issue-invitation.use-case';
 import { RevokeInvitationUseCase } from './modules/invitations/application/use-cases/revoke-invitation.use-case';
 import { ValidateInvitationUseCase } from './modules/invitations/application/use-cases/validate-invitation.use-case';
@@ -108,9 +113,21 @@ import type { PhysicalConditionsRepository } from './modules/physical-conditions
 import { CloseConditionUseCase } from './modules/physical-conditions/application/use-cases/close-condition.use-case';
 import { DeclareConditionUseCase } from './modules/physical-conditions/application/use-cases/declare-condition.use-case';
 import { ListConditionsUseCase } from './modules/physical-conditions/application/use-cases/list-conditions.use-case';
+import { ReviseConditionUseCase } from './modules/physical-conditions/application/use-cases/revise-condition.use-case';
+import type { RoutineRevaluation } from './modules/physical-conditions/application/ports/routine-revaluation.port';
 import { PhysicalConditionsController } from './modules/physical-conditions/infrastructure/http/physical-conditions.controller';
 import { createPhysicalConditionsRouter } from './modules/physical-conditions/infrastructure/http/physical-conditions.routes';
+import { ConditionsDeclarationUseCases } from './modules/physical-conditions/application/use-cases/conditions-declaration.use-cases';
 import { PrismaPhysicalConditionsRepository } from './modules/physical-conditions/infrastructure/persistence/prisma-physical-conditions.repository';
+import type { NoticesRepository } from './modules/notifications/application/ports/notices.repository';
+import {
+  ListOwnNoticesUseCase,
+  MarkAllNoticesReadUseCase,
+  MarkNoticeReadUseCase,
+} from './modules/notifications/application/use-cases/notices.use-cases';
+import { NoticesController } from './modules/notifications/infrastructure/http/notices.controller';
+import { createNoticesRouter } from './modules/notifications/infrastructure/http/notices.routes';
+import { PrismaNoticesRepository } from './modules/notifications/infrastructure/persistence/prisma-notices.repository';
 import type { PrescriptionsRepository } from './modules/prescriptions/application/ports/prescriptions.repository';
 import { AssignRoutineFromTemplateUseCase } from './modules/prescriptions/application/use-cases/assign-routine-from-template.use-case';
 import { CreateManualRoutineUseCase } from './modules/prescriptions/application/use-cases/create-manual-routine.use-case';
@@ -151,6 +168,8 @@ import { GetRoutineGenerationUseCase } from './modules/routine-generations/appli
 import { FinalizeRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/finalize-routine-generation.use-case';
 import { RequestRoutineGenerationUseCase } from './modules/routine-generations/application/use-cases/request-routine-generation.use-case';
 import { RoutineGenerationsController } from './modules/routine-generations/infrastructure/http/routine-generations.controller';
+import { GetRoutineHistoryUseCase } from './modules/routine-generations/application/use-cases/get-routine-history.use-case';
+import { PrismaRoutineHistoryRepository } from './modules/routine-generations/infrastructure/persistence/prisma-routine-history.repository';
 import { createRoutineGenerationsRouter } from './modules/routine-generations/infrastructure/http/routine-generations.routes';
 import { PrismaGenerationContextRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generation-context.repository';
 import { PrismaGeneratedRoutinesRepository } from './modules/routine-generations/infrastructure/persistence/prisma-generated-routines.repository';
@@ -164,6 +183,25 @@ import {
   StudentContextUseCases,
   type StudentContextRepository,
 } from './modules/student-context/application/student-context.use-cases';
+import {
+  GetAdherenceUseCase,
+  GetSessionComplianceUseCase,
+  GetSignalsUseCase,
+  type IndicatorsRepository,
+} from './modules/indicators/application/indicators.use-cases';
+import { createIndicatorsRouter } from './modules/indicators/infrastructure/indicators.http';
+import { PrismaIndicatorsRepository } from './modules/indicators/infrastructure/prisma-indicators.repository';
+import {
+  GetMuscleActivityUseCase,
+  type MuscleActivityRepository,
+} from './modules/indicators/application/muscle-activity.use-case';
+import { PrismaMuscleActivityRepository } from './modules/indicators/infrastructure/prisma-muscle-activity.repository';
+import {
+  GetSetPreloadUseCase,
+  type SetPreloadRepository,
+} from './modules/training-sessions/application/set-preload.use-cases';
+import { PrismaSetPreloadRepository } from './modules/training-sessions/infrastructure/prisma-set-preload.repository';
+import { createTrainingSessionsRouter as createSetPreloadRouter } from './modules/training-sessions/infrastructure/training-sessions.http';
 import { PrismaStudentContextRepository } from './modules/student-context/infrastructure/prisma-student-context.repository';
 import { createStudentContextRouter } from './modules/student-context/infrastructure/student-context.http';
 import type { StudentsRepository } from './modules/students/application/ports/students.repository';
@@ -188,6 +226,20 @@ import { BlockUserOnInactivityUseCase } from './modules/users/application/use-ca
 import { UsersController } from './modules/users/infrastructure/http/users.controller';
 import { createUsersRouter } from './modules/users/infrastructure/http/users.routes';
 import { PrismaUsersRepository } from './modules/users/infrastructure/persistence/prisma-users.repository';
+import type { TrainingSessionsRepository } from './modules/training-sessions/application/ports/training-sessions.repository';
+import {
+  AbandonTrainingSessionUseCase,
+  ExpireTrainingSessionsUseCase,
+  FinishTrainingSessionUseCase,
+  GetActiveTrainingSessionUseCase,
+  GetTrainingSessionUseCase,
+  ListTrainingSessionsUseCase,
+  StartTrainingSessionUseCase,
+  UpdateSeriesUseCase,
+} from './modules/training-sessions/application/use-cases/training-sessions.use-cases';
+import { TrainingSessionsController } from './modules/training-sessions/infrastructure/http/training-sessions.controller';
+import { createTrainingSessionsRouter } from './modules/training-sessions/infrastructure/http/training-sessions.routes';
+import { PrismaTrainingSessionsRepository } from './modules/training-sessions/infrastructure/persistence/prisma-training-sessions.repository';
 import { createAuthenticate } from './shared/middleware/auth.middleware';
 import { requireTrainerAssignment } from './shared/middleware/assignment.middleware';
 import { requireStudentMeasurementAccess } from './shared/middleware/student-measurement-access.middleware';
@@ -216,11 +268,16 @@ interface AppDependencies {
   routineRenewalsRepository?: RoutineRenewalsRepository;
   invitationsRepository?: InvitationsRepository;
   physicalConditionsRepository?: PhysicalConditionsRepository;
+  routineRevaluation?: RoutineRevaluation;
+  noticesRepository?: NoticesRepository;
   invitationAttemptLimiter?: AttemptLimiter;
   gymsRepository?: GymsRepository;
   timezoneCatalog?: TimezoneCatalog;
   invitationMailer?: InvitationMailer;
   studentContextRepository?: StudentContextRepository;
+  indicatorsRepository?: IndicatorsRepository;
+  muscleActivityRepository?: MuscleActivityRepository;
+  setPreloadRepository?: SetPreloadRepository;
   assignmentsRepository?: AssignmentsRepository;
   inventoryRepository?: InventoryRepository;
   prescriptionsRepository?: PrescriptionsRepository;
@@ -230,6 +287,7 @@ interface AppDependencies {
   routineGenerationGateway?: RoutineGenerationGateway;
   routineGenerationsRepository?: RoutineGenerationsRepository;
   generatedRoutinesRepository?: GeneratedRoutinesRepository;
+  trainingSessionsRepository?: TrainingSessionsRepository;
   idGenerator?: IdGenerator;
 }
 
@@ -279,11 +337,16 @@ export function createApp({
   routineRenewalsRepository,
   invitationsRepository,
   physicalConditionsRepository,
+  routineRevaluation,
+  noticesRepository,
   invitationAttemptLimiter,
   gymsRepository,
   timezoneCatalog,
   invitationMailer,
   studentContextRepository,
+  indicatorsRepository,
+  muscleActivityRepository,
+  setPreloadRepository,
   assignmentsRepository,
   inventoryRepository,
   prescriptionsRepository,
@@ -293,6 +356,7 @@ export function createApp({
   routineGenerationGateway,
   routineGenerationsRepository,
   generatedRoutinesRepository,
+  trainingSessionsRepository,
   idGenerator,
 }: AppDependencies = {}) {
   const app = express();
@@ -389,6 +453,11 @@ export function createApp({
         ),
         new ListInvitationsUseCase(resolvedInvitationsRepo, resolvedClock),
         new RevokeInvitationUseCase(resolvedInvitationsRepo, resolvedClock),
+        new ResendInvitationUseCase(
+          resolvedInvitationsRepo,
+          resolvedInvitationMailer,
+          resolvedClock,
+        ),
       ),
       createAttemptLimit(
         invitationAttemptLimiter ??
@@ -458,16 +527,68 @@ export function createApp({
     ),
   );
 
-  // HU11: declaraciÃ³n, historial y cierre de condiciones fÃ­sicas.
+  // HU23: adherencia y cumplimiento derivados de lo registrado.
+  const resolvedIndicatorsRepo =
+    indicatorsRepository ?? new PrismaIndicatorsRepository(prisma);
+  const resolvedAssignments =
+    trainerAssignments ?? new PrismaTrainerAssignments(prisma);
+  app.use(
+    createIndicatorsRouter(
+      new GetAdherenceUseCase(resolvedIndicatorsRepo, resolvedClock),
+      new GetSessionComplianceUseCase(resolvedIndicatorsRepo, resolvedClock),
+      new GetSignalsUseCase(resolvedIndicatorsRepo, resolvedClock),
+      new GetMuscleActivityUseCase(
+        muscleActivityRepository ?? new PrismaMuscleActivityRepository(prisma),
+        resolvedAssignments,
+        resolvedClock,
+      ),
+      resolvedAssignments,
+    ),
+  );
+
+  // HU22 - T2: precarga de las series con la última ejecución del alumno.
+  app.use(
+    createSetPreloadRouter(
+      new GetSetPreloadUseCase(
+        setPreloadRepository ?? new PrismaSetPreloadRepository(prisma),
+        resolvedClock,
+      ),
+    ),
+  );
+
+  // HU11: declaración, historial y cierre de condiciones físicas.
   const resolvedConditionsRepo =
     physicalConditionsRepository ??
     new PrismaPhysicalConditionsRepository(prisma);
   app.use(
     createPhysicalConditionsRouter(
       new PhysicalConditionsController(
-        new DeclareConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new DeclareConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          routineRevaluation,
+        ),
         new ListConditionsUseCase(resolvedConditionsRepo, resolvedClock),
-        new CloseConditionUseCase(resolvedConditionsRepo, resolvedClock),
+        new CloseConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          routineRevaluation,
+        ),
+        new ReviseConditionUseCase(
+          resolvedConditionsRepo,
+          resolvedClock,
+          routineRevaluation,
+        ),
+        new ConditionsDeclarationUseCases(
+          resolvedConditionsRepo,
+          resolvedClock,
+        ),
+      ),
+      // HU11 - criterios 17 y 18: sin excepción para el administrador.
+      requireTrainerAssignment(
+        trainerAssignments ?? new PrismaTrainerAssignments(prisma),
+        'studentId',
+        false,
       ),
     ),
   );
@@ -481,8 +602,6 @@ export function createApp({
 
   app.use(usersRouter);
 
-  const resolvedAssignments =
-    trainerAssignments ?? new PrismaTrainerAssignments(prisma);
   const resolvedStudentMeasurementAccess =
     studentMeasurementAccess ??
     (process.env.NODE_ENV === 'test'
@@ -573,6 +692,7 @@ export function createApp({
     requestRoutineGenerationUseCase,
     getRoutineGenerationUseCase,
     new FinalizeRoutineGenerationUseCase(resolvedGeneratedRoutinesRepository),
+    new GetRoutineHistoryUseCase(new PrismaRoutineHistoryRepository(prisma)),
   );
   const routineGenerationsRouter = createRoutineGenerationsRouter(
     routineGenerationsController,
@@ -603,6 +723,22 @@ export function createApp({
           resolvedMeasurementCheckpointsRepo,
           resolvedClock,
         ),
+      ),
+    ),
+  );
+
+  const adjustmentProposalsRepository = new PrismaAdjustmentProposalsRepository(
+    prisma,
+  );
+  app.use(
+    createAdjustmentProposalsJobRouter(
+      new ElaborateWeeklyAdjustmentProposalsUseCase(
+        adjustmentProposalsRepository,
+        new ElaborateAdjustmentProposalUseCase(
+          adjustmentProposalsRepository,
+          resolvedClock,
+        ),
+        resolvedClock,
       ),
     ),
   );
@@ -645,6 +781,57 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+
+  const resolvedNoticesRepo =
+    noticesRepository ?? new PrismaNoticesRepository(prisma);
+  app.use(
+    createNoticesRouter(
+      new NoticesController(
+        new ListOwnNoticesUseCase(resolvedNoticesRepo, resolvedClock),
+        new MarkNoticeReadUseCase(resolvedNoticesRepo, resolvedClock),
+        new MarkAllNoticesReadUseCase(resolvedNoticesRepo, resolvedClock),
+      ),
+    ),
+  );
+  // RF-027 — Ciclo de vida de la sesión (FL-05, FL-07, RN-50 a RN-61).
+  // Pausar no es una transición: es estado local del cliente (CB-25, FL-07).
+  const resolvedTrainingSessionsRepo =
+    trainingSessionsRepository ?? new PrismaTrainingSessionsRepository(prisma);
+  const trainingSessionsController = new TrainingSessionsController(
+    new StartTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new GetActiveTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new UpdateSeriesUseCase(resolvedTrainingSessionsRepo, resolvedClock),
+    new FinishTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new AbandonTrainingSessionUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new ExpireTrainingSessionsUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new ListTrainingSessionsUseCase(
+      resolvedTrainingSessionsRepo,
+      resolvedClock,
+    ),
+    new GetTrainingSessionUseCase(resolvedTrainingSessionsRepo, resolvedClock),
+  );
+  app.use(
+    createTrainingSessionsRouter(
+      trainingSessionsController,
+      requireMeasurementAccess,
+      requireTrainerAssignment(resolvedAssignments),
+    ),
+  );
   app.use(
     createGenerationSettingsRouter(
       new GenerationSettingsService(
@@ -681,7 +868,7 @@ export function createApp({
     }
 
     // Un error de infraestructura puede incluir argumentos Prisma con secretos.
-    console.error('Unhandled request error');
+    console.error('Unhandled request error', error);
     response.status(500).json({ error: 'internal_server_error' });
   };
 

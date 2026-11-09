@@ -12,7 +12,12 @@ export class PrismaTrainerAssignments implements TrainerAssignments {
     }
 
     const count = await this.prisma.trainerStudentAssignment.count({
-      where: { trainerId, studentId, endsAt: null },
+      where: {
+        trainerId,
+        studentId,
+        startsAt: { lte: new Date() },
+        OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
+      },
     });
     return count > 0;
   }

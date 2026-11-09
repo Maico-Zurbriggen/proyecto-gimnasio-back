@@ -59,7 +59,7 @@ function proposal(overrides: Partial<ProposalRecord> = {}): ProposalRecord {
         criterion: 'Tope del rango',
         previousValue: { min_repetitions: 3, max_repetitions: 6 },
         proposedValue: { min_repetitions: 4, max_repetitions: 6 },
-        supportingData: {},
+        supportingData: { sesionesConsideradas: 4 },
         state: 'PENDIENTE',
       },
     ],
@@ -172,6 +172,14 @@ describe('Proposals API - HU04', () => {
       id: PROPOSAL,
       adjustmentsCount: 2,
       advertenciaDatos: { sinDatosActualizados: true },
+    });
+    // T2 (RF-090, FL-10): la bandeja expone criterio y dato sin abrir el detalle.
+    expect(response.body[0].adjustments).toHaveLength(2);
+    expect(response.body[0].adjustments[0]).toMatchObject({
+      id: ADJ_LOAD,
+      type: 'CARGA',
+      criterion: 'Estancamiento',
+      supportingData: { sesiones: 6 },
     });
   });
 
