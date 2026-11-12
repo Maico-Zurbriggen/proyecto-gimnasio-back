@@ -1,0 +1,20 @@
+Antes de tocar cualquier línea de código, lee obligatoriamente los archivos `AGENT.md` y `README.md` del repositorio para alinear tu trabajo con las reglas y convenciones establecidas.
+
+Necesito que trabajes estrictamente bajo las siguientes restricciones:
+- Modifica únicamente archivos correspondientes al backend (`proyecto-gimnasio-back`). No toques ninguna otra carpeta ni archivos externos.
+- Mantén exactamente la misma arquitectura, estructura de carpetas, patrones y estilo de tests que ya se están usando en el proyecto.
+- Realiza **solamente** lo que te pido a continuación; no agregues funcionalidades de más, ni refactors no solicitados, ni lógica de frontend.
+
+### Contexto y Alcance (T1 - HU22 Criterio 5 / RN-55a)
+- **Historia de Usuario:** Como alumno, quiero que al ingresar un valor atípico en una serie se me muestre un diálogo con el valor ingresado para confirmarlo, para no guardar por error un dato mal tipeado.
+- **Subtarea:** T1 - Diálogo con el valor ingresado para confirmar un valor atípico.
+- **Regla de Negocio (RN-55a):** Una carga superior al 150% del mejor histórico del alumno en ese ejercicio exige confirmación explícita. Sin confirmar no se registra; confirmada se registra y puede producir récord.
+
+### Qué tenés que hacer en el Backend
+La API ya rechaza el registro atípico sin confirmación (HU22, criterio 5). Por lo tanto, **no** reescribas la funcionalidad si ya existe; solo verifica el contrato actual y agrega la **prueba de contrato** (en el proyecto de tests correspondiente del backend) validando el código de error exacto y la respuesta que el frontend interpreta:
+1. **Caso límite 150% exacto:** Carga igual al 150% del mejor histórico del alumno en ese ejercicio -> No es atípico, se registra correctamente sin pedir confirmación.
+2. **Caso límite 150,01%:** Carga del 150,01% del mejor histórico -> Es atípico:
+   - Sin confirmación explícita: la API rechaza el registro y devuelve el código/estructura de error esperada por el contrato.
+   - Con confirmación explícita: la API registra la serie y evalúa/produce récord si corresponde.
+
+Ejecuta los tests al finalizar para confirmar que toda la suite pasa sin errores y muéstrame únicamente los archivos modificados/creados en el backend.
