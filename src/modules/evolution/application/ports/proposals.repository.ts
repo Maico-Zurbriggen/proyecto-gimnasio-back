@@ -32,6 +32,7 @@ export interface ProposalRecord {
     periodEnd: Date;
     globalSituation: string;
     adherence: number | null;
+    componentVersion: string;
   };
   routine: {
     id: string;

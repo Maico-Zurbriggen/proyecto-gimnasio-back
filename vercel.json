@@ -14,8 +14,12 @@
       "schedule": "0 4 * * *"
     },
     {
+      "path": "/internal/jobs/evolution-diagnostics",
+      "schedule": "30 20 * * 1"
+    },
+    {
       "path": "/internal/jobs/adjustment-proposals",
-      "schedule": "15 21 * * 1"
+      "schedule": "15 21 * * *"
     },
     {
       "path": "/internal/jobs/training-sessions/expire",

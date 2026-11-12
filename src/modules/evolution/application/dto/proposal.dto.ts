@@ -49,6 +49,8 @@ export interface ProposalReviewDto {
     periodEnd: string;
     globalSituation: string;
     adherence: number | null;
+    componentVersion: string;
+    dataOrigin: 'REAL' | 'SIMULATED';
   };
   adjustments: ProposalAdjustmentRecord[];
   /** HU04 - T1: visible antes de decidir. */
@@ -132,6 +134,10 @@ export function toProposalReviewDto(record: ProposalRecord): ProposalReviewDto {
       periodEnd: toDateOnly(record.diagnostic.periodEnd),
       globalSituation: record.diagnostic.globalSituation,
       adherence: record.diagnostic.adherence,
+      componentVersion: record.diagnostic.componentVersion,
+      dataOrigin: record.diagnostic.componentVersion.startsWith('seed-')
+        ? 'SIMULATED'
+        : 'REAL',
     },
     adjustments: record.adjustments,
     advertenciaDatos: evaluarAdvertencia(record),

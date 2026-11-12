@@ -80,6 +80,7 @@ function toRecord(row: ProposalRow): ProposalRecord {
         row.diagnostic.adherence === null
           ? null
           : Number(row.diagnostic.adherence),
+      componentVersion: row.diagnostic.componentVersion,
     },
     routine: {
       id: routine.id,

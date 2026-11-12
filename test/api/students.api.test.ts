@@ -167,7 +167,7 @@ describe('Students API - measurement blocking', () => {
     },
   );
 
-  it('lists blocked students first and keeps routine notices', async () => {
+  it('lists pending reviews first and keeps routine notices', async () => {
     const active: AssignedStudentRecord = {
       id: '22222222-2222-4222-a222-222222222222',
       displayName: 'Ana Activa',
@@ -177,7 +177,12 @@ describe('Students API - measurement blocking', () => {
       activeMeasurementBlock: null,
       checkpointResults: ['CUMPLIDO'],
       goal: 'FUERZA',
-      activeRoutine: { routineType: 'FUERZA', cycleStart: daysAgo(55) },
+      activeRoutine: {
+        routineType: 'FUERZA',
+        cycleStart: daysAgo(55),
+        hasUnresolvedIncompatibility: false,
+      },
+      lastSessionOn: daysAgo(2),
       pendingRoutineReviews: 1,
       pendingAdaptationProposals: 2,
     };
@@ -185,6 +190,7 @@ describe('Students API - measurement blocking', () => {
       ...blockedStudent(),
       goal: null,
       activeRoutine: null,
+      lastSessionOn: null,
       pendingRoutineReviews: 0,
       pendingAdaptationProposals: 0,
     };
@@ -200,11 +206,14 @@ describe('Students API - measurement blocking', () => {
       response.body.map(
         (student: { displayName: string }) => student.displayName,
       ),
-    ).toEqual(['Juan Pérez', 'Ana Activa']);
-    expect(response.body[1]).toMatchObject({
+    ).toEqual(['Ana Activa', 'Juan Pérez']);
+    expect(response.body[0]).toMatchObject({
       rutinaVigente: { diasRestantesRenovacion: 5, estadoAviso: 'pendiente' },
       rutinasPendientesRevision: 1,
       propuestasAdaptacionPendientes: 2,
+      ultimaSesion: daysAgo(2).toISOString().slice(0, 10),
+      prioridad: 1,
+      motivoPrioridad: 'REVISION_PENDIENTE',
     });
   });
 });
