@@ -1,6 +1,7 @@
 import type { Clock } from '../../../routines/application/ports/clock';
 import {
   toTrainerStudentDto,
+  type TrainerStudentIndicators,
   type TrainerStudentDto,
 } from '../dto/student-status.dto';
 import type { StudentsRepository } from '../ports/students.repository';
@@ -13,21 +14,25 @@ export class ListTrainerStudentsUseCase {
   constructor(
     private readonly students: StudentsRepository,
     private readonly clock: Clock,
+    private readonly indicators: {
+      get(studentId: string): Promise<TrainerStudentIndicators>;
+    },
   ) {}
 
   async execute(query: { trainerId: string }): Promise<TrainerStudentDto[]> {
     const now = this.clock.now();
     const records = await this.students.findAssignedToTrainer(query.trainerId);
 
-    return records
-      .map((record) => toTrainerStudentDto(record, now))
-      .sort(
-        (a, b) =>
-          Number(b.bloqueado) - Number(a.bloqueado) ||
-          b.rutinasPendientesRevision +
-            b.propuestasAdaptacionPendientes -
-            (a.rutinasPendientesRevision + a.propuestasAdaptacionPendientes) ||
-          a.displayName.localeCompare(b.displayName, 'es'),
-      );
+    const students = await Promise.all(
+      records.map(async (record) =>
+        toTrainerStudentDto(record, now, await this.indicators.get(record.id)),
+      ),
+    );
+
+    return students.sort(
+      (a, b) =>
+        a.prioridad - b.prioridad ||
+        a.displayName.localeCompare(b.displayName, 'es'),
+    );
   }
 }

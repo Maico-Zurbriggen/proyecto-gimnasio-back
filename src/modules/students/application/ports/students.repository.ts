@@ -12,7 +12,12 @@ export interface StudentRecord {
 
 export interface AssignedStudentRecord extends StudentRecord {
   goal: string | null;
-  activeRoutine: { routineType: string; cycleStart: Date } | null;
+  activeRoutine: {
+    routineType: string;
+    cycleStart: Date;
+    hasUnresolvedIncompatibility: boolean;
+  } | null;
+  lastSessionOn: Date | null;
   pendingRoutineReviews: number;
   pendingAdaptationProposals: number;
 }

@@ -6,6 +6,12 @@ import type { ElaborateAdjustmentProposalUseCase } from './elaborate-adjustment-
 const LOOKBACK_DAYS = 8;
 
 export interface WeeklyAdjustmentProposalsResult {
+  diagnostics?: {
+    scanned: number;
+    created: number;
+    skipped: number;
+    failed: number;
+  };
   scanned: number;
   proposed: number;
   withoutAdjustments: number;
@@ -25,14 +31,21 @@ export class ElaborateWeeklyAdjustmentProposalsUseCase {
       'execute'
     >,
     private readonly clock: Clock,
+    private readonly diagnostics?: {
+      execute(): Promise<
+        NonNullable<WeeklyAdjustmentProposalsResult['diagnostics']>
+      >;
+    },
   ) {}
 
   async execute(): Promise<WeeklyAdjustmentProposalsResult> {
+    const diagnostics = await this.diagnostics?.execute();
     const since = new Date(
       this.clock.now().getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
     );
     const ids = await this.repository.listDiagnosticIdsWithoutProposal(since);
     const result: WeeklyAdjustmentProposalsResult = {
+      ...(diagnostics ? { diagnostics } : {}),
       scanned: ids.length,
       proposed: 0,
       withoutAdjustments: 0,

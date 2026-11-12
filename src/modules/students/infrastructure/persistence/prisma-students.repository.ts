@@ -106,8 +106,29 @@ export class PrismaStudentsRepository implements StudentsRepository {
               orderBy: { reviewedAt: 'desc' },
               take: 1,
             },
-            versions: { where: { current: true }, take: 1 },
+            versions: {
+              where: { current: true },
+              take: 1,
+              include: {
+                days: {
+                  include: {
+                    exercises: {
+                      select: { compatibilityState: true },
+                    },
+                  },
+                },
+              },
+            },
           },
+        },
+        trainingSessions: {
+          where: {
+            simulated: false,
+            state: { in: ['COMPLETADA', 'BLOQUEADA'] },
+          },
+          orderBy: [{ occurredOn: 'desc' }, { startedAt: 'desc' }],
+          take: 1,
+          select: { occurredOn: true },
         },
         _count: {
           select: {
@@ -131,8 +152,19 @@ export class PrismaStudentsRepository implements StudentsRepository {
                 routine.reviews[0]?.reviewedAt ??
                 routine.versions[0]?.createdAt ??
                 routine.requestedAt,
+              hasUnresolvedIncompatibility:
+                routine.versions[0]?.days.some((day) =>
+                  day.exercises.some(({ compatibilityState }) =>
+                    [
+                      'ADVERTIDO',
+                      'INCOMPATIBLE',
+                      'EJERCICIO_DESACTIVADO',
+                    ].includes(compatibilityState),
+                  ),
+                ) ?? false,
             }
           : null,
+        lastSessionOn: row.trainingSessions[0]?.occurredOn ?? null,
         pendingRoutineReviews: row._count.routines,
         pendingAdaptationProposals: row._count.adaptationProposals,
       };

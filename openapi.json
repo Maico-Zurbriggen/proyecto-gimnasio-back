@@ -180,6 +180,15 @@
               "adherence": {
                 "type": "number",
                 "nullable": true
+              },
+              "componentVersion": {
+                "type": "string",
+                "description": "Versión del componente determinístico que produjo el diagnóstico."
+              },
+              "dataOrigin": {
+                "type": "string",
+                "enum": ["REAL", "SIMULATED"],
+                "description": "Permite distinguir diagnósticos reales de fixtures simulados."
               }
             }
           },
