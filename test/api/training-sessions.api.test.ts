@@ -7,6 +7,8 @@ import type {
   TrainingSessionsRepository,
   TrainingSessionView,
 } from '../../src/modules/training-sessions/application/ports/training-sessions.repository';
+import { AtypicalSeriesError } from '../../src/modules/training-sessions/domain/errors';
+import { isAtypicalLoad } from '../../src/modules/training-sessions/domain/session-policy';
 
 const fixedNow = new Date('2026-09-08T10:00:00Z');
 const mockClock: Clock = { now: () => fixedNow };
@@ -459,8 +461,6 @@ describe('Training sessions API (RF-027, FL-05, FL-07)', () => {
   });
 
   it('exige confirmación ante serie atípica sin confirmar (RN-55a)', async () => {
-    const { AtypicalSeriesError } =
-      await import('../../src/modules/training-sessions/domain/errors');
     const mockRepo: TrainingSessionsRepository = {
       start: vi.fn(),
       findActive: vi.fn(),
@@ -485,7 +485,139 @@ describe('Training sessions API (RF-027, FL-05, FL-07)', () => {
       .send({ performedLoad: 200, performedRepetitions: 5, completed: true })
       .expect(409);
 
-    expect(response.body.error).toBe('atypical_series_requires_confirmation');
+    expect(response.body).toEqual({
+      error: 'atypical_series_requires_confirmation',
+      message:
+        'La carga supera el 150% de tu mejor marca en este ejercicio. Confirmala explícitamente para registrarla.',
+      bestHistorical: 100,
+      attemptedLoad: 200,
+    });
+  });
+
+  describe('HU22 Criterio 5 / RN-55a: Pruebas de contrato para valores atípicos y límites', () => {
+    const bestHistorical = 100;
+
+    function createAtypicalTestApp() {
+      const mockRepo: TrainingSessionsRepository = {
+        start: vi.fn(),
+        findActive: vi.fn(),
+        updateSeries: vi.fn(async (cmd) => {
+          if (
+            cmd.performedLoad !== undefined &&
+            cmd.performedLoad !== null &&
+            !cmd.atypicalConfirmed &&
+            isAtypicalLoad(cmd.performedLoad, bestHistorical)
+          ) {
+            throw new AtypicalSeriesError(bestHistorical, cmd.performedLoad);
+          }
+          return baseSession({
+            setRecords: [
+              {
+                ...baseSession().setRecords[0]!,
+                performedLoad: cmd.performedLoad ?? null,
+                performedRepetitions: cmd.performedRepetitions ?? null,
+                completed: cmd.completed ?? false,
+                atypicalConfirmed: cmd.atypicalConfirmed ?? false,
+              },
+            ],
+          });
+        }),
+        finish: vi.fn(),
+        abandon: vi.fn(),
+        expireInactive: vi.fn(),
+        list: vi.fn(),
+        getById: vi.fn(),
+      };
+      const app = createApp({
+        trainingSessionsRepository: mockRepo,
+        clock: mockClock,
+      });
+      return { app, mockRepo };
+    }
+
+    it('caso límite 150% exacto: carga igual al 150% del mejor histórico no es atípica y se registra sin pedir confirmación', async () => {
+      const { app, mockRepo } = createAtypicalTestApp();
+
+      const response = await request(app)
+        .patch(
+          `/students/${studentId}/training-sessions/${sessionId}/records/1`,
+        )
+        .set('x-user-id', studentId)
+        .set('x-user-roles', 'ALUMNO')
+        .send({ performedLoad: 150, performedRepetitions: 10, completed: true })
+        .expect(200);
+
+      expect(mockRepo.updateSeries).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId,
+          sessionId,
+          position: 1,
+          performedLoad: 150,
+          performedRepetitions: 10,
+          completed: true,
+        }),
+      );
+      expect(response.body.setRecords[0].performedLoad).toBe(150);
+      expect(response.body.setRecords[0].atypicalConfirmed).toBe(false);
+    });
+
+    it('caso límite 150,01%: carga del 150,01% del mejor histórico sin confirmación se rechaza con 409 y contrato esperado', async () => {
+      const { app, mockRepo } = createAtypicalTestApp();
+
+      const response = await request(app)
+        .patch(
+          `/students/${studentId}/training-sessions/${sessionId}/records/1`,
+        )
+        .set('x-user-id', studentId)
+        .set('x-user-roles', 'ALUMNO')
+        .send({
+          performedLoad: 150.01,
+          performedRepetitions: 10,
+          completed: true,
+        })
+        .expect(409);
+
+      expect(response.body).toEqual({
+        error: 'atypical_series_requires_confirmation',
+        message:
+          'La carga supera el 150% de tu mejor marca en este ejercicio. Confirmala explícitamente para registrarla.',
+        bestHistorical: 100,
+        attemptedLoad: 150.01,
+      });
+      expect(mockRepo.updateSeries).toHaveBeenCalledTimes(1);
+    });
+
+    it('caso límite 150,01%: carga del 150,01% del mejor histórico con confirmación explícita se registra con 200 OK', async () => {
+      const { app, mockRepo } = createAtypicalTestApp();
+
+      const response = await request(app)
+        .patch(
+          `/students/${studentId}/training-sessions/${sessionId}/records/1`,
+        )
+        .set('x-user-id', studentId)
+        .set('x-user-roles', 'ALUMNO')
+        .send({
+          performedLoad: 150.01,
+          performedRepetitions: 10,
+          completed: true,
+          atypicalConfirmed: true,
+        })
+        .expect(200);
+
+      expect(mockRepo.updateSeries).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId,
+          sessionId,
+          position: 1,
+          performedLoad: 150.01,
+          performedRepetitions: 10,
+          completed: true,
+          atypicalConfirmed: true,
+        }),
+      );
+      expect(response.body.setRecords[0].performedLoad).toBe(150.01);
+      expect(response.body.setRecords[0].atypicalConfirmed).toBe(true);
+    });
   });
 
   it('devuelve el detalle de una sesión con prescripto y ejecutado', async () => {
