@@ -38,6 +38,7 @@ function createProposalRecord(
       periodEnd: new Date('2026-09-15T12:00:00Z'),
       globalSituation: 'ESTANCAMIENTO',
       adherence: 80,
+      componentVersion: 'evolution-diagnostic-v1',
     },
     routine: {
       id: ROUTINE_ID,

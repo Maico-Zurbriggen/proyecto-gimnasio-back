@@ -56,6 +56,8 @@ import { ElaborateAdjustmentProposalUseCase } from './modules/evolution/applicat
 import { ElaborateWeeklyAdjustmentProposalsUseCase } from './modules/evolution/application/use-cases/elaborate-weekly-adjustment-proposals.use-case';
 import { createAdjustmentProposalsJobRouter } from './modules/evolution/infrastructure/http/adjustment-proposals.routes';
 import { PrismaAdjustmentProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-adjustment-proposals.repository';
+import { RunEvolutionDiagnosticsUseCase } from './modules/evolution/application/use-cases/run-evolution-diagnostics.use-case';
+import { PrismaEvolutionDiagnosticsRepository } from './modules/evolution/infrastructure/persistence/prisma-evolution-diagnostics.repository';
 import { createRoutineRenewalsRouter } from './modules/evolution/infrastructure/http/routine-renewals.routes';
 import { PrismaRoutineRenewalsRepository } from './modules/evolution/infrastructure/persistence/prisma-routine-renewals.repository';
 import type { ProposalsRepository } from './modules/evolution/application/ports/proposals.repository';
@@ -220,6 +222,7 @@ import { createMeasurementCheckpointsRouter } from './modules/students/infrastru
 import { PrismaMeasurementCheckpointsRepository } from './modules/students/infrastructure/persistence/prisma-measurement-checkpoints.repository';
 import { PrismaStudentMeasurementAccess } from './modules/students/infrastructure/persistence/prisma-student-measurement-access';
 import { PrismaStudentsRepository } from './modules/students/infrastructure/persistence/prisma-students.repository';
+import { TrainerPortfolioIndicators } from './modules/students/infrastructure/persistence/trainer-portfolio-indicators';
 import { PrismaTrainerAssignments } from './modules/students/infrastructure/persistence/prisma-trainer-assignments.repository';
 import type { UsersRepository } from './modules/users/application/ports/users.repository';
 import { BlockUserOnInactivityUseCase } from './modules/users/application/use-cases/block-user-on-inactivity.use-case';
@@ -276,6 +279,14 @@ interface AppDependencies {
   invitationMailer?: InvitationMailer;
   studentContextRepository?: StudentContextRepository;
   indicatorsRepository?: IndicatorsRepository;
+  trainerPortfolioIndicators?: {
+    get(studentId: string): Promise<{
+      adherence: number | null;
+      insufficientData: boolean;
+      stagnation: boolean;
+      adherenceDrop: boolean;
+    }>;
+  };
   muscleActivityRepository?: MuscleActivityRepository;
   setPreloadRepository?: SetPreloadRepository;
   assignmentsRepository?: AssignmentsRepository;
@@ -345,6 +356,7 @@ export function createApp({
   invitationMailer,
   studentContextRepository,
   indicatorsRepository,
+  trainerPortfolioIndicators,
   muscleActivityRepository,
   setPreloadRepository,
   assignmentsRepository,
@@ -705,7 +717,24 @@ export function createApp({
   const resolvedStudentsRepo =
     studentsRepository ?? new PrismaStudentsRepository(prisma);
   const studentsController = new StudentsController(
-    new ListTrainerStudentsUseCase(resolvedStudentsRepo, resolvedClock),
+    new ListTrainerStudentsUseCase(
+      resolvedStudentsRepo,
+      resolvedClock,
+      trainerPortfolioIndicators ??
+        (studentsRepository
+          ? {
+              get: async () => ({
+                adherence: null,
+                insufficientData: true,
+                stagnation: false,
+                adherenceDrop: false,
+              }),
+            }
+          : new TrainerPortfolioIndicators(
+              resolvedIndicatorsRepo,
+              resolvedClock,
+            )),
+    ),
     new GetStudentStatusUseCase(resolvedStudentsRepo, resolvedAssignments),
     new GetOwnMeasurementBlockUseCase(resolvedStudentsRepo),
     new UnlockStudentUseCase(resolvedStudentsRepo, resolvedClock),
@@ -739,6 +768,11 @@ export function createApp({
           resolvedClock,
         ),
         resolvedClock,
+        new RunEvolutionDiagnosticsUseCase(
+          new PrismaEvolutionDiagnosticsRepository(prisma),
+          resolvedIndicatorsRepo,
+          resolvedClock,
+        ),
       ),
     ),
   );

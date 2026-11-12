@@ -15,7 +15,7 @@
     },
     {
       "path": "/internal/jobs/adjustment-proposals",
-      "schedule": "15 21 * * 1"
+      "schedule": "15 21 * * *"
     },
     {
       "path": "/internal/jobs/training-sessions/expire",

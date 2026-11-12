@@ -32,6 +32,7 @@ function proposal(overrides: Partial<ProposalRecord> = {}): ProposalRecord {
       periodEnd: daysAgo(1),
       globalSituation: 'ESTANCAMIENTO',
       adherence: 62.5,
+      componentVersion: 'evolution-diagnostic-v1',
     },
     routine: {
       id: ROUTINE,
