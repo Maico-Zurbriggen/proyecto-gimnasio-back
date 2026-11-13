@@ -57,6 +57,7 @@ function createRepo(options: RepoOptions = {}) {
   const guardados: DiagnosticToSave[] = [];
 
   const repo: EvolutionDiagnosticsRepository = {
+    findLatestForStudent: vi.fn(async () => null),
     listStudentsWithCurrentRoutine: vi.fn(
       async () =>
         options.alumnos ?? [{ studentId: ALUMNO, routineVersionId: VERSION }],

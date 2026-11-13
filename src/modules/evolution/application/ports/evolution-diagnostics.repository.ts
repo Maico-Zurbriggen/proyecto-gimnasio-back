@@ -45,7 +45,35 @@ export interface DiagnosticToSave {
   exercises: ExerciseDiagnosticToSave[];
 }
 
+/** Un diagnóstico ya calculado, tal como se lee. */
+export interface StoredDiagnostic {
+  id: string;
+  studentId: string;
+  routineVersionId: string;
+  periodStart: Date;
+  periodEnd: Date;
+  globalSituation: Situacion;
+  adherence: number | null;
+  componentVersion: string;
+  criteriaNotEvaluated: string[];
+  calculatedAt: Date;
+  exercises: {
+    exerciseId: string;
+    exerciseName: string;
+    situation: Situacion;
+    metrics: unknown;
+  }[];
+}
+
 export interface EvolutionDiagnosticsRepository {
+  /**
+   * Diagnóstico vigente del alumno: el más reciente (D6/§10, RN-98).
+   *
+   * `null` si nunca se le calculó uno. Esa ausencia es lo que permite que la
+   * vista diga «no disponible» en lugar de inventar un estado (RNF-12).
+   */
+  findLatestForStudent(studentId: string): Promise<StoredDiagnostic | null>;
+
   /** Alumnos con rutina VIGENTE: los únicos diagnosticables (RN-78). */
   listStudentsWithCurrentRoutine(): Promise<StudentToDiagnose[]>;
 

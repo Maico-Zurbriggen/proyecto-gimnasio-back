@@ -62,6 +62,8 @@ import {
 import type { EvolutionDiagnosticsRepository } from './modules/evolution/application/ports/evolution-diagnostics.repository';
 import { PrismaEvolutionDiagnosticsRepository } from './modules/evolution/infrastructure/persistence/prisma-evolution-diagnostics.repository';
 import { createEvolutionDiagnosticsJobRouter } from './modules/evolution/infrastructure/http/evolution-diagnostics.routes';
+import { createEvolutionDiagnosticsRouter } from './modules/evolution/infrastructure/http/evolution-diagnostics.read.routes';
+import { GetEvolutionDiagnosticUseCase } from './modules/evolution/application/use-cases/get-evolution-diagnostic.use-case';
 import { PrismaAdjustmentProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-adjustment-proposals.repository';
 import { createRoutineRenewalsRouter } from './modules/evolution/infrastructure/http/routine-renewals.routes';
 import { PrismaRoutineRenewalsRepository } from './modules/evolution/infrastructure/persistence/prisma-routine-renewals.repository';
@@ -768,6 +770,17 @@ export function createApp({
   const resolvedDiagnosticsRepo =
     evolutionDiagnosticsRepository ??
     new PrismaEvolutionDiagnosticsRepository(prisma);
+  // El alumno lee su diagnóstico y su entrenador con asignación vigente
+  // también; el administrador recibe 403. El entrenador puede además pedir el
+  // recálculo antes de tiempo (RN-78, FL-09/A2).
+  app.use(
+    createEvolutionDiagnosticsRouter(
+      new GetEvolutionDiagnosticUseCase(resolvedDiagnosticsRepo),
+      new DiagnoseEvolutionUseCase(resolvedDiagnosticsRepo, resolvedClock),
+      trainerAssignments ?? new PrismaTrainerAssignments(prisma),
+    ),
+  );
+
   app.use(
     createEvolutionDiagnosticsJobRouter(
       new DiagnoseWeeklyEvolutionUseCase(
