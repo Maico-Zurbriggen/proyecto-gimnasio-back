@@ -40,6 +40,7 @@ function createRepo(overrides: Partial<EvolutionDiagnosticsRepository> = {}) {
   const guardados: DiagnosticToSave[] = [];
 
   const repo: EvolutionDiagnosticsRepository = {
+    findLatestForStudent: vi.fn(async () => null),
     listStudentsWithCurrentRoutine: vi.fn(async () => [
       { studentId: ALUMNO, routineVersionId: VERSION },
     ]),

@@ -8,6 +8,7 @@ import {
 import type {
   DiagnosticToSave,
   EvolutionDiagnosticsRepository,
+  StoredDiagnostic,
   StudentPeriodData,
   StudentToDiagnose,
 } from '../../application/ports/evolution-diagnostics.repository';
@@ -19,6 +20,50 @@ import {
 
 export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnosticsRepository {
   constructor(private readonly prisma: PrismaClient) {}
+
+  async findLatestForStudent(
+    studentId: string,
+  ): Promise<StoredDiagnostic | null> {
+    if (!isUuid(studentId)) {
+      return null;
+    }
+
+    // El vigente es el más reciente: cada cálculo es un registro nuevo y
+    // fechado, nunca se actualiza ni se borra (D6/§10, RN-98).
+    const row = await this.prisma.evolutionDiagnostic.findFirst({
+      where: { studentId },
+      orderBy: { calculatedAt: 'desc' },
+      include: {
+        exerciseDiagnostics: {
+          include: { exercise: { select: { name: true } } },
+        },
+      },
+    });
+    if (row === null) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      studentId: row.studentId,
+      routineVersionId: row.routineVersionId,
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      globalSituation: row.globalSituation,
+      adherence: row.adherence === null ? null : row.adherence.toNumber(),
+      componentVersion: row.componentVersion,
+      criteriaNotEvaluated: Array.isArray(row.criteriaNotEvaluated)
+        ? (row.criteriaNotEvaluated as string[])
+        : [],
+      calculatedAt: row.calculatedAt,
+      exercises: row.exerciseDiagnostics.map((item) => ({
+        exerciseId: item.exerciseId,
+        exerciseName: item.exercise.name,
+        situation: item.situation,
+        metrics: item.metrics,
+      })),
+    };
+  }
 
   async listStudentsWithCurrentRoutine(): Promise<StudentToDiagnose[]> {
     const versions = await this.prisma.routineVersion.findMany({
