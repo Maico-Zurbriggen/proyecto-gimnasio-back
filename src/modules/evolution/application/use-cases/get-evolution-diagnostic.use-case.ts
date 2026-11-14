@@ -3,6 +3,7 @@ import type {
   StoredDiagnostic,
 } from '../ports/evolution-diagnostics.repository';
 import type { Situacion } from '../../domain/services/evolution-diagnosis';
+import { DIAGNOSTIC_COMPONENT_PREFIX } from './diagnose-evolution.use-case';
 
 /** Diagnóstico vigente del alumno, tal como se expone. */
 export interface EvolutionDiagnosticDto {
@@ -66,7 +67,10 @@ export class GetEvolutionDiagnosticUseCase {
   constructor(private readonly diagnostics: EvolutionDiagnosticsRepository) {}
 
   async execute(studentId: string): Promise<GetEvolutionDiagnosticResult> {
-    const diagnostic = await this.diagnostics.findLatestForStudent(studentId);
+    const diagnostic = await this.diagnostics.findLatestForStudent(
+      studentId,
+      DIAGNOSTIC_COMPONENT_PREFIX,
+    );
 
     if (diagnostic === null) {
       return {

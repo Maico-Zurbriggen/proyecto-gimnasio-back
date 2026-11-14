@@ -6,7 +6,10 @@ import {
 } from 'express';
 import { z } from 'zod';
 
-import { requireAuth } from '../../../../shared/middleware/auth.middleware';
+import {
+  requireAuth,
+  requireRoles,
+} from '../../../../shared/middleware/auth.middleware';
 import { requireIndicatorsAccess } from '../../../indicators/infrastructure/indicators.access';
 import type { TrainerAssignments } from '../../../students/application/ports/trainer-assignments.port';
 import {
@@ -33,14 +36,15 @@ export function createEvolutionDiagnosticsRouter(
   trainerAssignments: TrainerAssignments,
 ): Router {
   const router = Router();
-  const propiosOAsignados = [
-    requireAuth,
-    requireIndicatorsAccess(trainerAssignments, 'studentId'),
-  ];
+  const accesoDeLectura = requireIndicatorsAccess(
+    trainerAssignments,
+    'studentId',
+  );
 
   router.get(
     '/students/:studentId/evolution-diagnostic',
-    ...propiosOAsignados,
+    requireAuth,
+    accesoDeLectura,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const params = studentParams.safeParse(req.params);
@@ -66,7 +70,9 @@ export function createEvolutionDiagnosticsRouter(
   // explícito es la excepción que la regla contempla (FL-09/A2).
   router.post(
     '/students/:studentId/evolution-diagnostic',
-    ...propiosOAsignados,
+    requireAuth,
+    requireRoles('ENTRENADOR'),
+    accesoDeLectura,
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const params = studentParams.safeParse(req.params);

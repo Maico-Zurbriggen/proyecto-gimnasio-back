@@ -17,8 +17,9 @@ import type {
 
 const MS_POR_SEMANA = 7 * 24 * 60 * 60 * 1000;
 
-/** Versión del componente que produjo el diagnóstico, para trazarlo (DD-04). */
-export const DIAGNOSTIC_COMPONENT_VERSION = 'evolution-diagnosis@1';
+/** Familia y versión del componente que produjo el diagnóstico (DD-04). */
+export const DIAGNOSTIC_COMPONENT_PREFIX = 'evolution-diagnosis@';
+export const DIAGNOSTIC_COMPONENT_VERSION = `${DIAGNOSTIC_COMPONENT_PREFIX}1`;
 
 export interface DiagnoseStudentResult {
   diagnosticId: string;
@@ -171,6 +172,7 @@ export class DiagnoseWeeklyEvolutionUseCase {
       try {
         const ultimo = await this.diagnostics.findLastDiagnosticDate(
           alumno.studentId,
+          DIAGNOSTIC_COMPONENT_PREFIX,
         );
         if (ultimo !== null && ultimo.getTime() > corte.getTime()) {
           resultado.skipped += 1;

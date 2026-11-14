@@ -23,6 +23,7 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
 
   async findLatestForStudent(
     studentId: string,
+    componentVersionPrefix: string,
   ): Promise<StoredDiagnostic | null> {
     if (!isUuid(studentId)) {
       return null;
@@ -31,7 +32,10 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
     // El vigente es el más reciente: cada cálculo es un registro nuevo y
     // fechado, nunca se actualiza ni se borra (D6/§10, RN-98).
     const row = await this.prisma.evolutionDiagnostic.findFirst({
-      where: { studentId },
+      where: {
+        studentId,
+        componentVersion: { startsWith: componentVersionPrefix },
+      },
       orderBy: { calculatedAt: 'desc' },
       include: {
         exerciseDiagnostics: {
@@ -77,13 +81,19 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
     }));
   }
 
-  async findLastDiagnosticDate(studentId: string): Promise<Date | null> {
+  async findLastDiagnosticDate(
+    studentId: string,
+    componentVersionPrefix: string,
+  ): Promise<Date | null> {
     if (!isUuid(studentId)) {
       return null;
     }
 
     const last = await this.prisma.evolutionDiagnostic.findFirst({
-      where: { studentId },
+      where: {
+        studentId,
+        componentVersion: { startsWith: componentVersionPrefix },
+      },
       orderBy: { calculatedAt: 'desc' },
       select: { calculatedAt: true },
     });

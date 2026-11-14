@@ -146,6 +146,10 @@ describe('Evolution diagnostic read API - HU32', () => {
         globalSituation: 'ESTANCAMIENTO',
         adherencia: 75,
       });
+      expect(repo.findLatestForStudent).toHaveBeenCalledWith(
+        ALUMNO,
+        'evolution-diagnosis@',
+      );
     });
 
     it('incluye la situación y las métricas de cada ejercicio (RN-84)', async () => {
@@ -308,10 +312,11 @@ describe('Evolution diagnostic read API - HU32', () => {
       expect(guardados).toHaveLength(1);
     });
 
-    it('el alumno también puede pedir el suyo', async () => {
-      const { repo } = createRepo();
+    it('el alumno no puede disparar el recálculo', async () => {
+      const { repo, guardados } = createRepo();
 
-      await como(crearApp(repo), 'post', RUTA, ALUMNO, 'ALUMNO').expect(201);
+      await como(crearApp(repo), 'post', RUTA, ALUMNO, 'ALUMNO').expect(403);
+      expect(guardados).toHaveLength(0);
     });
 
     it('un alumno sin rutina vigente responde 409', async () => {

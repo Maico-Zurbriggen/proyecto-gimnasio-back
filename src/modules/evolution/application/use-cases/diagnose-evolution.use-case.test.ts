@@ -240,6 +240,10 @@ describe('DiagnoseWeeklyEvolutionUseCase (HU32 - T3)', () => {
     expect(resultado.skipped).toBe(1);
     expect(resultado.evaluated).toBe(0);
     expect(guardados).toHaveLength(0);
+    expect(repo.findLastDiagnosticDate).toHaveBeenCalledWith(
+      ALUMNO,
+      'evolution-diagnosis@',
+    );
   });
 
   it('pasadas las dos semanas vuelve a diagnosticar', async () => {

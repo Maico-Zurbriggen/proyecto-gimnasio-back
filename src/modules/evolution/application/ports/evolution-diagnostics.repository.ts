@@ -72,7 +72,10 @@ export interface EvolutionDiagnosticsRepository {
    * `null` si nunca se le calculó uno. Esa ausencia es lo que permite que la
    * vista diga «no disponible» en lugar de inventar un estado (RNF-12).
    */
-  findLatestForStudent(studentId: string): Promise<StoredDiagnostic | null>;
+  findLatestForStudent(
+    studentId: string,
+    componentVersionPrefix: string,
+  ): Promise<StoredDiagnostic | null>;
 
   /** Alumnos con rutina VIGENTE: los únicos diagnosticables (RN-78). */
   listStudentsWithCurrentRoutine(): Promise<StudentToDiagnose[]>;
@@ -93,7 +96,10 @@ export interface EvolutionDiagnosticsRepository {
    * Es lo que hace idempotente al job: con periodicidad de dos semanas (RN-78),
    * volver a correrlo el mismo día no produce un segundo diagnóstico.
    */
-  findLastDiagnosticDate(studentId: string): Promise<Date | null>;
+  findLastDiagnosticDate(
+    studentId: string,
+    componentVersionPrefix: string,
+  ): Promise<Date | null>;
 
   /** Persiste el diagnóstico con sus ejercicios. Devuelve su id. */
   save(diagnostic: DiagnosticToSave): Promise<string>;

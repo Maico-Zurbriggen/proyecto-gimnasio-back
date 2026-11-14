@@ -332,6 +332,152 @@
         },
         "required": ["error", "missing"]
       },
+      "EvolutionSituation": {
+        "type": "string",
+        "enum": [
+          "DATOS_INSUFICIENTES",
+          "SOBREEXIGENCIA",
+          "PROGRESION_ADECUADA",
+          "ESTIMULO_INSUFICIENTE",
+          "ESTANCAMIENTO"
+        ]
+      },
+      "EvolutionExerciseDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["exerciseId", "exerciseName", "situation", "metrics"],
+        "properties": {
+          "exerciseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "exerciseName": {
+            "type": "string"
+          },
+          "situation": {
+            "$ref": "#/components/schemas/EvolutionSituation"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "EvolutionDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "disponible",
+          "diagnosticId",
+          "studentId",
+          "routineVersionId",
+          "periodStart",
+          "periodEnd",
+          "globalSituation",
+          "adherencia",
+          "criteriosNoEvaluados",
+          "componentVersion",
+          "calculadoEl",
+          "ejercicios"
+        ],
+        "properties": {
+          "disponible": {
+            "type": "boolean",
+            "const": true
+          },
+          "diagnosticId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "studentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "routineVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date"
+          },
+          "globalSituation": {
+            "$ref": "#/components/schemas/EvolutionSituation"
+          },
+          "adherencia": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criteriosNoEvaluados": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "componentVersion": {
+            "type": "string"
+          },
+          "calculadoEl": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ejercicios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvolutionExerciseDiagnostic"
+            }
+          }
+        }
+      },
+      "EvolutionDiagnosticUnavailable": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["studentId", "disponible", "motivo"],
+        "properties": {
+          "studentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "disponible": {
+            "type": "boolean",
+            "const": false
+          },
+          "motivo": {
+            "type": "string",
+            "const": "SIN_DIAGNOSTICO_CALCULADO"
+          }
+        }
+      },
+      "EvolutionDiagnosticCalculation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["diagnosticId", "globalSituation", "exerciseCount"],
+        "properties": {
+          "diagnosticId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "globalSituation": {
+            "$ref": "#/components/schemas/EvolutionSituation"
+          },
+          "exerciseCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "DetailedError": {
         "type": "object",
         "properties": {
@@ -1080,6 +1226,140 @@
           },
           "403": {
             "description": "Rol, propiedad, gimnasio o asignación no autorizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/students/{studentId}/evolution-diagnostic": {
+      "parameters": [
+        {
+          "name": "studentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getStudentEvolutionDiagnostic",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Consultar el diagnóstico de evolución vigente",
+        "description": "El alumno consulta el propio y el entrenador sólo el de un alumno con asignación vigente. Si el proceso aún no corrió se informa disponible=false sin degradar la vista.",
+        "responses": {
+          "200": {
+            "description": "Diagnóstico vigente o ausencia legítima de cálculo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EvolutionDiagnostic"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EvolutionDiagnosticUnavailable"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "studentId inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente o inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rol, propiedad o asignación no autorizados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "recalculateStudentEvolutionDiagnostic",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Recalcular el diagnóstico de evolución a pedido",
+        "description": "Sólo el entrenador con asignación vigente puede solicitar un cálculo antes de la periodicidad automática de dos semanas.",
+        "responses": {
+          "201": {
+            "description": "Diagnóstico recalculado y persistido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvolutionDiagnosticCalculation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "studentId inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión ausente o inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No es entrenador o no posee asignación vigente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El alumno no tiene rutina vigente.",
             "content": {
               "application/json": {
                 "schema": {
