@@ -362,6 +362,89 @@ describe('diagnosticarEjercicio · precedencia de RN-79a', () => {
     });
   });
 
+  describe('bordes exactos que pide el criterio de aceptación', () => {
+    it('esfuerzo exactamente 5 SÍ es estímulo insuficiente', () => {
+      // El umbral es «5 o menos»: el 5 entra.
+      const sesiones = [38, 30, 14, 7].map((dias) =>
+        sesion(dias, [serie({ performedRepetitions: 12, perceivedEffort: 5 })]),
+      );
+
+      expect(diagnosticarEjercicio(sesiones, HOY).situacion).toBe(
+        'ESTIMULO_INSUFICIENTE',
+      );
+    });
+
+    it('esfuerzo 6 ya no lo es', () => {
+      const sesiones = [38, 30, 14, 7].map((dias) =>
+        sesion(dias, [serie({ performedRepetitions: 12, perceivedEffort: 6 })]),
+      );
+
+      expect(diagnosticarEjercicio(sesiones, HOY).situacion).toBe(
+        'ESTANCAMIENTO',
+      );
+    });
+
+    it('cumpliendo 2 y 3 a la vez queda en SOBREEXIGENCIA', () => {
+      // Progresa en carga (3) pero con esfuerzo 9 sostenido (2): gana el 2
+      // porque está antes en la precedencia.
+      const sesiones = [
+        sesion(38, [serie({ performedLoad: 100, perceivedEffort: 7 })]),
+        sesion(30, [serie({ performedLoad: 100, perceivedEffort: 9 })]),
+        ...[14, 7].map((dias) =>
+          sesion(dias, [serie({ performedLoad: 130, perceivedEffort: 9 })]),
+        ),
+      ];
+      const resultado = diagnosticarEjercicio(sesiones, HOY);
+
+      expect(resultado.metricas.variacionCargaMaxima).toBeGreaterThanOrEqual(
+        2.5,
+      );
+      expect(resultado.situacion).toBe('SOBREEXIGENCIA');
+    });
+
+    it('cumpliendo 3 y 4 a la vez queda en PROGRESION_ADECUADA', () => {
+      // Llega al tope del rango sin esfuerzo (4) y además sube la carga (3):
+      // gana el 3. Progresar no es falta de estímulo, aunque se sienta fácil.
+      const comodo = { performedRepetitions: 12, perceivedEffort: 4 };
+      const sesiones = [
+        sesion(38, [serie({ ...comodo, performedLoad: 100 })]),
+        sesion(30, [serie({ ...comodo, performedLoad: 100 })]),
+        sesion(14, [serie({ ...comodo, performedLoad: 120 })]),
+        sesion(7, [serie({ ...comodo, performedLoad: 120 })]),
+      ];
+      const resultado = diagnosticarEjercicio(sesiones, HOY);
+
+      expect(resultado.metricas.variacionCargaMaxima).toBeGreaterThanOrEqual(
+        2.5,
+      );
+      expect(resultado.situacion).toBe('PROGRESION_ADECUADA');
+    });
+
+    it('cumplimiento exactamente 70% no es sobreexigencia; por debajo sí', () => {
+      // Las repeticiones quedan dentro del tope de 12 de RN-65: por encima no
+      // hay carga máxima estimada y el ejercicio caería antes en
+      // DATOS_INSUFICIENTES, sin llegar a evaluarse este criterio.
+      const conReps = (prescriptas: number, ejecutadas: number) =>
+        [38, 30, 14, 7].map((dias) =>
+          sesion(dias, [
+            serie({
+              prescribedMaxRepetitions: prescriptas,
+              performedRepetitions: ejecutadas,
+            }),
+          ]),
+        );
+
+      // 7 de 10 = exactamente 70%: el umbral es «menor que».
+      expect(diagnosticarEjercicio(conReps(10, 7), HOY).situacion).not.toBe(
+        'SOBREEXIGENCIA',
+      );
+      // 8 de 12 = 66,67%: por debajo.
+      expect(diagnosticarEjercicio(conReps(12, 8), HOY).situacion).toBe(
+        'SOBREEXIGENCIA',
+      );
+    });
+  });
+
   describe('5 · ESTANCAMIENTO', () => {
     it('ninguna de las anteriores', () => {
       // Carga quieta, cumplimiento normal, esfuerzo medio.
