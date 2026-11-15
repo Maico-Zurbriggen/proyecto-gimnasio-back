@@ -524,6 +524,16 @@
             "type": "string",
             "format": "uuid"
           },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "gymName": {
+            "type": "string"
+          },
           "roles": {
             "type": "array",
             "items": {
@@ -532,7 +542,7 @@
             }
           }
         },
-        "required": ["id", "gymId", "roles"]
+        "required": ["id", "gymId", "displayName", "email", "gymName", "roles"]
       },
       "GymSummary": {
         "type": "object",
@@ -799,6 +809,80 @@
     }
   },
   "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Iniciar sesión",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sesión iniciada; el token se entrega únicamente en una cookie httpOnly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["user", "expiresAt"],
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/AuthenticatedUser"
+                    },
+                    "expiresAt": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Credenciales inválidas." }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Cerrar sesión",
+        "responses": {
+          "204": { "description": "Sesión cerrada o ya inexistente." }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "getCurrentSession",
+        "summary": "Consultar la identidad de la sesión actual",
+        "security": [{ "session": [] }],
+        "responses": {
+          "200": {
+            "description": "Identidad, gimnasio y roles de la sesión.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["user"],
+                  "properties": {
+                    "user": { "$ref": "#/components/schemas/AuthenticatedUser" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "No hay una sesión válida." }
+        }
+      }
+    },
     "/notices": {
       "get": {
         "operationId": "listOwnNotices",

@@ -101,6 +101,9 @@ export class CompleteAccountUseCase {
       user: {
         id: account.userId,
         gymId: account.gymId,
+        displayName,
+        email: invitation.emailNormalized,
+        gymName: invitation.gymName,
         roles: account.roles,
       },
     };

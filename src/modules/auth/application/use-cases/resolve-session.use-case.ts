@@ -51,6 +51,9 @@ export class ResolveSessionUseCase {
     return {
       id: session.userId,
       gymId: session.gymId,
+      displayName: session.displayName,
+      email: session.email,
+      gymName: session.gymName,
       roles: session.roles,
       sessionId: session.id,
     };

@@ -74,7 +74,14 @@ export class AuthController {
       return;
     }
     res.status(200).json({
-      user: { id: req.user.id, gymId: req.user.gymId, roles: req.user.roles },
+      user: {
+        id: req.user.id,
+        gymId: req.user.gymId,
+        displayName: req.user.displayName,
+        email: req.user.email,
+        gymName: req.user.gymName,
+        roles: req.user.roles,
+      },
     });
   };
 }

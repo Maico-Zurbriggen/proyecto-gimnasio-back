@@ -186,7 +186,14 @@ describe('Invitations API - HU06', () => {
         .expect(201);
 
       expect(response.body).toEqual({
-        user: { id: USER_ID, gymId: GYM_ID, roles: ['ALUMNO'] },
+        user: {
+          id: USER_ID,
+          gymId: GYM_ID,
+          displayName: 'Ana Pérez',
+          email: 'nuevo.alumno@gym.test',
+          gymName: 'Gimnasio Central',
+          roles: ['ALUMNO'],
+        },
         expiresAt: '2026-10-21T10:00:00.000Z',
       });
       expect(invitationsRepository.completeAccount).toHaveBeenCalledTimes(1);

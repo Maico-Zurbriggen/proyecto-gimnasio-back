@@ -4,6 +4,9 @@ import type { UserRole } from '../../../../shared/types/auth';
 export interface UserCredentialsRecord {
   id: string;
   gymId: string;
+  displayName: string;
+  email: string;
+  gymName: string;
   passwordHash: string;
   state: 'ACTIVO' | 'SUSPENDIDO';
   roles: UserRole[];
@@ -14,6 +17,9 @@ export interface AuthSessionRecord {
   id: string;
   userId: string;
   gymId: string;
+  displayName: string;
+  email: string;
+  gymName: string;
   roles: UserRole[];
   lastActivityAt: Date;
   expiresAt: Date;

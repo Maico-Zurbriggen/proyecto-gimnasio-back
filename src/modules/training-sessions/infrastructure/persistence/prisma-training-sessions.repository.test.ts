@@ -11,7 +11,14 @@ const exerciseId = '66666666-6666-4666-a666-666666666666';
 const routineId = '44444444-4444-4444-a444-444444444444';
 const versionId = '55555555-5555-4555-a555-555555555555';
 const now = new Date('2026-10-22T02:30:00Z');
-const actor = { id: studentId, gymId, roles: ['ALUMNO'] as ['ALUMNO'] };
+const actor = {
+  id: studentId,
+  gymId,
+  displayName: 'Alumno Demo',
+  email: 'alumno@vivaz.test',
+  gymName: 'Vivaz Demo',
+  roles: ['ALUMNO'] as ['ALUMNO'],
+};
 
 function setup() {
   const day = {

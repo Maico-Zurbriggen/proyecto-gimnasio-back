@@ -39,6 +39,9 @@ function createAuthRepo({
         ? {
             id: USER_ID,
             gymId: GYM_ID,
+            displayName: 'Alumno Demo',
+            email: 'alumno@gym.test',
+            gymName: 'Gimnasio Demo',
             passwordHash,
             state,
             roles: ['ALUMNO' as const],
@@ -60,6 +63,9 @@ function createAuthRepo({
         id: SESSION_ID,
         userId: USER_ID,
         gymId: GYM_ID,
+        displayName: 'Alumno Demo',
+        email: 'alumno@gym.test',
+        gymName: 'Gimnasio Demo',
         roles: ['ALUMNO' as const],
         lastActivityAt: AHORA,
         expiresAt: new Date('2026-10-20T12:00:00Z'),
@@ -320,6 +326,12 @@ describe('Auth API - HU07', () => {
 
       expect(me.body.user.id).toBe(USER_ID);
       expect(me.body.user.gymId).toBe(GYM_ID);
+      expect(me.body.user).toMatchObject({
+        displayName: 'Alumno Demo',
+        email: 'alumno@gym.test',
+        gymName: 'Gimnasio Demo',
+        roles: ['ALUMNO'],
+      });
     });
 
     it('T7: returns 401 without a session', async () => {
