@@ -1,8 +1,9 @@
 # Seeds de base de datos
 
 Datos iniciales versionados según `ARCH-DATABASE §10`. La estructura pertenece
-exclusivamente a Prisma Migrate: estos scripts solo contienen `INSERT ... ON
-CONFLICT` y nunca crean, alteran ni borran nada.
+exclusivamente a Prisma Migrate: los seeds base no crean ni alteran tablas. El
+seed aislado de presentación también elimina y reconstruye exclusivamente sus
+UUID reservados para poder reiniciar la demostración.
 
 ## Archivos
 
@@ -15,6 +16,7 @@ CONFLICT` y nunca crean, alteran ni borran nada.
 | `seed-login-demo.sql`       | Solo Test | Contraseña real (`Usuario2026`) para admin, Lucía y Martín      |
 | `seed-invitations-demo.sql` | Solo Test | Invitaciones con token conocido para recorrer HU06              |
 | `seed-superadmin-demo.sql`  | Solo Test | SuperAdmin `superadmin@vivaz.test` (`Usuario2026`) para HU13    |
+| `seed-presentation-demo.sql` | Demo aislada | Gimnasio, cuentas y seis escenarios reiniciables de evolución; genera la contraseña al ejecutarse |
 
 ## Orden de carga
 
@@ -22,7 +24,23 @@ CONFLICT` y nunca crean, alteran ni borran nada.
 2. Desde SQL Editor, ejecutar `seed-reference.sql`.
 3. Solo en Neon Test, ejecutar `seed-test.sql`.
 
-Ambos scripts son idempotentes y re-ejecutables: las tablas de referencia se
+Para preparar la demostración, ejecutar `seed-presentation-demo.sql` con el rol
+migrador después del catálogo de referencia. El script:
+
+- crea un gimnasio aislado, una entrenadora y seis alumnos identificados como
+  demo;
+- deja cuatro propuestas pendientes y dos casos sin propuesta;
+- registra sesiones como `simulated = true` y diagnósticos con versión
+  `seed-demo-*`, por lo que la interfaz los rotula como simulados;
+- muestra en `NOTICE` una contraseña aleatoria compartida por las ocho cuentas;
+- puede volver a ejecutarse para restaurar el estado inicial después de una
+  aprobación o rechazo.
+
+La ejecución falla de forma explícita si el catálogo no contiene un segundo
+ejercicio aprobado de empuje horizontal para la demo de sustitución. No copiar
+la contraseña generada a este repositorio ni a variables versionadas.
+
+Los seeds base son idempotentes y re-ejecutables: las tablas de referencia se
 actualizan por código natural y el resto usa UUID fijos con `DO NOTHING`.
 
 ## Elenco de `seed-test.sql`
