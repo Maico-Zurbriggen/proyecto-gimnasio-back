@@ -75,6 +75,9 @@ export class LoginUseCase {
       user: {
         id: credentials.id,
         gymId: credentials.gymId,
+        displayName: credentials.displayName,
+        email: credentials.email,
+        gymName: credentials.gymName,
         roles: credentials.roles,
       },
     };

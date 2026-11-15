@@ -30,6 +30,9 @@ function identidadDePrueba(req: Request): void {
     req.user = {
       id: userId,
       gymId: typeof gymId === 'string' ? gymId : 'default-gym',
+      displayName: 'Test user',
+      email: 'test@example.invalid',
+      gymName: 'Test gym',
       roles,
     };
   }
