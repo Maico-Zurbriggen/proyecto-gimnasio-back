@@ -4,6 +4,9 @@ import type { UserRole } from '../../../../shared/types/auth';
 export interface AuthenticatedUserDto {
   id: string;
   gymId: string;
+  displayName: string;
+  email: string;
+  gymName: string;
   roles: UserRole[];
   sessionId?: string;
 }

@@ -232,6 +232,9 @@ describe('Casos de uso de invitaciones (HU06)', () => {
       expect(result.user).toEqual({
         id: USER_ID,
         gymId: '11111111-1111-4111-8111-111111111111',
+        displayName: 'Ana Pérez',
+        email: 'nuevo.alumno@gym.test',
+        gymName: 'Gimnasio Central',
         roles: ['ALUMNO'],
       });
       expect(invitations.completed).toHaveLength(1);
