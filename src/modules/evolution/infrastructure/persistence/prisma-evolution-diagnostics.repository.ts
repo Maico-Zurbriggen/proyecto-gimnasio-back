@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { isUuid } from '../../../../shared/types/uuid';
 import {
@@ -19,7 +19,9 @@ import {
 } from '../../domain/services/evolution-diagnosis';
 
 export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnosticsRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient | Prisma.TransactionClient,
+  ) {}
 
   async findLatestForStudent(
     studentId: string,
@@ -35,6 +37,17 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
       where: {
         studentId,
         componentVersion: { startsWith: componentVersionPrefix },
+        OR: [
+          {
+            routineVersion: { routine: { demoRunId: null } },
+            student: { adaptationDemoRuns: { none: { restoredAt: null } } },
+          },
+          {
+            routineVersion: {
+              routine: { demoRun: { is: { restoredAt: null } } },
+            },
+          },
+        ],
       },
       orderBy: { calculatedAt: 'desc' },
       include: {
@@ -56,6 +69,7 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
       globalSituation: row.globalSituation,
       adherence: row.adherence === null ? null : row.adherence.toNumber(),
       componentVersion: row.componentVersion,
+      simulated: row.simulated,
       criteriaNotEvaluated: Array.isArray(row.criteriaNotEvaluated)
         ? (row.criteriaNotEvaluated as string[])
         : [],
@@ -71,7 +85,7 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
 
   async listStudentsWithCurrentRoutine(): Promise<StudentToDiagnose[]> {
     const versions = await this.prisma.routineVersion.findMany({
-      where: { current: true, routine: { state: 'VIGENTE' } },
+      where: { current: true, routine: { state: 'VIGENTE', demoRunId: null } },
       select: { id: true, routine: { select: { studentId: true } } },
     });
 
@@ -93,6 +107,7 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
       where: {
         studentId,
         componentVersion: { startsWith: componentVersionPrefix },
+        simulated: false,
       },
       orderBy: { calculatedAt: 'desc' },
       select: { calculatedAt: true },
@@ -114,6 +129,7 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
       where: { current: true, routine: { studentId, state: 'VIGENTE' } },
       select: {
         id: true,
+        routine: { select: { id: true, demoRunId: true } },
         days: {
           select: {
             exercises: {
@@ -133,7 +149,8 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
         occurredOn: { gte: desde, lte: hasta },
         state: { in: ['COMPLETADA', 'BLOQUEADA'] },
         // RN-107: un registro simulado queda fuera de toda analítica real.
-        simulated: false,
+        simulated: version.routine.demoRunId !== null,
+        ...(version.routine.demoRunId ? { routineId: version.routine.id } : {}),
       },
       select: {
         occurredOn: true,
@@ -192,8 +209,14 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
 
     return {
       routineVersionId: version.id,
+      ...(version.routine.demoRunId ? { simulated: true } : {}),
       ejercicios,
-      adherencia: await this.adherenciaDelPeriodo(studentId, desde, hasta),
+      adherencia: await this.adherenciaDelPeriodo(
+        studentId,
+        desde,
+        hasta,
+        version.routine.demoRunId ? version.routine.id : undefined,
+      ),
       cumplimientoMedio: cumplimientoMedioDelPeriodo(
         sessions.map((session) => ({
           occurredOn: session.occurredOn,
@@ -226,6 +249,10 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
         globalSituation: diagnostic.globalSituation,
         adherence: diagnostic.adherence,
         componentVersion: diagnostic.componentVersion,
+        simulated: diagnostic.simulated ?? false,
+        ...(diagnostic.calculatedAt
+          ? { calculatedAt: diagnostic.calculatedAt }
+          : {}),
         criteriaNotEvaluated: diagnostic.criteriaNotEvaluated,
         exerciseDiagnostics: {
           create: diagnostic.exercises.map((exercise) => ({
@@ -246,9 +273,14 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
     studentId: string,
     desde: Date,
     hasta: Date,
+    demoRoutineId?: string,
   ): Promise<number | null> {
     const routines = await this.prisma.routine.findMany({
-      where: { studentId, state: { in: ['VIGENTE', 'ARCHIVADA'] } },
+      where: {
+        studentId,
+        state: { in: ['VIGENTE', 'ARCHIVADA'] },
+        ...(demoRoutineId ? { id: demoRoutineId } : { demoRunId: null }),
+      },
       select: {
         targetWeeklyFrequency: true,
         requestedAt: true,
@@ -272,7 +304,8 @@ export class PrismaEvolutionDiagnosticsRepository implements EvolutionDiagnostic
       where: {
         studentId,
         occurredOn: { gte: desde, lte: hasta },
-        simulated: false,
+        simulated: Boolean(demoRoutineId),
+        ...(demoRoutineId ? { routineId: demoRoutineId } : {}),
       },
       select: { occurredOn: true, state: true },
     });

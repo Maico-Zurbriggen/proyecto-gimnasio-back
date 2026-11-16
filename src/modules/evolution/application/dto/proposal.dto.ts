@@ -135,9 +135,11 @@ export function toProposalReviewDto(record: ProposalRecord): ProposalReviewDto {
       globalSituation: record.diagnostic.globalSituation,
       adherence: record.diagnostic.adherence,
       componentVersion: record.diagnostic.componentVersion,
-      dataOrigin: record.diagnostic.componentVersion.startsWith('seed-')
-        ? 'SIMULATED'
-        : 'REAL',
+      dataOrigin:
+        record.diagnostic.simulated ||
+        record.diagnostic.componentVersion.startsWith('seed-')
+          ? 'SIMULATED'
+          : 'REAL',
     },
     adjustments: record.adjustments,
     advertenciaDatos: evaluarAdvertencia(record),

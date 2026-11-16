@@ -14,7 +14,10 @@ export class PrismaRoutineHistoryRepository implements RoutineHistoryRepository 
 
   async listByStudent(studentId: string): Promise<RoutineHistoryItem[]> {
     const routines = await this.prisma.routine.findMany({
-      where: { studentId },
+      where: {
+        studentId,
+        OR: [{ demoRunId: null }, { demoRun: { is: { restoredAt: null } } }],
+      },
       orderBy: { requestedAt: 'desc' },
       select: {
         id: true,

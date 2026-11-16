@@ -5,6 +5,7 @@ import {
   ExerciseNotFoundError,
   RoutineDayNotFoundError,
   RoutineNotActiveError,
+  DemoRoutineActiveError,
   SeriesNotFoundError,
   SeriesOutOfRangeError,
   SessionAlreadyInProgressError,
@@ -328,6 +329,8 @@ export class PrismaTrainingSessionsRepository implements TrainingSessionsReposit
           studentId,
           actor.gymId,
         );
+        // Serialize with reversible demo preparation/restoration for this student.
+        await tx.$queryRaw`SELECT user_id FROM app.student_profiles WHERE user_id = ${studentId}::uuid FOR UPDATE`;
 
         // Cierre perezoso: una sesión abandonada no bloquea el inicio (RN-53).
         await this.expireStudentStaleSessions(tx, studentId, now);
@@ -363,6 +366,7 @@ export class PrismaTrainingSessionsRepository implements TrainingSessionsReposit
         if (!routine || routine.versions[0] === undefined) {
           throw new RoutineNotActiveError();
         }
+        if (routine.demoRunId) throw new DemoRoutineActiveError();
         const version = routine.versions[0];
         if (version.days.length === 0) throw new RoutineNotActiveError();
 
@@ -889,6 +893,9 @@ export class PrismaTrainingSessionsRepository implements TrainingSessionsReposit
       await this.expireStudentStaleSessions(tx, studentId, now);
       const where: Prisma.TrainingSessionWhereInput = {
         studentId,
+        routine: {
+          OR: [{ demoRunId: null }, { demoRun: { is: { restoredAt: null } } }],
+        },
         ...(command.simulated === undefined
           ? {}
           : { simulated: command.simulated }),

@@ -17,6 +17,7 @@ export interface EvolutionDiagnosticDto {
   /** RN-81: criterios que no se pudieron evaluar, declarados. */
   criteriosNoEvaluados: string[];
   componentVersion: string;
+  dataOrigin: 'REAL' | 'SIMULATED';
   calculadoEl: string;
   ejercicios: {
     exerciseId: string;
@@ -47,6 +48,10 @@ function toDto(diagnostic: StoredDiagnostic): EvolutionDiagnosticDto {
     adherencia: diagnostic.adherence,
     criteriosNoEvaluados: diagnostic.criteriaNotEvaluated,
     componentVersion: diagnostic.componentVersion,
+    dataOrigin:
+      diagnostic.simulated || diagnostic.componentVersion.startsWith('seed-')
+        ? 'SIMULATED'
+        : 'REAL',
     calculadoEl: diagnostic.calculatedAt.toISOString(),
     ejercicios: diagnostic.exercises,
   };
