@@ -152,7 +152,7 @@ export function increasedLoad(load: number): number {
   const { loadPercent, loadStepKg, minIncrementKg } =
     ADJUSTMENT_TABLE.estimuloInsuficiente;
   const raised = ceilToStep((load * (100 + loadPercent)) / 100, loadStepKg);
-  return Math.max(raised, round2(load + minIncrementKg));
+  return ceilToStep(Math.max(raised, load + minIncrementKg), loadStepKg);
 }
 
 /** CARGA −10 %, a la baja a múltiplo de 2,5 kg (nunca negativa). */

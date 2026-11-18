@@ -26,6 +26,7 @@ const proposalInclude = {
       user: { select: { displayName: true } },
       bodyMeasurements: { select: { measuredOn: true } },
       adaptationProposals: {
+        where: { diagnostic: { simulated: false } },
         select: { createdAt: true },
         orderBy: { createdAt: 'desc' },
       },
@@ -81,6 +82,7 @@ function toRecord(row: ProposalRow): ProposalRecord {
           ? null
           : Number(row.diagnostic.adherence),
       componentVersion: row.diagnostic.componentVersion,
+      simulated: row.diagnostic.simulated,
     },
     routine: {
       id: routine.id,
@@ -147,6 +149,11 @@ export class PrismaProposalsRepository implements ProposalsRepository {
     const rows = await this.prisma.adaptationProposal.findMany({
       where: {
         state: 'PENDIENTE',
+        diagnostic: {
+          routineVersion: {
+            routine: { originalForDemoRuns: { none: { restoredAt: null } } },
+          },
+        },
         student: { trainerAssignments: { some: { trainerId, endsAt: null } } },
       },
       include: proposalInclude,

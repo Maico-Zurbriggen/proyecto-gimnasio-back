@@ -99,6 +99,8 @@ describe('tabla situación → ajuste: por ejercicio', () => {
     expect(increasedLoad(20)).toBe(22.5);
     expect(increasedLoad(100)).toBe(102.5);
     expect(increasedLoad(200)).toBe(205);
+    expect(increasedLoad(16)).toBe(20);
+    expect(increasedLoad(46)).toBe(50);
   });
 
   it('ESTIMULO_INSUFICIENTE sin carga previa se declara y no propone', () => {

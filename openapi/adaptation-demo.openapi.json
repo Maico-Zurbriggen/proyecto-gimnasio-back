@@ -1,0 +1,559 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Reversible adaptation demonstration on assigned students",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/demo/adaptations": {
+      "get": {
+        "operationId": "listAdaptationDemoStudents",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Assigned students and durable active preparation, including current proposal state",
+        "responses": {
+          "200": {
+            "description": "Assigned students",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptationDemoList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID, scenario or unknown input field"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Trainer role and current assignment in the same gym required"
+          },
+          "404": {
+            "description": "ADAPTATION_DEMO_ENABLED is disabled"
+          },
+          "409": {
+            "description": "Missing current routine or alternative, unavailable exercise, ongoing training, regeneration pending or restore conflict. Preparation rolls back completely."
+          }
+        }
+      }
+    },
+    "/demo/adaptations/{studentId}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "studentId",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "prepareAdaptationDemo",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Prepare historical simulated sessions and invoke the real diagnosis and proposal rules",
+        "description": "Temporarily archives the original routine and creates a tagged working routine with the same catalogue exercises and type. No original history is rewritten. Same scenario on the same day is reused until resolved. Switching cases or repeating after resolution restores the previous preparation atomically. Second stagnation requires an eligible existing alternative.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareAdaptationDemo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Calculated diagnosis and optional pending proposal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptationDemoResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID, scenario or unknown input field"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Trainer role and current assignment in the same gym required"
+          },
+          "404": {
+            "description": "ADAPTATION_DEMO_ENABLED is disabled"
+          },
+          "409": {
+            "description": "Missing current routine or alternative, unavailable exercise, ongoing training, regeneration pending or restore conflict. Preparation rolls back completely."
+          }
+        }
+      }
+    },
+    "/demo/adaptations/{studentId}/restore": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "studentId",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "restoreAdaptationDemo",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Reactivate the original routine and retire generated artifacts, retaining audit and immutable evidence",
+        "description": "Idempotent. Archives the working routine including approval versions, invalidates pending proposals and expires related notices. Refuses conflicting real activity or another current routine. Simulated diagnoses remain identified and are excluded from real analytics and periodic jobs.",
+        "responses": {
+          "200": {
+            "description": "Whether an active preparation was restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptationDemoRestore"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID, scenario or unknown input field"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Trainer role and current assignment in the same gym required"
+          },
+          "404": {
+            "description": "ADAPTATION_DEMO_ENABLED is disabled"
+          },
+          "409": {
+            "description": "Missing current routine or alternative, unavailable exercise, ongoing training, regeneration pending or restore conflict. Preparation rolls back completely."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "gym_session"
+      }
+    },
+    "schemas": {
+      "AdaptationDemoScenario": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "enum": [
+          "ESTIMULO_INSUFICIENTE",
+          "SOBREEXIGENCIA",
+          "ESTANCAMIENTO_PRIMERO",
+          "ESTANCAMIENTO_SEGUNDO",
+          "PROGRESION_ADECUADA",
+          "DATOS_INSUFICIENTES"
+        ]
+      },
+      "PrepareAdaptationDemo": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "ESTIMULO_INSUFICIENTE",
+              "SOBREEXIGENCIA",
+              "ESTANCAMIENTO_PRIMERO",
+              "ESTANCAMIENTO_SEGUNDO",
+              "PROGRESION_ADECUADA",
+              "DATOS_INSUFICIENTES"
+            ]
+          }
+        },
+        "required": ["scenario"],
+        "additionalProperties": false
+      },
+      "AdaptationDemoResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "studentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "ESTIMULO_INSUFICIENTE",
+              "SOBREEXIGENCIA",
+              "ESTANCAMIENTO_PRIMERO",
+              "ESTANCAMIENTO_SEGUNDO",
+              "PROGRESION_ADECUADA",
+              "DATOS_INSUFICIENTES"
+            ]
+          },
+          "diagnosticId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "globalSituation": {
+            "type": "string",
+            "enum": [
+              "DATOS_INSUFICIENTES",
+              "SOBREEXIGENCIA",
+              "PROGRESION_ADECUADA",
+              "ESTIMULO_INSUFICIENTE",
+              "ESTANCAMIENTO"
+            ]
+          },
+          "proposalId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposalState": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposalStatus": {
+            "type": "string",
+            "enum": ["PROPUESTA", "SIN_AJUSTES", "DATOS_INSUFICIENTES"]
+          },
+          "preparedOn": {
+            "type": "string"
+          },
+          "reused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "runId",
+          "studentId",
+          "scenario",
+          "diagnosticId",
+          "globalSituation",
+          "proposalId",
+          "proposalState",
+          "proposalStatus",
+          "preparedOn",
+          "reused"
+        ],
+        "additionalProperties": false
+      },
+      "AdaptationDemoStudent": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "studentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "hasCurrentRoutine": {
+            "type": "boolean"
+          },
+          "activeRun": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "runId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "studentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "scenario": {
+                    "type": "string",
+                    "enum": [
+                      "ESTIMULO_INSUFICIENTE",
+                      "SOBREEXIGENCIA",
+                      "ESTANCAMIENTO_PRIMERO",
+                      "ESTANCAMIENTO_SEGUNDO",
+                      "PROGRESION_ADECUADA",
+                      "DATOS_INSUFICIENTES"
+                    ]
+                  },
+                  "diagnosticId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "globalSituation": {
+                    "type": "string",
+                    "enum": [
+                      "DATOS_INSUFICIENTES",
+                      "SOBREEXIGENCIA",
+                      "PROGRESION_ADECUADA",
+                      "ESTIMULO_INSUFICIENTE",
+                      "ESTANCAMIENTO"
+                    ]
+                  },
+                  "proposalId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "proposalState": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "proposalStatus": {
+                    "type": "string",
+                    "enum": ["PROPUESTA", "SIN_AJUSTES", "DATOS_INSUFICIENTES"]
+                  },
+                  "preparedOn": {
+                    "type": "string"
+                  },
+                  "reused": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "runId",
+                  "studentId",
+                  "scenario",
+                  "diagnosticId",
+                  "globalSituation",
+                  "proposalId",
+                  "proposalState",
+                  "proposalStatus",
+                  "preparedOn",
+                  "reused"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "studentId",
+          "displayName",
+          "hasCurrentRoutine",
+          "activeRun"
+        ],
+        "additionalProperties": false
+      },
+      "AdaptationDemoList": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "studentId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "hasCurrentRoutine": {
+                  "type": "boolean"
+                },
+                "activeRun": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "studentId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "scenario": {
+                          "type": "string",
+                          "enum": [
+                            "ESTIMULO_INSUFICIENTE",
+                            "SOBREEXIGENCIA",
+                            "ESTANCAMIENTO_PRIMERO",
+                            "ESTANCAMIENTO_SEGUNDO",
+                            "PROGRESION_ADECUADA",
+                            "DATOS_INSUFICIENTES"
+                          ]
+                        },
+                        "diagnosticId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "globalSituation": {
+                          "type": "string",
+                          "enum": [
+                            "DATOS_INSUFICIENTES",
+                            "SOBREEXIGENCIA",
+                            "PROGRESION_ADECUADA",
+                            "ESTIMULO_INSUFICIENTE",
+                            "ESTANCAMIENTO"
+                          ]
+                        },
+                        "proposalId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proposalState": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "proposalStatus": {
+                          "type": "string",
+                          "enum": [
+                            "PROPUESTA",
+                            "SIN_AJUSTES",
+                            "DATOS_INSUFICIENTES"
+                          ]
+                        },
+                        "preparedOn": {
+                          "type": "string"
+                        },
+                        "reused": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "studentId",
+                        "scenario",
+                        "diagnosticId",
+                        "globalSituation",
+                        "proposalId",
+                        "proposalState",
+                        "proposalStatus",
+                        "preparedOn",
+                        "reused"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "studentId",
+                "displayName",
+                "hasCurrentRoutine",
+                "activeRun"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["students"],
+        "additionalProperties": false
+      },
+      "AdaptationDemoRestore": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "restored": {
+            "type": "boolean"
+          }
+        },
+        "required": ["restored"],
+        "additionalProperties": false
+      },
+      "EvolutionDiagnosticDataOrigin": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "enum": ["REAL", "SIMULATED"]
+      }
+    }
+  },
+  "x-evolution-diagnostic-extension": {
+    "endpoint": "GET /students/{studentId}/evolution-diagnostic",
+    "when": "disponible=true",
+    "property": "dataOrigin",
+    "schema": {
+      "$ref": "#/components/schemas/EvolutionDiagnosticDataOrigin"
+    },
+    "description": "REAL excludes simulated sessions; SIMULATED identifies an explicitly prepared demonstration diagnosis."
+  }
+}

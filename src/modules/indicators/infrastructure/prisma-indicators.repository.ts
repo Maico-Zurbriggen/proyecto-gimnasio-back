@@ -64,7 +64,11 @@ export class PrismaIndicatorsRepository implements IndicatorsRepository {
     // El ciclo de una rutina arranca con su revisión favorable, que es cuando
     // entró en vigencia; si no la hubiera, se cae a la creación de su versión.
     const routines = await this.prisma.routine.findMany({
-      where: { studentId, state: { in: ['VIGENTE', 'ARCHIVADA'] } },
+      where: {
+        studentId,
+        state: { in: ['VIGENTE', 'ARCHIVADA'] },
+        demoRunId: null,
+      },
       select: {
         targetWeeklyFrequency: true,
         requestedAt: true,
