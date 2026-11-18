@@ -94,6 +94,7 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
             current: true,
             routine: {
               state: 'VIGENTE',
+              demoRunId: null,
               student: { user: { state: 'ACTIVO' } },
             },
           },
@@ -231,7 +232,10 @@ export class PrismaRoutineRenewalsRepository implements RoutineRenewalsRepositor
         const pending = await tx.routineRenewalCycle.findMany({
           where: {
             state: 'PENDIENTE',
-            routineVersion: { current: true, routine: { state: 'VIGENTE' } },
+            routineVersion: {
+              current: true,
+              routine: { state: 'VIGENTE', demoRunId: null },
+            },
             OR: [{ leaseUntil: null }, { leaseUntil: { lte: evaluatedAt } }],
           },
           include: {

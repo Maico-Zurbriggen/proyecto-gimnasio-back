@@ -612,7 +612,10 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
     }
 
     const routines = await this.prisma.routine.findMany({
-      where: { studentId },
+      where: {
+        studentId,
+        OR: [{ demoRunId: null }, { demoRun: { is: { restoredAt: null } } }],
+      },
       orderBy: { requestedAt: 'desc' },
       include: { versions: ultimaVersion },
     });

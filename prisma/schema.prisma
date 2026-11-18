@@ -150,6 +150,7 @@ enum MuscleParticipation {
 enum RoutineOrigin {
   PLANTILLA_ENTRENADOR
   GENERADA
+  DEMOSTRACION
 
   @@schema("app")
 }
@@ -492,6 +493,7 @@ model StudentProfile {
   personalRecords        PersonalRecord[]
   measurementCheckpoints StudentMeasurementCheckpoint[]
   measurementBlocks      StudentMeasurementBlock[]
+  adaptationDemoRuns     AdaptationDemoRun[]
 
   @@map("student_profiles")
   @@schema("app")
@@ -508,6 +510,7 @@ model TrainerProfile {
   routineReviews            RoutineReview[]
   resolvedProposals         AdaptationProposal[]       @relation("AdaptationResolver")
   approvedMeasurementBlocks StudentMeasurementBlock[]  @relation("MeasurementBlockApprover")
+  adaptationDemoRuns        AdaptationDemoRun[]
 
   @@map("trainer_profiles")
   @@schema("app")
@@ -790,6 +793,9 @@ model Routine {
   origin                   RoutineOrigin
   requestedByUserId        String?                        @map("requested_by_user_id") @db.Uuid
   requestedAt              DateTime                       @default(now()) @map("requested_at") @db.Timestamptz(6)
+  demoRunId                String?                        @unique @map("demo_run_id") @db.Uuid
+  demoRun                  AdaptationDemoRun?             @relation("PreparedDemoRoutine", fields: [demoRunId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  originalForDemoRuns      AdaptationDemoRun[]            @relation("DemoOriginalRoutine")
   student                  StudentProfile                 @relation(fields: [studentId], references: [userId], onDelete: Restrict)
   sourceTemplate           RoutineTemplate?               @relation(fields: [sourceTemplateId], references: [id], onDelete: Restrict)
   sourceGenerationResult   AiGenerationResult?            @relation(fields: [sourceGenerationResultId], references: [id], onDelete: Restrict)
@@ -841,6 +847,7 @@ model RoutineVersion {
   resultingForProposal   AdaptationProposal?            @relation("ResultingRoutineVersion")
   measurementCheckpoints StudentMeasurementCheckpoint[]
   renewalCycles          RoutineRenewalCycle[]
+  originalForDemoRuns    AdaptationDemoRun[]            @relation("DemoOriginalVersion")
 
   @@unique([routineId, versionNumber])
   @@map("routine_versions")
@@ -1086,6 +1093,7 @@ model EvolutionDiagnostic {
   componentVersion     String               @map("component_version")
   criteriaNotEvaluated Json                 @map("criteria_not_evaluated")
   globalFindings       Json?                @map("global_findings")
+  simulated            Boolean              @default(false)
   calculatedAt         DateTime             @default(now()) @map("calculated_at") @db.Timestamptz(6)
   student              StudentProfile       @relation(fields: [studentId], references: [userId], onDelete: Restrict)
   routineVersion       RoutineVersion       @relation(fields: [routineVersionId], references: [id], onDelete: Restrict)
@@ -1095,6 +1103,30 @@ model EvolutionDiagnostic {
   @@index([studentId, periodEnd])
   @@index([routineVersionId, calculatedAt])
   @@map("evolution_diagnostics")
+  @@schema("app")
+}
+
+// Durable restoration point for an explicitly enabled presentation on an existing student.
+// A partial unique index in the migration permits only one unrestored run per student.
+model AdaptationDemoRun {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId         String         @map("student_id") @db.Uuid
+  trainerId         String         @map("trainer_id") @db.Uuid
+  scenario          String
+  originalRoutineId String         @map("original_routine_id") @db.Uuid
+  originalVersionId String         @map("original_version_id") @db.Uuid
+  preparedOn        DateTime       @map("prepared_on") @db.Date
+  result            Json?
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  restoredAt        DateTime?      @map("restored_at") @db.Timestamptz(6)
+  student           StudentProfile @relation(fields: [studentId], references: [userId], onDelete: Restrict, onUpdate: NoAction)
+  trainer           TrainerProfile @relation(fields: [trainerId], references: [userId], onDelete: Restrict, onUpdate: NoAction)
+  originalRoutine   Routine        @relation("DemoOriginalRoutine", fields: [originalRoutineId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  originalVersion   RoutineVersion @relation("DemoOriginalVersion", fields: [originalVersionId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  preparedRoutine   Routine?       @relation("PreparedDemoRoutine")
+
+  @@index([trainerId, restoredAt])
+  @@map("adaptation_demo_runs")
   @@schema("app")
 }
 

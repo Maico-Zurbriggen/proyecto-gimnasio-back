@@ -76,6 +76,7 @@ function setup() {
   };
   let saved: object | null = null;
   const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     studentProfile: {
       findFirst: vi.fn().mockResolvedValue({
         user: { gym: { timezone: 'America/Argentina/Buenos_Aires' } },

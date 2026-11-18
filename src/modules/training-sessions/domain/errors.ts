@@ -1,5 +1,6 @@
 export class StudentNotFoundError extends Error {}
 export class RoutineNotActiveError extends Error {}
+export class DemoRoutineActiveError extends Error {}
 export class RoutineDayNotFoundError extends Error {}
 export class SessionAlreadyInProgressError extends Error {}
 export class SessionNotFoundError extends Error {}

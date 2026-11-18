@@ -33,11 +33,17 @@ function parseGlobalFindings(value: unknown): GlobalFindings {
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
 export class PrismaAdjustmentProposalsRepository implements AdjustmentProposalsRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient | Prisma.TransactionClient,
+  ) {}
 
   async listDiagnosticIdsWithoutProposal(since: Date): Promise<string[]> {
     const rows = await this.prisma.evolutionDiagnostic.findMany({
-      where: { calculatedAt: { gte: since }, adaptationProposal: null },
+      where: {
+        calculatedAt: { gte: since },
+        adaptationProposal: null,
+        simulated: false,
+      },
       orderBy: { calculatedAt: 'asc' },
       select: { id: true },
     });
@@ -210,7 +216,7 @@ export class PrismaAdjustmentProposalsRepository implements AdjustmentProposalsR
     at: Date;
   }): Promise<DeliveredProposal> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const operation = async (tx: Prisma.TransactionClient) => {
         const existing = await tx.adaptationProposal.findUnique({
           where: { diagnosticId: input.diagnosticId },
           select: { id: true, state: true },
@@ -311,7 +317,10 @@ export class PrismaAdjustmentProposalsRepository implements AdjustmentProposalsR
           state: trainer ? 'PENDIENTE' : 'BLOQUEADA',
           alreadyExisted: false,
         } satisfies DeliveredProposal;
-      });
+      };
+      return await ('$transaction' in this.prisma
+        ? this.prisma.$transaction(operation)
+        : operation(this.prisma));
     } catch (error) {
       // Reejecución concurrente: el diagnóstico ya tiene propuesta (RN-83).
       if (

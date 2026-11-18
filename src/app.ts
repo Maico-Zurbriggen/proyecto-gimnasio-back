@@ -73,6 +73,10 @@ import { ListTrainerProposalsUseCase } from './modules/evolution/application/use
 import { ResolveProposalUseCase } from './modules/evolution/application/use-cases/resolve-proposal.use-case';
 import { ProposalsController } from './modules/evolution/infrastructure/http/proposals.controller';
 import { createProposalsRouter } from './modules/evolution/infrastructure/http/proposals.routes';
+import { createAdaptationDemoRouter } from './modules/evolution/infrastructure/http/adaptation-demo.routes';
+import { AdaptationDemoUseCases } from './modules/evolution/application/use-cases/adaptation-demo.use-cases';
+import { PrismaAdaptationDemoRepository } from './modules/evolution/infrastructure/persistence/prisma-adaptation-demo.repository';
+import type { AdaptationDemoRepository } from './modules/evolution/application/ports/adaptation-demo.repository';
 import { PrismaProposalsRepository } from './modules/evolution/infrastructure/persistence/prisma-proposals.repository';
 import {
   AssignmentsUseCases,
@@ -280,6 +284,8 @@ interface AppDependencies {
   physicalConditionsRepository?: PhysicalConditionsRepository;
   routineRevaluation?: RoutineRevaluation;
   evolutionDiagnosticsRepository?: EvolutionDiagnosticsRepository;
+  adaptationDemoRepository?: AdaptationDemoRepository;
+  adaptationDemoEnabled?: boolean;
   noticesRepository?: NoticesRepository;
   invitationAttemptLimiter?: AttemptLimiter;
   gymsRepository?: GymsRepository;
@@ -358,6 +364,8 @@ export function createApp({
   physicalConditionsRepository,
   routineRevaluation,
   evolutionDiagnosticsRepository,
+  adaptationDemoRepository,
+  adaptationDemoEnabled,
   noticesRepository,
   invitationAttemptLimiter,
   gymsRepository,
@@ -845,6 +853,16 @@ export function createApp({
   );
 
   app.use(createProposalsRouter(proposalsController));
+  app.use(
+    createAdaptationDemoRouter(
+      new AdaptationDemoUseCases(
+        adaptationDemoRepository ?? new PrismaAdaptationDemoRepository(prisma),
+        resolvedAssignments,
+        resolvedClock,
+        adaptationDemoEnabled ?? process.env.ADAPTATION_DEMO_ENABLED === 'true',
+      ),
+    ),
+  );
 
   const resolvedNoticesRepo =
     noticesRepository ?? new PrismaNoticesRepository(prisma);
