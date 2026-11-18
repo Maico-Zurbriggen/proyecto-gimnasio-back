@@ -55,3 +55,85 @@ describe('routine content generation prompt', () => {
     },
   );
 });
+
+describe('manual routine persistence', () => {
+  it('keeps a hidden source snapshot required by PLANTILLA_ENTRENADOR', async () => {
+    const exerciseId = 'e0000000-0003-4000-8000-000000000003';
+    const sourceTemplateId = '40000000-0000-4000-8000-000000000099';
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      user: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({ gymId: 'gym-1' })
+          .mockResolvedValueOnce({ gymId: 'gym-1' }),
+      },
+      exercise: {
+        count: vi.fn().mockResolvedValue(1),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: exerciseId, movementPattern: 'CORE' }]),
+      },
+      routineTemplate: {
+        create: vi.fn().mockResolvedValue({ id: sourceTemplateId }),
+      },
+      routine: {
+        create: vi.fn().mockResolvedValue({ id: 'routine-manual' }),
+      },
+      routineVersion: {
+        create: vi.fn().mockResolvedValue({ id: 'version-manual' }),
+      },
+      routineDay: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (operation: (client: typeof tx) => unknown) =>
+        operation(tx),
+      ),
+    } as unknown as PrismaClient;
+    const repository = new PrismaPrescriptionsRepository(prisma);
+
+    await repository.createManualRoutine({
+      trainerId: 'trainer-1',
+      studentId: 'student-1',
+      routineType: 'HIPERTROFIA',
+      days: [
+        {
+          name: 'Día A',
+          exercises: [
+            {
+              exerciseId,
+              note: null,
+              sets: [
+                {
+                  minRepetitions: 8,
+                  maxRepetitions: 12,
+                  suggestedLoad: 40,
+                  restSeconds: 90,
+                  warmup: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(tx.routineTemplate.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          authorTrainerId: 'trainer-1',
+          gymId: 'gym-1',
+          active: false,
+        }),
+      }),
+    );
+    expect(tx.routine.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          origin: 'PLANTILLA_ENTRENADOR',
+          sourceTemplateId,
+        }),
+      }),
+    );
+  });
+});
