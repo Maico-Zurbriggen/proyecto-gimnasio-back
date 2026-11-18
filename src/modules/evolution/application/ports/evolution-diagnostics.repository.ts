@@ -18,6 +18,7 @@ export interface ExercisePeriodData {
 /** Lo que el diagnóstico necesita leer del período de un alumno. */
 export interface StudentPeriodData {
   routineVersionId: string;
+  simulated?: boolean;
   /** Todos los ejercicios de la versión vigente, tengan sesiones o no. */
   ejercicios: ExercisePeriodData[];
   /** Adherencia del período; `null` si no está disponible (RN-68). */
@@ -40,6 +41,8 @@ export interface DiagnosticToSave {
   globalSituation: Situacion;
   adherence: number | null;
   componentVersion: string;
+  simulated?: boolean;
+  calculatedAt?: Date;
   /** RN-81: qué criterios no se pudieron evaluar, para declararlos. */
   criteriaNotEvaluated: string[];
   exercises: ExerciseDiagnosticToSave[];
@@ -55,6 +58,7 @@ export interface StoredDiagnostic {
   globalSituation: Situacion;
   adherence: number | null;
   componentVersion: string;
+  simulated?: boolean;
   criteriaNotEvaluated: string[];
   calculatedAt: Date;
   exercises: {

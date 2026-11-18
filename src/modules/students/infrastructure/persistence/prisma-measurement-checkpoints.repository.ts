@@ -45,6 +45,7 @@ export class PrismaMeasurementCheckpointsRepository implements MeasurementCheckp
             routines: {
               some: {
                 state: 'VIGENTE',
+                demoRunId: null,
                 reviews: { some: { result: { in: [...FAVORABLE_REVIEWS] } } },
               },
             },
@@ -65,6 +66,7 @@ export class PrismaMeasurementCheckpointsRepository implements MeasurementCheckp
               orderBy: { approvedAt: 'desc' },
             },
             routines: {
+              where: { demoRunId: null },
               include: {
                 reviews: {
                   where: { result: { in: [...FAVORABLE_REVIEWS] } },

@@ -33,6 +33,7 @@ export interface ProposalRecord {
     globalSituation: string;
     adherence: number | null;
     componentVersion: string;
+    simulated?: boolean;
   };
   routine: {
     id: string;

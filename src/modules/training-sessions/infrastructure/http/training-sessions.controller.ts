@@ -6,6 +6,7 @@ import {
   ExerciseNotFoundError,
   RoutineDayNotFoundError,
   RoutineNotActiveError,
+  DemoRoutineActiveError,
   SeriesNotFoundError,
   SeriesOutOfRangeError,
   SessionAccessError,
@@ -74,6 +75,14 @@ function sendTrainingSessionError(
     res.status(409).json({
       error: 'no_active_routine',
       message: 'Necesitás una rutina vigente para iniciar una sesión.',
+    });
+    return;
+  }
+  if (error instanceof DemoRoutineActiveError) {
+    res.status(409).json({
+      error: 'adaptation_demo_active',
+      message:
+        'El entrenador debe restaurar la preparación de la demo antes de iniciar un entrenamiento real.',
     });
     return;
   }

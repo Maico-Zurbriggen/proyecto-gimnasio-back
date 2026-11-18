@@ -69,6 +69,26 @@ export class DiagnoseEvolutionUseCase {
       throw new StudentNotDiagnosableError();
     }
 
+    // Repeating a prepared case must not count the same evidence as another
+    // consecutive stagnation. Real recalculations retain their historical behavior.
+    if (datos.simulated) {
+      const previous = await this.diagnostics.findLatestForStudent(
+        studentId,
+        DIAGNOSTIC_COMPONENT_PREFIX,
+      );
+      if (
+        previous?.simulated &&
+        previous.routineVersionId === datos.routineVersionId &&
+        previous.periodEnd.getTime() === periodEnd.getTime()
+      ) {
+        return {
+          diagnosticId: previous.id,
+          globalSituation: previous.globalSituation,
+          exerciseCount: previous.exercises.length,
+        };
+      }
+    }
+
     const porEjercicio: ExerciseDiagnosticToSave[] = datos.ejercicios.map(
       (ejercicio) => {
         const { situacion, metricas } = diagnosticarEjercicio(
@@ -116,6 +136,7 @@ export class DiagnoseEvolutionUseCase {
       globalSituation,
       adherence: datos.adherencia,
       componentVersion: DIAGNOSTIC_COMPONENT_VERSION,
+      ...(datos.simulated ? { simulated: true, calculatedAt: ahora } : {}),
       criteriaNotEvaluated,
       exercises: porEjercicio,
     });
