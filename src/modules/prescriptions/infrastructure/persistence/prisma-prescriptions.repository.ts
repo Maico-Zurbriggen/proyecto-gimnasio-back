@@ -564,9 +564,31 @@ export class PrismaPrescriptionsRepository implements PrescriptionsRepository {
           })),
         };
       });
+      // El origen PLANTILLA_ENTRENADOR exige conservar una fuente. La edición
+      // manual genera una instantánea privada e inactiva: no aparece entre las
+      // plantillas reutilizables, pero mantiene la procedencia y permite
+      // reconstruir qué estructura confirmó el entrenador.
+      const sourceTemplate = await tx.routineTemplate.create({
+        data: {
+          gymId: student.gymId,
+          authorTrainerId: command.trainerId,
+          name: 'Instantánea de edición manual',
+          routineType: command.routineType,
+          active: false,
+          days: {
+            create: this.templateDaysData({
+              name: 'Instantánea de edición manual',
+              routineType: command.routineType,
+              days: command.days,
+            }),
+          },
+        },
+        select: { id: true },
+      });
       const routine = await tx.routine.create({
         data: {
           studentId: command.studentId,
+          sourceTemplateId: sourceTemplate.id,
           routineType: command.routineType,
           targetWeeklyFrequency: days.length,
           state: 'PROPUESTA',
